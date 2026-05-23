@@ -28,13 +28,7 @@
     }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { font-size: 14px; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'IBM Plex Sans', sans-serif;
-      min-height: 100vh;
-      padding: 0;
-    }
+    body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Sans', sans-serif; min-height: 100vh; }
 
     /* ── HEADER ── */
     header {
@@ -58,37 +52,35 @@
     }
     .logo span { color: var(--text3); }
     header .spacer { flex: 1; }
-    .header-meta {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: var(--text3);
-    }
-    #refreshBtn {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      padding: 6px 14px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
+    .header-meta { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text3); }
+
+    .icon-btn {
       background: transparent;
+      border: 1px solid var(--border);
       color: var(--text2);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 4px;
       cursor: pointer;
-      transition: all .15s;
       display: flex;
       align-items: center;
       gap: 6px;
+      transition: all .15s;
     }
-    #refreshBtn:hover { border-color: var(--accent); color: var(--accent); }
+    .icon-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-    /* ── CONFIG BAR ── */
-    #configBar {
+    /* ── SETTINGS DRAWER ── */
+    #settingsDrawer {
       background: var(--bg2);
       border-bottom: 1px solid var(--border);
       padding: 1rem 2rem;
-      display: flex;
+      display: none;
       gap: 10px;
       align-items: center;
     }
-    #configBar label {
+    #settingsDrawer.open { display: flex; }
+    #settingsDrawer label {
       font-family: 'IBM Plex Mono', monospace;
       font-size: 11px;
       color: var(--text3);
@@ -96,7 +88,7 @@
       letter-spacing: .06em;
       white-space: nowrap;
     }
-    #configBar input {
+    #settingsDrawer input {
       flex: 1;
       background: var(--bg3);
       border: 1px solid var(--border);
@@ -108,7 +100,7 @@
       outline: none;
       transition: border-color .15s;
     }
-    #configBar input:focus { border-color: var(--accent); }
+    #settingsDrawer input:focus { border-color: var(--accent); }
     #tokenInput { max-width: 180px; flex: none; }
     #loadBtn {
       background: var(--accent);
@@ -121,10 +113,10 @@
       border-radius: 4px;
       cursor: pointer;
       white-space: nowrap;
-      transition: opacity .15s;
       display: flex;
       align-items: center;
       gap: 8px;
+      transition: opacity .15s;
     }
     #loadBtn:hover { opacity: .85; }
     #saveUrlBtn {
@@ -140,286 +132,87 @@
       transition: all .15s;
     }
     #saveUrlBtn:hover { border-color: var(--accent); color: var(--accent); }
-    .saved-notice {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: var(--accent);
-      opacity: 0;
-      transition: opacity .3s;
-    }
+    .saved-notice { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); opacity: 0; transition: opacity .3s; }
     .saved-notice.show { opacity: 1; }
 
     /* ── METRICS ── */
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1px;
-      background: var(--border2);
-      border-bottom: 1px solid var(--border);
-    }
-    .metric {
-      background: var(--bg);
-      padding: 1.25rem 2rem;
-    }
-    .metric-label {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--text3);
-      margin-bottom: 6px;
-    }
-    .metric-value {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 28px;
-      font-weight: 500;
-      line-height: 1;
-    }
+    .metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 1px; background: var(--border2); border-bottom: 1px solid var(--border); }
+    .metric { background: var(--bg); padding: 1.25rem 2rem; }
+    .metric-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); margin-bottom: 6px; }
+    .metric-value { font-family: 'IBM Plex Mono', monospace; font-size: 28px; font-weight: 500; line-height: 1; }
     .metric-value.green { color: var(--green); }
     .metric-value.red   { color: var(--red); }
     .metric-value.yellow{ color: var(--yellow); }
     .metric-value.white { color: var(--text); }
 
     /* ── FILTERS ── */
-    .filters {
-      padding: .75rem 2rem;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      border-bottom: 1px solid var(--border2);
-      flex-wrap: wrap;
-    }
-    .filters-label {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      color: var(--text3);
-      margin-right: 4px;
-    }
-    .filters select {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      color: var(--text2);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      padding: 5px 10px;
-      border-radius: 4px;
-      outline: none;
-      cursor: pointer;
-    }
+    .filters { padding: .75rem 2rem; display: flex; gap: 8px; align-items: center; border-bottom: 1px solid var(--border2); flex-wrap: wrap; }
+    .filters-label { font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; color: var(--text3); margin-right: 4px; }
+    .filters select { background: var(--bg2); border: 1px solid var(--border); color: var(--text2); font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 5px 10px; border-radius: 4px; outline: none; cursor: pointer; }
     .filters select:focus { border-color: var(--accent); }
-    .filter-count {
-      margin-left: auto;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: var(--text3);
-    }
+    .filter-count { margin-left: auto; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text3); }
 
     /* ── TABLE ── */
-    .table-wrap {
-      overflow-x: auto;
-      padding: 0 2rem 2rem;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 1rem;
-    }
-    thead th {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      color: var(--text3);
-      padding: 0 12px 10px;
-      text-align: left;
-      border-bottom: 1px solid var(--border);
-      white-space: nowrap;
-    }
-    tbody tr {
-      border-bottom: 1px solid var(--border2);
-      transition: background .1s;
-    }
+    .table-wrap { overflow-x: auto; padding: 0 2rem 2rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    thead th { font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--text3); padding: 0 12px 10px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody tr { border-bottom: 1px solid var(--border2); transition: background .1s; }
     tbody tr:hover { background: var(--bg2); }
     tbody tr:last-child { border-bottom: none; }
-    td {
-      padding: 11px 12px;
-      vertical-align: middle;
-      font-size: 13px;
-    }
-    .td-name {
-      font-weight: 500;
-      color: var(--text);
-      white-space: nowrap;
-    }
-    .td-vendor {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: var(--text3);
-      white-space: nowrap;
-    }
+    td { padding: 11px 12px; vertical-align: middle; font-size: 13px; }
+    .td-name { font-weight: 500; color: var(--text); white-space: nowrap; }
+    .td-vendor { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text3); white-space: nowrap; }
     .td-client { color: var(--text2); white-space: nowrap; }
-    .td-time {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      color: var(--text2);
-      white-space: nowrap;
-    }
-    .td-sched {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      color: var(--text3);
-      margin-top: 2px;
-    }
-    .td-age {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 12px;
-      font-weight: 500;
-      white-space: nowrap;
-    }
-    .td-reason {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      max-width: 220px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
+    .td-time { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text2); white-space: nowrap; }
+    .td-sched { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 2px; }
+    .td-age { font-family: 'IBM Plex Mono', monospace; font-size: 12px; font-weight: 500; white-space: nowrap; }
 
     /* ── BADGES ── */
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      font-weight: 500;
-      padding: 3px 9px;
-      border-radius: 3px;
-      text-transform: uppercase;
-      letter-spacing: .05em;
-      white-space: nowrap;
-    }
+    .badge { display: inline-flex; align-items: center; gap: 5px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500; padding: 3px 9px; border-radius: 3px; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
     .badge-ok       { background: var(--green-bg);  color: var(--green);  border: 1px solid #1a4028; }
     .badge-fail     { background: var(--red-bg);    color: var(--red);    border: 1px solid #3a1515; }
     .badge-warn     { background: var(--yellow-bg); color: var(--yellow); border: 1px solid #3a2a08; }
     .badge-running  { background: var(--blue-bg);   color: var(--blue);   border: 1px solid #0d2540; }
     .badge-gray     { background: var(--bg3);       color: var(--text3);  border: 1px solid var(--border); }
     .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-    .dot-pulse {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--blue);
-      animation: pulse 1.2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; transform: scale(1); }
-      50% { opacity: .4; transform: scale(.8); }
-    }
+    .dot-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--blue); animation: pulse 1.2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.8)} }
 
-    /* ── ERROR LINK ── */
+    /* ── REASON CELL ── */
+    .reason-wrap { display: flex; align-items: center; gap: 8px; }
     .err-btn {
-      background: none;
-      border: none;
-      color: var(--red);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      cursor: pointer;
-      text-align: left;
-      padding: 0;
-      text-decoration: underline;
-      text-decoration-style: dotted;
-      max-width: 220px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      display: block;
+      background: none; border: none; color: var(--red);
+      font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+      cursor: pointer; text-align: left; padding: 0;
+      text-decoration: underline; text-decoration-style: dotted;
+      max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block;
     }
+    .skyvern-link {
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+      color: var(--text3); text-decoration: none; white-space: nowrap;
+      border: 1px solid var(--border); border-radius: 3px; padding: 2px 7px;
+      transition: all .15s; flex-shrink: 0;
+    }
+    .skyvern-link:hover { color: var(--accent); border-color: var(--accent); }
 
     /* ── EMPTY / LOADING ── */
-    .state-box {
-      text-align: center;
-      padding: 5rem 2rem;
-      color: var(--text3);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 13px;
-    }
+    .state-box { text-align: center; padding: 5rem 2rem; color: var(--text3); font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
     .state-box .big { font-size: 32px; margin-bottom: 1rem; }
-    .spinner {
-      display: inline-block;
-      width: 16px; height: 16px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-    }
+    .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── MODAL ── */
-    .modal-backdrop {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.7);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-    }
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: center; justify-content: center; }
     .modal-backdrop.open { display: flex; }
-    .modal {
-      background: var(--bg2);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 1.5rem;
-      max-width: 540px;
-      width: 92%;
-    }
-    .modal h3 {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 13px;
-      color: var(--red);
-      margin-bottom: 1rem;
-      font-weight: 500;
-    }
-    .modal pre {
-      background: var(--bg3);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      padding: .75rem;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 12px;
-      color: var(--text2);
-      white-space: pre-wrap;
-      word-break: break-word;
-      max-height: 220px;
-      overflow-y: auto;
-      line-height: 1.6;
-    }
-    .modal-actions {
-      display: flex;
-      justify-content: flex-end;
-      gap: 8px;
-      margin-top: 1rem;
-    }
-    .modal-btn {
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      padding: 7px 14px;
-      border-radius: 4px;
-      cursor: pointer;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text2);
-      transition: all .15s;
-    }
+    .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 1.5rem; max-width: 580px; width: 92%; }
+    .modal h3 { font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--red); margin-bottom: .5rem; font-weight: 500; }
+    .modal-workflow { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--text3); margin-bottom: 1rem; }
+    .modal pre { background: var(--bg3); border: 1px solid var(--border); border-radius: 4px; padding: .75rem; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--text2); white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow-y: auto; line-height: 1.6; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 1rem; align-items: center; }
+    .modal-btn { font-family: 'IBM Plex Mono', monospace; font-size: 11px; padding: 7px 14px; border-radius: 4px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text2); transition: all .15s; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
     .modal-btn:hover { border-color: var(--text2); color: var(--text); }
-    .modal-btn-primary {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #0a1a0a;
-      font-weight: 500;
-    }
-    .modal-btn-primary:hover { opacity: .85; }
+    .modal-btn-skyvern { border-color: var(--blue); color: var(--blue); }
+    .modal-btn-skyvern:hover { background: var(--blue-bg); }
   </style>
 </head>
 <body>
@@ -428,17 +221,18 @@
     <div class="logo">Bald Ginger <span>//</span> Automation Status</div>
     <div class="spacer"></div>
     <div class="header-meta" id="updatedAt"></div>
-    <button id="refreshBtn" onclick="loadData()">
+    <button class="icon-btn" onclick="loadData()">
       <span id="refreshSpinner" style="display:none" class="spinner"></span>
       ↻ Refresh
     </button>
+    <button class="icon-btn" onclick="toggleSettings()" id="settingsToggle">⚙ Settings</button>
   </header>
 
-  <div id="configBar">
+  <div id="settingsDrawer">
     <label>Script URL</label>
     <input type="text" id="scriptUrl" placeholder="https://script.google.com/macros/s/.../exec" />
     <input type="text" id="tokenInput" placeholder="token (optional)" />
-    <button id="saveUrlBtn" onclick="saveUrl()">Save URL</button>
+    <button id="saveUrlBtn" onclick="saveUrl()">Save &amp; Close</button>
     <span class="saved-notice" id="savedNotice">Saved ✓</span>
     <button id="loadBtn" onclick="loadData()">
       <span id="loadSpinner" style="display:none" class="spinner"></span>
@@ -447,22 +241,10 @@
   </div>
 
   <div class="metrics">
-    <div class="metric">
-      <div class="metric-label">Total Workflows</div>
-      <div class="metric-value white" id="m-total">—</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Completed</div>
-      <div class="metric-value green" id="m-ok">—</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Failed / Terminated</div>
-      <div class="metric-value red" id="m-fail">—</div>
-    </div>
-    <div class="metric">
-      <div class="metric-label">Stale / Not Run</div>
-      <div class="metric-value yellow" id="m-stale">—</div>
-    </div>
+    <div class="metric"><div class="metric-label">Total Workflows</div><div class="metric-value white" id="m-total">—</div></div>
+    <div class="metric"><div class="metric-label">Completed</div><div class="metric-value green" id="m-ok">—</div></div>
+    <div class="metric"><div class="metric-label">Failed / Terminated</div><div class="metric-value red" id="m-fail">—</div></div>
+    <div class="metric"><div class="metric-label">Stale / Not Run</div><div class="metric-value yellow" id="m-stale">—</div></div>
   </div>
 
   <div class="filters">
@@ -497,7 +279,7 @@
         <tr><td colspan="7">
           <div class="state-box">
             <div class="big">⬡</div>
-            Paste your Apps Script URL above and click Load
+            Click ⚙ Settings to paste your Apps Script URL
           </div>
         </td></tr>
       </tbody>
@@ -507,8 +289,10 @@
   <div class="modal-backdrop" id="modalBackdrop">
     <div class="modal">
       <h3 id="modalTitle">Failure Details</h3>
+      <div class="modal-workflow" id="modalWorkflow"></div>
       <pre id="modalBody"></pre>
       <div class="modal-actions">
+        <a class="modal-btn modal-btn-skyvern" id="modalSkyvernLink" href="#" target="_blank">↗ Open in Skyvern</a>
         <button class="modal-btn" onclick="closeModal()">Close</button>
       </div>
     </div>
@@ -516,9 +300,11 @@
 
   <script>
     const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const SKYVERN_BASE = "https://app.skyvern.com/workflows/";
     let allData = [];
+    let currentRunId = null;
+    let currentWfId = null;
 
-    // ── Load saved URL on startup
     window.addEventListener('DOMContentLoaded', () => {
       const saved = localStorage.getItem('dashboardUrl');
       const savedToken = localStorage.getItem('dashboardToken');
@@ -526,8 +312,16 @@
         document.getElementById('scriptUrl').value = saved;
         if (savedToken) document.getElementById('tokenInput').value = savedToken;
         loadData();
+      } else {
+        // No URL saved yet — open settings automatically
+        document.getElementById('settingsDrawer').classList.add('open');
       }
     });
+
+    function toggleSettings() {
+      const drawer = document.getElementById('settingsDrawer');
+      drawer.classList.toggle('open');
+    }
 
     function saveUrl() {
       const url = document.getElementById('scriptUrl').value.trim();
@@ -537,7 +331,10 @@
       if (token) localStorage.setItem('dashboardToken', token);
       const notice = document.getElementById('savedNotice');
       notice.classList.add('show');
-      setTimeout(() => notice.classList.remove('show'), 2000);
+      setTimeout(() => {
+        notice.classList.remove('show');
+        document.getElementById('settingsDrawer').classList.remove('open');
+      }, 1200);
     }
 
     function relTime(iso) {
@@ -547,13 +344,6 @@
       if (diff < 3600) return Math.floor(diff/60) + 'm ago';
       if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
       return Math.floor(diff/86400) + 'd ago';
-    }
-
-    function fmtDate(iso) {
-      if (!iso) return '—';
-      const d = new Date(iso);
-      return d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' +
-             d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
     }
 
     function schedLabel(w) {
@@ -585,7 +375,10 @@
 
     async function loadData() {
       const url = document.getElementById('scriptUrl').value.trim();
-      if (!url) { alert('Please paste your Apps Script URL first.'); return; }
+      if (!url) {
+        document.getElementById('settingsDrawer').classList.add('open');
+        return;
+      }
       const token = document.getElementById('tokenInput').value.trim();
       const fullUrl = token ? url + '?token=' + encodeURIComponent(token) : url;
 
@@ -598,12 +391,10 @@
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const json = await resp.json();
         if (json.error) throw new Error(json.error);
-
         allData = json.workflows || [];
         const genAt = json.generatedAt ? new Date(json.generatedAt) : new Date();
         document.getElementById('updatedAt').textContent =
           'Updated ' + genAt.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
-
         populateFilters();
         updateMetrics();
         render();
@@ -658,7 +449,6 @@
 
       const order = {failed:0, api_error:1, terminated:2, running:3, stale:4, never_run:5, completed:6};
       rows.sort((a,b) => (order[(a.status||'').toLowerCase()]??9) - (order[(b.status||'').toLowerCase()]??9));
-
       document.getElementById('filterCount').textContent = rows.length + ' of ' + allData.length + ' workflows';
 
       if (!rows.length) {
@@ -670,12 +460,21 @@
       document.getElementById('tbody').innerHTML = rows.map(w => {
         const s = (w.status||'').toLowerCase();
         const hours = w.hoursSince;
-        const ageStr = (hours !== null && hours !== undefined)
-          ? (hours < 1 ? '<1h' : Math.round(hours) + 'h') : '—';
+        const ageStr = (hours !== null && hours !== undefined) ? (hours < 1 ? '<1h' : Math.round(hours) + 'h') : '—';
         const hasErr = w.failureReason && (s === 'failed' || s === 'terminated' || s === 'api_error');
-        const reasonCell = hasErr
-          ? `<button class="err-btn" onclick="showErr(${JSON.stringify(w.name)}, ${JSON.stringify(w.failureReason)})">${w.failureReason.substring(0,45)}${w.failureReason.length>45?'…':''}</button>`
-          : `<span style="color:var(--text3);font-family:'IBM Plex Mono',monospace;font-size:11px">—</span>`;
+
+        // Build Skyvern URL — links to the workflow run if we have a runId, otherwise the workflow
+        const skyvernUrl = w.lastRunId
+          ? SKYVERN_BASE + w.id + '/runs/' + w.lastRunId
+          : SKYVERN_BASE + w.id;
+
+        let reasonCell = '<span style="color:var(--text3);font-family:\'IBM Plex Mono\',monospace;font-size:11px">—</span>';
+        if (hasErr) {
+          reasonCell = `<div class="reason-wrap">
+            <button class="err-btn" onclick="showErr(${JSON.stringify(w.name)}, ${JSON.stringify(w.failureReason)}, ${JSON.stringify(w.lastRunId||'')}, ${JSON.stringify(w.id)}, ${JSON.stringify(skyvernUrl)})">${w.failureReason.substring(0,38)}${w.failureReason.length>38?'…':''}</button>
+            <a class="skyvern-link" href="${skyvernUrl}" target="_blank">↗ Skyvern</a>
+          </div>`;
+        }
 
         return `<tr>
           <td class="td-name">${w.name}</td>
@@ -684,14 +483,16 @@
           <td>${badge(w.status)}</td>
           <td class="td-time">${relTime(w.finishedAt)}<div class="td-sched">${schedLabel(w)}</div></td>
           <td class="td-age" style="color:${ageColor(hours,s)}">${ageStr}</td>
-          <td class="td-reason">${reasonCell}</td>
+          <td>${reasonCell}</td>
         </tr>`;
       }).join('');
     }
 
-    function showErr(name, reason) {
-      document.getElementById('modalTitle').textContent = name;
+    function showErr(name, reason, runId, wfId, skyvernUrl) {
+      document.getElementById('modalTitle').textContent = 'Failure Details';
+      document.getElementById('modalWorkflow').textContent = name;
       document.getElementById('modalBody').textContent = reason;
+      document.getElementById('modalSkyvernLink').href = skyvernUrl;
       document.getElementById('modalBackdrop').classList.add('open');
     }
 
