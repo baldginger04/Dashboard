@@ -940,7 +940,7 @@ async function loadMyTasks() {
 
   let html = '';
   if (!tasks.length && !unblockedSubs.length) {
-    html = '<div class="empty">🎉 You're all caught up! No pending tasks.</div>';
+    html = '<div class="empty">All caught up! No pending tasks.</div>';
   } else {
     if (tasks.length) {
       html += '<div class="section-hdr"><div class="section-title">Tasks</div></div>';
