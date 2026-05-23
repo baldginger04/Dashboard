@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bald Ginger — Internal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --bg:       #faf9f6;
+      --bg2:      #f2f0eb;
+      --bg3:      #e8e4dc;
+      --border:   #ddd9d0;
+      --text:     #1a1714;
+      --text2:    #6b6560;
+      --text3:    #9e9892;
+      --accent:   #c8622a;
+      --accent2:  #e8834a;
+      --green:    #2d7a4f;
+      --green-bg: #edf7f2;
+      --yellow:   #b58a00;
+      --yellow-bg:#fdf8e8;
+      --red:      #b93232;
+      --red-bg:   #fdf0f0;
+      --blue:     #2a5fa8;
+      --blue-bg:  #eef3fc;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{font-size:14px}
+    body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh}
+
+    /* ── LOGIN ── */
+    #loginScreen{
+      display:flex;align-items:center;justify-content:center;
+      min-height:100vh;background:var(--bg);
+    }
+    .login-card{
+      width:380px;padding:3rem 2.5rem;
+      background:white;border:1px solid var(--border);
+      border-radius:12px;box-shadow:0 4px 40px rgba(0,0,0,.06);
+    }
+    .login-logo{
+      font-family:'DM Serif Display',serif;font-size:22px;
+      color:var(--accent);margin-bottom:.25rem;
+    }
+    .login-sub{font-size:12px;color:var(--text3);margin-bottom:2rem;letter-spacing:.04em;text-transform:uppercase;}
+    .field{margin-bottom:1rem}
+    .field label{display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em}
+    .field input{
+      width:100%;padding:10px 12px;border:1px solid var(--border);
+      border-radius:6px;font-size:14px;font-family:'DM Sans',sans-serif;
+      background:var(--bg);outline:none;transition:border-color .15s;
+    }
+    .field input:focus{border-color:var(--accent)}
+    .login-btn{
+      width:100%;padding:11px;background:var(--accent);color:white;
+      border:none;border-radius:6px;font-family:'DM Sans',sans-serif;
+      font-size:14px;font-weight:500;cursor:pointer;transition:opacity .15s;
+      margin-top:.5rem;
+    }
+    .login-btn:hover{opacity:.88}
+    .login-err{font-size:12px;color:var(--red);margin-top:.75rem;text-align:center}
+
+    /* ── APP SHELL ── */
+    #appShell{display:none}
+    .shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+
+    /* ── SIDEBAR ── */
+    .sidebar{
+      background:var(--text);color:white;
+      display:flex;flex-direction:column;
+      position:sticky;top:0;height:100vh;overflow-y:auto;
+    }
+    .sidebar-logo{
+      padding:1.5rem 1.25rem 1rem;
+      border-bottom:1px solid rgba(255,255,255,.08);
+    }
+    .sidebar-logo-text{
+      font-family:'DM Serif Display',serif;font-size:18px;
+      color:var(--accent2);
+    }
+    .sidebar-logo-sub{font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+    .sidebar-user{
+      padding:.75rem 1.25rem;margin:.75rem .75rem 0;
+      background:rgba(255,255,255,.06);border-radius:8px;
+      display:flex;align-items:center;gap:10px;
+    }
+    .user-avatar{
+      width:32px;height:32px;border-radius:50%;
+      background:var(--accent);color:white;
+      display:flex;align-items:center;justify-content:center;
+      font-size:12px;font-weight:600;flex-shrink:0;
+    }
+    .user-name{font-size:13px;font-weight:500;color:white}
+    .user-role{font-size:11px;color:rgba(255,255,255,.4)}
+    .sidebar-nav{padding:.75rem 0;flex:1}
+    .nav-section{
+      font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+      color:rgba(255,255,255,.3);padding:.5rem 1.25rem .25rem;margin-top:.5rem;
+    }
+    .nav-item{
+      display:flex;align-items:center;gap:10px;
+      padding:.6rem 1.25rem;font-size:13px;color:rgba(255,255,255,.6);
+      cursor:pointer;transition:all .15s;border-left:2px solid transparent;
+      text-decoration:none;
+    }
+    .nav-item:hover{color:white;background:rgba(255,255,255,.05)}
+    .nav-item.active{color:white;border-left-color:var(--accent2);background:rgba(255,255,255,.07)}
+    .nav-icon{font-size:15px;opacity:.7}
+    .sidebar-bottom{padding:1rem 1.25rem;border-top:1px solid rgba(255,255,255,.08)}
+    .logout-btn{
+      font-size:12px;color:rgba(255,255,255,.4);cursor:pointer;
+      background:none;border:none;font-family:'DM Sans',sans-serif;
+      padding:0;transition:color .15s;
+    }
+    .logout-btn:hover{color:rgba(255,255,255,.8)}
+
+    /* ── MAIN CONTENT ── */
+    .main{background:var(--bg);overflow-y:auto}
+    .page{display:none;padding:2rem 2.5rem}
+    .page.active{display:block}
+    .page-header{margin-bottom:1.75rem}
+    .page-title{font-family:'DM Serif Display',serif;font-size:28px;color:var(--text)}
+    .page-sub{font-size:13px;color:var(--text3);margin-top:4px}
+
+    /* ── METRICS ROW ── */
+    .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:2rem}
+    .metric-card{
+      background:white;border:1px solid var(--border);
+      border-radius:10px;padding:1.25rem 1.5rem;
+    }
+    .metric-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:6px}
+    .metric-value{font-family:'DM Serif Display',serif;font-size:32px;color:var(--text);line-height:1}
+    .metric-value.green{color:var(--green)}
+    .metric-value.orange{color:var(--accent)}
+    .metric-value.red{color:var(--red)}
+    .metric-sub{font-size:12px;color:var(--text3);margin-top:4px}
+
+    /* ── SECTION HEADER ── */
+    .section-hdr{
+      display:flex;align-items:center;justify-content:space-between;
+      margin-bottom:1rem;
+    }
+    .section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2)}
+
+    /* ── CLIENT TABLE ── */
+    .card{background:white;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.5rem}
+    .filter-row{
+      display:flex;gap:8px;align-items:center;padding:.75rem 1rem;
+      border-bottom:1px solid var(--border);flex-wrap:wrap;
+    }
+    .filter-input{
+      font-size:13px;padding:6px 10px;border:1px solid var(--border);
+      border-radius:6px;background:var(--bg);outline:none;font-family:'DM Sans',sans-serif;
+      color:var(--text);transition:border-color .15s;
+    }
+    .filter-input:focus{border-color:var(--accent)}
+    .filter-select{
+      font-size:13px;padding:6px 10px;border:1px solid var(--border);
+      border-radius:6px;background:var(--bg);outline:none;font-family:'DM Sans',sans-serif;
+      color:var(--text);cursor:pointer;
+    }
+    table{width:100%;border-collapse:collapse}
+    thead th{
+      font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+      color:var(--text3);padding:10px 14px;text-align:left;
+      background:var(--bg2);border-bottom:1px solid var(--border);
+      white-space:nowrap;
+    }
+    tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
+    tbody tr:last-child{border-bottom:none}
+    tbody tr:hover{background:var(--bg)}
+    td{padding:11px 14px;font-size:13px;vertical-align:middle}
+    .td-name{font-weight:500;color:var(--text)}
+    .td-muted{color:var(--text2)}
+    .td-small{font-size:12px;color:var(--text3)}
+
+    /* ── BADGES ── */
+    .badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px;white-space:nowrap}
+    .badge-done{background:var(--green-bg);color:var(--green)}
+    .badge-progress{background:var(--yellow-bg);color:var(--yellow)}
+    .badge-pending{background:var(--bg3);color:var(--text2)}
+    .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+
+    /* ── AVATAR ── */
+    .avatar{
+      width:26px;height:26px;border-radius:50%;
+      display:inline-flex;align-items:center;justify-content:center;
+      font-size:10px;font-weight:600;color:white;flex-shrink:0;
+    }
+    .av-ed{background:#c8622a}
+    .av-jen{background:#2a5fa8}
+    .av-jenc{background:#2d7a4f}
+
+    /* ── CLIENT DETAIL ── */
+    .detail-header{
+      display:flex;align-items:flex-start;justify-content:space-between;
+      margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;
+    }
+    .detail-title{font-family:'DM Serif Display',serif;font-size:26px}
+    .detail-meta{font-size:13px;color:var(--text3);margin-top:4px}
+    .back-btn{
+      font-size:13px;color:var(--accent);cursor:pointer;
+      background:none;border:none;font-family:'DM Sans',sans-serif;
+      display:flex;align-items:center;gap:4px;padding:0;
+      margin-bottom:1rem;transition:opacity .15s;
+    }
+    .back-btn:hover{opacity:.7}
+    .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem}
+    .detail-card{
+      background:white;border:1px solid var(--border);
+      border-radius:10px;padding:1.25rem;
+    }
+    .detail-card-title{
+      font-size:11px;text-transform:uppercase;letter-spacing:.07em;
+      color:var(--text3);margin-bottom:1rem;font-weight:600;
+    }
+    .task-list{list-style:none}
+    .task-item{
+      display:flex;align-items:center;gap:10px;
+      padding:.5rem 0;border-bottom:1px solid var(--border);
+    }
+    .task-item:last-child{border-bottom:none}
+    .task-check{
+      width:18px;height:18px;border-radius:4px;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;
+      font-size:11px;
+    }
+    .check-done{background:var(--green);color:white}
+    .check-progress{background:var(--yellow-bg);border:1px solid var(--yellow);color:var(--yellow)}
+    .check-pending{background:var(--bg3);border:1px solid var(--border)}
+    .task-name{flex:1;font-size:13px}
+    .task-assign{font-size:11px;color:var(--text3)}
+
+    /* ── KPI CHARTS ── */
+    .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:1.5rem}
+    .kpi-card{
+      background:white;border:1px solid var(--border);
+      border-radius:10px;padding:1.25rem;
+    }
+    .kpi-label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--text3);margin-bottom:.25rem}
+    .kpi-value{font-family:'DM Serif Display',serif;font-size:26px;color:var(--text);line-height:1}
+    .kpi-pct{font-size:12px;margin-top:2px}
+    .kpi-pct.good{color:var(--green)}
+    .kpi-pct.warn{color:var(--yellow)}
+    .kpi-pct.bad{color:var(--red)}
+    .chart-card{
+      background:white;border:1px solid var(--border);
+      border-radius:10px;padding:1.5rem;margin-bottom:1.5rem;
+    }
+    .chart-title{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:1rem;text-transform:uppercase;letter-spacing:.06em}
+    .chart-wrap{position:relative;height:220px}
+
+    /* ── EMPTY / LOADING ── */
+    .empty{text-align:center;padding:3rem;color:var(--text3);font-size:13px}
+    .spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ── TABS ── */
+    .tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
+    .tab{
+      padding:.6rem 1.25rem;font-size:13px;font-weight:500;
+      color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;
+      margin-bottom:-1px;transition:all .15s;
+    }
+    .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+    .tab-panel{display:none}
+    .tab-panel.active{display:block}
+
+    /* ── MESSAGES ── */
+    .msg-list{display:flex;flex-direction:column;gap:.75rem;margin-bottom:1rem}
+    .msg-item{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:.875rem 1rem}
+    .msg-meta{display:flex;align-items:center;gap:8px;margin-bottom:.35rem}
+    .msg-author{font-size:12px;font-weight:600;color:var(--text)}
+    .msg-time{font-size:11px;color:var(--text3)}
+    .msg-body{font-size:13px;color:var(--text);line-height:1.5}
+    .msg-input-row{display:flex;gap:8px}
+    .msg-input{
+      flex:1;padding:9px 12px;border:1px solid var(--border);
+      border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif;
+      outline:none;background:white;transition:border-color .15s;resize:none;
+    }
+    .msg-input:focus{border-color:var(--accent)}
+    .send-btn{
+      padding:9px 18px;background:var(--accent);color:white;
+      border:none;border-radius:6px;font-family:'DM Sans',sans-serif;
+      font-size:13px;font-weight:500;cursor:pointer;transition:opacity .15s;white-space:nowrap;
+    }
+    .send-btn:hover{opacity:.88}
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo">Bald Ginger</div>
+    <div class="login-sub">Internal Portal</div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="loginEmail" placeholder="you@baldginger.com" />
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" />
+    </div>
+    <button class="login-btn" onclick="doLogin()">Sign in</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="appShell">
+  <div class="shell">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <div class="sidebar-logo-text">Bald Ginger</div>
+        <div class="sidebar-logo-sub">Bookkeeping</div>
+      </div>
+      <div class="sidebar-user">
+        <div class="user-avatar" id="sidebarAvatar">EH</div>
+        <div>
+          <div class="user-name" id="sidebarName">Ed Hattrup</div>
+          <div class="user-role" id="sidebarRole">Owner</div>
+        </div>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section">Workspace</div>
+        <div class="nav-item active" onclick="showPage('dashboard')" id="nav-dashboard">
+          <span class="nav-icon">⊞</span> Dashboard
+        </div>
+        <div class="nav-item" onclick="showPage('clients')" id="nav-clients">
+          <span class="nav-icon">◎</span> Clients
+        </div>
+        <div class="nav-section">Tools</div>
+        <div class="nav-item" onclick="showPage('automation')" id="nav-automation">
+          <span class="nav-icon">⟳</span> Automation
+        </div>
+      </nav>
+      <div class="sidebar-bottom">
+        <button class="logout-btn" onclick="doLogout()">Sign out</button>
+      </div>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+
+      <!-- DASHBOARD PAGE -->
+      <div class="page active" id="page-dashboard">
+        <div class="page-header">
+          <div class="page-title">Good morning</div>
+          <div class="page-sub" id="dashDate"></div>
+        </div>
+
+        <div class="metrics">
+          <div class="metric-card">
+            <div class="metric-label">Total Clients</div>
+            <div class="metric-value" id="m-total">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Done</div>
+            <div class="metric-value green" id="m-done">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">In Progress</div>
+            <div class="metric-value orange" id="m-inprogress">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Not Started</div>
+            <div class="metric-value red" id="m-notstarted">—</div>
+          </div>
+        </div>
+
+        <div class="section-hdr">
+          <div class="section-title">My Clients This Period</div>
+        </div>
+        <div class="card">
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Role</th>
+                <th>Due Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="myClientsTbody">
+              <tr><td colspan="4"><div class="empty"><span class="spinner"></span></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CLIENTS PAGE -->
+      <div class="page" id="page-clients">
+        <div class="page-header">
+          <div class="page-title">All Clients</div>
+          <div class="page-sub">47 clients · April 2026 close</div>
+        </div>
+        <div class="card">
+          <div class="filter-row">
+            <input class="filter-input" id="clientSearch" placeholder="Search clients…" oninput="filterClients()" style="width:200px" />
+            <select class="filter-select" id="filterPreparer" onchange="filterClients()">
+              <option value="all">All preparers</option>
+              <option value="Ed Hattrup">Ed Hattrup</option>
+              <option value="Jennifer Mills">Jennifer Mills</option>
+              <option value="Jen Crane">Jen Crane</option>
+            </select>
+            <select class="filter-select" id="filterStatus" onchange="filterClients()">
+              <option value="all">All statuses</option>
+              <option value="Done">Done</option>
+              <option value="In Progress">In Progress</option>
+              <option value="Not Started">Not Started</option>
+            </select>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Preparer</th>
+                <th>Reviewer</th>
+                <th>Due Date</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="clientsTbody">
+              <tr><td colspan="5"><div class="empty"><span class="spinner"></span></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CLIENT DETAIL PAGE -->
+      <div class="page" id="page-client-detail">
+        <button class="back-btn" onclick="showPage('clients')">← Back to clients</button>
+        <div class="detail-header">
+          <div>
+            <div class="detail-title" id="detailName">Client Name</div>
+            <div class="detail-meta" id="detailMeta">April 2026 · Due May 11</div>
+          </div>
+          <div id="detailBadge"></div>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active" onclick="showTab('tasks')">Close Checklist</div>
+          <div class="tab" onclick="showTab('kpi')">KPI Dashboard</div>
+          <div class="tab" onclick="showTab('messages')">Messages</div>
+        </div>
+
+        <!-- TASKS TAB -->
+        <div class="tab-panel active" id="tab-tasks">
+          <div class="detail-grid" id="taskGrid"></div>
+        </div>
+
+        <!-- KPI TAB -->
+        <div class="tab-panel" id="tab-kpi">
+          <div class="kpi-grid" id="kpiCards"></div>
+          <div class="chart-card">
+            <div class="chart-title">Monthly Revenue</div>
+            <div class="chart-wrap"><canvas id="revenueChart"></canvas></div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Cost % Breakdown</div>
+            <div class="chart-wrap"><canvas id="costChart"></canvas></div>
+          </div>
+        </div>
+
+        <!-- MESSAGES TAB -->
+        <div class="tab-panel" id="tab-messages">
+          <div class="card" style="padding:1.25rem">
+            <div class="msg-list" id="msgList"></div>
+            <div class="msg-input-row">
+              <textarea class="msg-input" id="msgInput" rows="2" placeholder="Add a note or question…"></textarea>
+              <button class="send-btn" onclick="sendMessage()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AUTOMATION PAGE -->
+      <div class="page" id="page-automation">
+        <div class="page-header">
+          <div class="page-title">Automation Status</div>
+          <div class="page-sub">Live Skyvern workflow monitoring</div>
+        </div>
+        <div class="card" style="padding:1.25rem">
+          <div style="font-size:13px;color:var(--text2);margin-bottom:1rem">
+            Paste your Apps Script URL to load live workflow data.
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:1.5rem">
+            <input type="text" id="autoScriptUrl" class="filter-input" style="flex:1" placeholder="https://script.google.com/macros/s/.../exec" />
+            <button class="send-btn" onclick="loadAutomation()">Load</button>
+          </div>
+          <div id="autoMetrics" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem;display:none">
+            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="am-total">—</div></div>
+            <div class="metric-card"><div class="metric-label">Completed</div><div class="metric-value green" id="am-ok">—</div></div>
+            <div class="metric-card"><div class="metric-label">Failed</div><div class="metric-value red" id="am-fail">—</div></div>
+            <div class="metric-card"><div class="metric-label">Stale</div><div class="metric-value orange" id="am-stale">—</div></div>
+          </div>
+          <div id="autoTable"></div>
+        </div>
+      </div>
+
+    </div><!-- /main -->
+  </div><!-- /shell -->
+</div><!-- /appShell -->
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────
+const SUPABASE_URL = 'https://evfemokwtofbarjeezhu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2ZmVtb2t3dG9mYmFyamVlemh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NDUxMjQsImV4cCI6MjA5NTEyMTEyNH0.B9OSeB9CEP0TX80dJWpBPAIP6IEhYIzYlYKe4WL-6B0';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let allClients  = [];
+let currentClientId = null;
+let revenueChartInst = null;
+let costChartInst    = null;
+
+// ── AUTH ────────────────────────────────────────────────
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    showApp();
+  }
+  sb.auth.onAuthStateChange((_event, session) => {
+    if (session) { currentUser = session.user; showApp(); }
+    else showLogin();
+  });
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPassword').value;
+  document.getElementById('loginErr').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password: pass });
+  if (error) document.getElementById('loginErr').textContent = error.message;
+}
+
+async function doLogout() {
+  await sb.auth.signOut();
+  showLogin();
+}
+
+function showLogin() {
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('appShell').style.display = 'none';
+}
+
+async function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appShell').style.display = 'block';
+
+  // Set user info
+  const email = currentUser.email || '';
+  const name  = email.includes('ed@') ? 'Ed Hattrup' :
+                email.includes('jennifer') || email.includes('jmills') ? 'Jennifer Mills' :
+                email.includes('jen') || email.includes('jcrane') ? 'Jen Crane' : email;
+  const initials = name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
+  document.getElementById('sidebarName').textContent = name;
+  document.getElementById('sidebarAvatar').textContent = initials;
+  const role = email.includes('ed@') ? 'Owner' : 'Preparer';
+  document.getElementById('sidebarRole').textContent = role;
+
+  // Date greeting
+  const d = new Date();
+  document.getElementById('dashDate').textContent =
+    d.toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+
+  await loadClients();
+  renderDashboard();
+}
+
+// ── DATA ────────────────────────────────────────────────
+async function loadClients() {
+  const { data, error } = await sb.from('clients').select('*').order('name');
+  if (error) { console.error(error); return; }
+  allClients = data || [];
+  renderClientsTable(allClients);
+  renderDashboard();
+}
+
+// ── DASHBOARD ───────────────────────────────────────────
+function renderDashboard() {
+  const total      = allClients.length;
+  const done       = allClients.filter(c => c.close_status === 'Done').length;
+  const inprogress = allClients.filter(c => c.close_status === 'In Progress').length;
+  const notstarted = total - done - inprogress;
+
+  document.getElementById('m-total').textContent     = total;
+  document.getElementById('m-done').textContent      = done;
+  document.getElementById('m-inprogress').textContent = inprogress;
+  document.getElementById('m-notstarted').textContent  = notstarted;
+
+  // My clients — match by current user name
+  const userName = document.getElementById('sidebarName').textContent;
+  const mine = allClients.filter(c =>
+    c.preparer === userName || c.reviewer === userName || c.manager === userName
+  );
+
+  const tbody = document.getElementById('myClientsTbody');
+  if (!mine.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty">No clients assigned</div></td></tr>'; return; }
+
+  tbody.innerHTML = mine.map(c => {
+    const role = c.preparer === userName ? 'Preparer' : c.reviewer === userName ? 'Reviewer' : 'Manager';
+    return `<tr onclick="openClient('${c.id}')">
+      <td class="td-name">${c.name}</td>
+      <td class="td-muted">${role}</td>
+      <td class="td-small">${c.close_due_date || '—'}</td>
+      <td>${statusBadge(c.close_status)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── CLIENTS TABLE ────────────────────────────────────────
+function renderClientsTable(clients) {
+  const tbody = document.getElementById('clientsTbody');
+  if (!clients.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty">No clients found</div></td></tr>'; return; }
+  tbody.innerHTML = clients.map(c => `
+    <tr onclick="openClient('${c.id}')">
+      <td class="td-name">${c.name}</td>
+      <td>${avatarFor(c.preparer)} <span class="td-muted" style="margin-left:6px">${c.preparer || '—'}</span></td>
+      <td>${c.reviewer ? avatarFor(c.reviewer) + '<span class="td-muted" style="margin-left:6px">' + c.reviewer + '</span>' : '<span class="td-muted">—</span>'}</td>
+      <td class="td-small">${c.close_due_date || '—'}</td>
+      <td>${statusBadge(c.close_status)}</td>
+    </tr>
+  `).join('');
+}
+
+function filterClients() {
+  const q  = document.getElementById('clientSearch').value.toLowerCase();
+  const fp = document.getElementById('filterPreparer').value;
+  const fs = document.getElementById('filterStatus').value;
+  const filtered = allClients.filter(c => {
+    if (q  && !c.name.toLowerCase().includes(q)) return false;
+    if (fp !== 'all' && c.preparer !== fp) return false;
+    if (fs !== 'all' && c.close_status !== fs) return false;
+    return true;
+  });
+  renderClientsTable(filtered);
+}
+
+// ── CLIENT DETAIL ────────────────────────────────────────
+async function openClient(id) {
+  currentClientId = id;
+  const client = allClients.find(c => c.id === id);
+  if (!client) return;
+
+  document.getElementById('detailName').textContent = client.name;
+  document.getElementById('detailMeta').textContent =
+    `${client.close_period || 'April 2026'} · Due ${client.close_due_date || '—'}`;
+  document.getElementById('detailBadge').innerHTML = statusBadge(client.close_status);
+
+  showPage('client-detail');
+  showTab('tasks');
+  await loadTasks(id);
+  await loadKPI(id);
+  await loadMessages(id);
+}
+
+async function loadTasks(clientId) {
+  const { data } = await sb.from('tasks').select('*').eq('client_id', clientId).order('category');
+  const grid = document.getElementById('taskGrid');
+  if (!data || !data.length) {
+    grid.innerHTML = '<div style="color:var(--text3);font-size:13px">No tasks found for this client.</div>';
+    return;
+  }
+  const byCategory = {};
+  data.forEach(t => {
+    if (!byCategory[t.category]) byCategory[t.category] = [];
+    byCategory[t.category].push(t);
+  });
+  grid.innerHTML = Object.entries(byCategory).map(([cat, tasks]) => `
+    <div class="detail-card">
+      <div class="detail-card-title">${cat}</div>
+      <ul class="task-list">
+        ${tasks.map(t => `
+          <li class="task-item">
+            <div class="task-check ${t.status === 'Done' ? 'check-done' : t.status === 'In Progress' ? 'check-progress' : 'check-pending'}">
+              ${t.status === 'Done' ? '✓' : ''}
+            </div>
+            <span class="task-name">${t.title}</span>
+            <span class="task-assign">${t.assigned_to || ''}</span>
+          </li>
+        `).join('')}
+      </ul>
+    </div>
+  `).join('');
+}
+
+async function loadKPI(clientId) {
+  const { data } = await sb.from('kpi_data').select('*').eq('client_id', clientId).order('period', {ascending: true});
+  const kpiCards = document.getElementById('kpiCards');
+
+  if (!data || !data.length) {
+    kpiCards.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No KPI data available yet.</div>';
+    return;
+  }
+
+  const latest = data[data.length - 1];
+  const foodPct   = latest.food_revenue   ? Math.round((latest.food_cost   / latest.food_revenue)   * 100) : null;
+  const liquorPct = latest.liquor_revenue ? Math.round((latest.liquor_cost / latest.liquor_revenue) * 100) : null;
+  const beerPct   = latest.beer_revenue   ? Math.round((latest.beer_cost   / latest.beer_revenue)   * 100) : null;
+  const winePct   = latest.wine_revenue   ? Math.round((latest.wine_cost   / latest.wine_revenue)   * 100) : null;
+  const laborPct  = latest.total_revenue  ? Math.round((latest.labor_cost  / latest.total_revenue)  * 100) : null;
+
+  kpiCards.innerHTML = [
+    { label: 'Total Revenue',  value: fmtCurrency(latest.total_revenue),  pct: null },
+    { label: 'Food Cost %',    value: foodPct   ? foodPct   + '%' : '—',  pct: foodPct,   thresholds: [32, 38] },
+    { label: 'Liquor Cost %',  value: liquorPct ? liquorPct + '%' : '—',  pct: liquorPct, thresholds: [28, 35] },
+    { label: 'Beer Cost %',    value: beerPct   ? beerPct   + '%' : '—',  pct: beerPct,   thresholds: [25, 32] },
+    { label: 'Wine Cost %',    value: winePct   ? winePct   + '%' : '—',  pct: winePct,   thresholds: [30, 38] },
+    { label: 'Labor Cost %',   value: laborPct  ? laborPct  + '%' : '—',  pct: laborPct,  thresholds: [30, 35] },
+    { label: 'Total Covers',   value: latest.total_covers ? latest.total_covers.toLocaleString() : '—', pct: null },
+  ].map(k => {
+    const pctClass = k.pct === null ? '' :
+      k.pct <= k.thresholds[0] ? 'good' : k.pct <= k.thresholds[1] ? 'warn' : 'bad';
+    const pctLabel = k.pct !== null ? (pctClass === 'good' ? '↓ On target' : pctClass === 'warn' ? '⚠ Watch' : '↑ High') : '';
+    return `<div class="kpi-card">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      ${k.pct !== null ? `<div class="kpi-pct ${pctClass}">${pctLabel}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Revenue chart
+  const labels  = data.map(d => d.period);
+  const revenue = data.map(d => d.total_revenue || 0);
+  if (revenueChartInst) revenueChartInst.destroy();
+  revenueChartInst = new Chart(document.getElementById('revenueChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Revenue',
+        data: revenue,
+        backgroundColor: '#c8622a33',
+        borderColor: '#c8622a',
+        borderWidth: 2,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'k' } } }
+    }
+  });
+
+  // Cost % chart
+  if (costChartInst) costChartInst.destroy();
+  const lastEntry = data[data.length - 1];
+  costChartInst = new Chart(document.getElementById('costChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Food', 'Liquor', 'Beer', 'Wine', 'Labor'],
+      datasets: [{
+        label: 'Cost %',
+        data: [
+          lastEntry.food_revenue   ? Math.round(lastEntry.food_cost   / lastEntry.food_revenue   * 100) : 0,
+          lastEntry.liquor_revenue ? Math.round(lastEntry.liquor_cost / lastEntry.liquor_revenue * 100) : 0,
+          lastEntry.beer_revenue   ? Math.round(lastEntry.beer_cost   / lastEntry.beer_revenue   * 100) : 0,
+          lastEntry.wine_revenue   ? Math.round(lastEntry.wine_cost   / lastEntry.wine_revenue   * 100) : 0,
+          lastEntry.total_revenue  ? Math.round(lastEntry.labor_cost  / lastEntry.total_revenue  * 100) : 0,
+        ],
+        backgroundColor: ['#2a5fa833','#c8622a33','#2d7a4f33','#b58a0033','#b9323233'],
+        borderColor:     ['#2a5fa8',  '#c8622a',  '#2d7a4f',  '#b58a00',  '#b93232'],
+        borderWidth: 2, borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { ticks: { callback: v => v + '%' }, max: 50 } }
+    }
+  });
+}
+
+async function loadMessages(clientId) {
+  const { data } = await sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
+  const list = document.getElementById('msgList');
+  if (!data || !data.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">No messages yet</div>';
+    return;
+  }
+  list.innerHTML = data.map(m => `
+    <div class="msg-item">
+      <div class="msg-meta">
+        <span class="msg-author">${m.author}</span>
+        <span class="msg-time">${new Date(m.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</span>
+      </div>
+      <div class="msg-body">${m.body}</div>
+    </div>
+  `).join('');
+}
+
+async function sendMessage() {
+  const body = document.getElementById('msgInput').value.trim();
+  if (!body || !currentClientId) return;
+  const author = document.getElementById('sidebarName').textContent;
+  const { error } = await sb.from('messages').insert({ client_id: currentClientId, author, body });
+  if (!error) {
+    document.getElementById('msgInput').value = '';
+    await loadMessages(currentClientId);
+  }
+}
+
+// ── AUTOMATION ───────────────────────────────────────────
+async function loadAutomation() {
+  const url = document.getElementById('autoScriptUrl').value.trim();
+  if (!url) return;
+  localStorage.setItem('autoUrl', url);
+  document.getElementById('autoTable').innerHTML = '<div class="empty"><span class="spinner"></span> Loading workflows…</div>';
+  try {
+    const resp = await fetch(url);
+    const json = await resp.json();
+    const wfs  = json.workflows || [];
+    let ok=0, fail=0, stale=0;
+    wfs.forEach(w => {
+      const s = (w.status||'').toLowerCase();
+      if (s==='completed') ok++; else if (s==='failed'||s==='terminated') fail++; else stale++;
+    });
+    document.getElementById('am-total').textContent = wfs.length;
+    document.getElementById('am-ok').textContent    = ok;
+    document.getElementById('am-fail').textContent  = fail;
+    document.getElementById('am-stale').textContent = stale;
+    document.getElementById('autoMetrics').style.display = 'grid';
+
+    const order = {failed:0,api_error:1,terminated:2,running:3,stale:4,never_run:5,completed:6};
+    wfs.sort((a,b)=>(order[(a.status||'').toLowerCase()]??9)-(order[(b.status||'').toLowerCase()]??9));
+
+    document.getElementById('autoTable').innerHTML = `
+      <table>
+        <thead><tr><th>Workflow</th><th>Vendor</th><th>Client</th><th>Status</th><th>Last Run</th><th>Age</th></tr></thead>
+        <tbody>${wfs.map(w => {
+          const s = (w.status||'').toLowerCase();
+          const badge = s==='completed' ? '<span class="badge badge-done"><span class="dot"></span>Done</span>' :
+                        s==='failed'||s==='terminated' ? '<span class="badge" style="background:var(--red-bg);color:var(--red)"><span class="dot"></span>'+s+'</span>' :
+                        '<span class="badge badge-pending"><span class="dot"></span>'+(s||'unknown')+'</span>';
+          const hours = w.hoursSince;
+          const age = hours ? (hours < 1 ? '<1h' : Math.round(hours)+'h') : '—';
+          return `<tr>
+            <td class="td-name" style="font-size:12px">${w.name}</td>
+            <td class="td-small">${w.vendor}</td>
+            <td class="td-small">${w.client}</td>
+            <td>${badge}</td>
+            <td class="td-small">${relTime(w.finishedAt)}</td>
+            <td class="td-small">${age}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>`;
+  } catch(e) {
+    document.getElementById('autoTable').innerHTML = '<div class="empty" style="color:var(--red)">Error: '+e.message+'</div>';
+  }
+}
+
+// ── NAVIGATION ───────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  const navEl = document.getElementById('nav-'+name);
+  if (navEl) navEl.classList.add('active');
+
+  // Load automation URL from storage
+  if (name === 'automation') {
+    const saved = localStorage.getItem('autoUrl');
+    if (saved) document.getElementById('autoScriptUrl').value = saved;
+  }
+}
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.getAttribute('onclick') === `showTab('${name}')`) t.classList.add('active');
+  });
+}
+
+// ── HELPERS ──────────────────────────────────────────────
+function statusBadge(s) {
+  if (s === 'Done') return '<span class="badge badge-done"><span class="dot"></span>Done</span>';
+  if (s === 'In Progress') return '<span class="badge badge-progress"><span class="dot"></span>In Progress</span>';
+  return '<span class="badge badge-pending"><span class="dot"></span>Not Started</span>';
+}
+
+function avatarFor(name) {
+  if (!name) return '';
+  const cls = name.includes('Ed') ? 'av-ed' : name.includes('Jennifer') ? 'av-jen' : 'av-jenc';
+  const init = name.split(' ').map(w=>w[0]).join('').substring(0,2);
+  return `<span class="avatar ${cls}">${init}</span>`;
+}
+
+function fmtCurrency(v) {
+  if (!v) return '—';
+  return '$' + Math.round(v).toLocaleString();
+}
+
+function relTime(iso) {
+  if (!iso) return '—';
+  const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+  if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+  return Math.floor(diff/86400) + 'd ago';
+}
+
+// ── BOOT ─────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>
