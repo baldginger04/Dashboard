@@ -1350,10 +1350,10 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
       </div>
     </div>`;
   try {
-    await fetch('https://api.resend.com/emails', {
+    await fetch('https://evfemokwtofbarjeezhu.supabase.co/functions/v1/smooth-endpoint', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM_EMAIL, to: toEmail, subject: `${author} mentioned you in ${context}`, html: emailBody })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: toEmail, subject: `${author} mentioned you in ${context}`, html: emailBody })
     });
   } catch(e) { console.error('Email send failed:', e); }
 }
