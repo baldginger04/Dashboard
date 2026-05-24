@@ -1317,11 +1317,11 @@ async function uploadMsgImage(file, folder) {
 function detectMentions(text) {
   const mentions = [];
   const patterns = [
-    { pattern: /@ed/i,        name: 'Ed Hattrup' },
-    { pattern: /@jennifer/i,  name: 'Jennifer Mills' },
-    { pattern: /@jen/i,       name: 'Jen Crane' },
-    { pattern: /@lydia/i,     name: 'Lydia Hattrup' },
-  ];
+  { pattern: /@ed(?![a-z])/i,        name: 'Ed Hattrup' },
+  { pattern: /@jennifer/i,           name: 'Jennifer Mills' },
+  { pattern: /@jen(?!nifer)/i,       name: 'Jen Crane' },
+  { pattern: /@lydia/i,              name: 'Lydia Hattrup' },
+];
   patterns.forEach(p => { if (p.pattern.test(text)) mentions.push(p.name); });
   return [...new Set(mentions)];
 }
