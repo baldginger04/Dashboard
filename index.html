@@ -480,9 +480,15 @@
           </select>
         </div>
       </div>
-      <div class="form-row">
-        <label class="form-label">Starts On</label>
-        <input type="date" class="form-input" id="tmStartsOn" />
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">Starts On</label>
+          <input type="date" class="form-input" id="tmStartsOn" />
+        </div>
+        <div>
+          <label class="form-label">Next Due Date</label>
+          <input type="date" class="form-input" id="tmNextDue" />
+        </div>
       </div>
       <div class="form-row">
         <label class="form-label">Subtasks <span style="font-size:11px;color:var(--text3);font-weight:normal;text-transform:none">(optional)</span></label>
@@ -827,9 +833,39 @@ function renderTasks() {
   const today = new Date().toISOString().split('T')[0];
   const periodStart = new Date(); periodStart.setDate(1); const ps = periodStart.toISOString().split('T')[0];
 
+  // Only show tasks due today or overdue, or recurring tasks that are active today
+  const todayDate = new Date(today);
+  const todayDay = todayDate.getDay(); // 0=Sun, 6=Sat
+  const isWeekday = todayDay >= 1 && todayDay <= 5;
+
+  function isTaskDueToday(t) {
+    if (t.status === 'Done') return false; // handled by show completed toggle
+    const startsOn = t.starts_on || t.next_due;
+    const startDate = startsOn ? new Date(startsOn) : null;
+    const freq = t.frequency || 'monthly';
+
+    // If starts in the future, never show
+    if (startDate && startDate > todayDate) return false;
+
+    // Check by frequency
+    if (freq === 'daily') return true;
+    if (freq === 'weekdays') return isWeekday;
+    if (freq === 'every_other_weekday') return isWeekday;
+    if (freq === 'weekly' || freq === 'every_x_weeks') {
+      // Show if next_due <= today
+      return t.next_due && t.next_due <= today;
+    }
+    // monthly, quarterly, annually, one-time
+    return t.next_due && t.next_due <= today;
+  }
+
   const byCat = {};
-  CATS.forEach(c => { if (clientTasks.some(t => t.category === c)) byCat[c] = []; });
-  clientTasks.forEach(t => { if (!byCat[t.category]) byCat[t.category] = []; byCat[t.category].push(t); });
+  CATS.forEach(c => { if (clientTasks.some(t => t.category === c && (isTaskDueToday(t) || t.status === 'Done'))) byCat[c] = []; });
+  clientTasks.forEach(t => {
+    if (!isTaskDueToday(t) && t.status !== 'Done') return; // skip future tasks
+    if (!byCat[t.category]) byCat[t.category] = [];
+    byCat[t.category].push(t);
+  });
 
   if (!Object.keys(byCat).length) {
     container.innerHTML = `<div class="empty">No tasks yet.<br><br><button class="btn btn-primary" onclick="openTaskModal()">+ Add Task</button></div>`;
@@ -967,6 +1003,7 @@ function openTaskModal(clientId, category, taskId) {
   document.getElementById('tmNotes').value = '';
   document.getElementById('tmAssigned').value = '';
   document.getElementById('tmStartsOn').value = new Date().toISOString().split('T')[0];
+  document.getElementById('tmNextDue').value = new Date().toISOString().split('T')[0];
   document.getElementById('tmClientId').value = clientId || currentClientId || '';
   document.getElementById('tmTaskId').value = taskId || '';
   if (category) document.getElementById('tmCategory').value = category;
@@ -983,6 +1020,8 @@ function openTaskModal(clientId, category, taskId) {
       document.getElementById('tmAssigned').value = task.assigned_to || '';
       document.getElementById('tmNotes').value = task.notes || '';
       if (task.starts_on) document.getElementById('tmStartsOn').value = task.starts_on;
+      if (task.next_due) document.getElementById('tmNextDue').value = task.next_due;
+      else if (task.starts_on) document.getElementById('tmNextDue').value = task.starts_on;
       if (task.frequency) {
         document.querySelectorAll('.freq-opt').forEach(o => o.classList.remove('sel'));
         document.querySelector(`.freq-opt[data-f="${task.frequency}"]`)?.classList.add('sel');
@@ -1054,7 +1093,7 @@ async function saveTask() {
     assigned_to: assigned || null, notes: notes || null,
     frequency: freq, frequency_day: freqDay, frequency_dow: freqDow,
     frequency_month: freqMonth, starts_on: startsOn || null,
-    next_due: startsOn || null, updated_at: new Date().toISOString()
+    next_due: document.getElementById('tmNextDue').value || startsOn || null, updated_at: new Date().toISOString()
   };
 
   let savedId = taskId;
