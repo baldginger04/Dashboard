@@ -1353,7 +1353,10 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
   try {
     await fetch('https://evfemokwtofbarjeezhu.supabase.co/functions/v1/smooth-endpoint', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + SB_KEY
+      },
       body: JSON.stringify({ to: toEmail, subject: `${author} mentioned you in ${context}`, html: emailBody })
     });
   } catch(e) { console.error('Email send failed:', e); }
