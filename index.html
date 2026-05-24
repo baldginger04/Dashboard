@@ -830,7 +830,6 @@ async function loadTasks(clientId) {
 
 function renderTasks() {
   const container = document.getElementById('taskContent');
-  const today = new Date().toISOString().split('T')[0];
   const periodStart = new Date(); periodStart.setDate(1); const ps = periodStart.toISOString().split('T')[0];
 
   // Only show tasks due today or overdue, or recurring tasks that are active today
@@ -877,6 +876,7 @@ function renderTasks() {
     const active = tasks.filter(t => t.status !== 'Done');
     const done   = tasks.filter(t => t.status === 'Done' && (!t.updated_at || t.updated_at >= ps));
     const showDone = showCompleted[cat] || false;
+    // Tasks in byCat are already filtered to visible — active are non-done visible tasks
     const displayed = showDone ? [...active, ...done] : active;
 
     html += `<div class="task-cat">
