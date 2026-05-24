@@ -387,7 +387,7 @@
           <div class="card" style="padding:1.25rem">
             <div class="msg-list" id="msgList"></div>
             <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white">
-              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
+              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
               <div id="imgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
                 <div style="position:relative;display:inline-block">
                   <img id="imgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -416,7 +416,7 @@
         <div class="card" style="padding:1.25rem">
           <div class="msg-list" id="teamMsgList"><div class="empty"><span class="spinner"></span></div></div>
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
-            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Post a note to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
+            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Post a note to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTeamMessage()}" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
             <div id="teamImgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
               <div style="position:relative;display:inline-block">
                 <img id="teamImgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -1443,13 +1443,16 @@ async function sendTeamMessage() {
   let imageUrl = null;
   if (currentTeamImgFile) imageUrl = await uploadMsgImage(currentTeamImgFile, 'team');
 
-  await sb.from('team_messages').insert({ author, body: body || '📷 Image', image_url: imageUrl });
+  const { error } = await sb.from('team_messages').insert({ author, body: body || '📷 Image', image_url: imageUrl });
+  if (error) { console.error('Team message error:', error); alert('Could not post message: ' + error.message); return; }
   document.getElementById('teamMsgInput').value = '';
   clearTeamImg();
 
-  const mentions = detectMentions(body);
-  for (const name of mentions) {
-    if (name !== author) await sendMentionEmail(name, author, 'Team Notes', body, imageUrl);
+  if (body) {
+    const mentions = detectMentions(body);
+    for (const name of mentions) {
+      if (name !== author) await sendMentionEmail(name, author, 'Team Notes', body, imageUrl);
+    }
   }
   await loadTeamMessages();
 }
