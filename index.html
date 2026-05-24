@@ -387,7 +387,7 @@
           <div class="card" style="padding:1.25rem">
             <div class="msg-list" id="msgList"></div>
             <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white">
-              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
+              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="handleMsgKey(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
               <div id="imgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
                 <div style="position:relative;display:inline-block">
                   <img id="imgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -416,7 +416,7 @@
         <div class="card" style="padding:1.25rem">
           <div class="msg-list" id="teamMsgList"><div class="empty"><span class="spinner"></span></div></div>
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
-            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Post a note to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendTeamMessage()}" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
+            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Post a note to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="handleTeamMsgKey(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
             <div id="teamImgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
               <div style="position:relative;display:inline-block">
                 <img id="teamImgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -1426,17 +1426,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // ── Team messages ─────────────────────────────────────────
 async function loadTeamMessages() {
-  const { data } = await sb.from('team_messages').select('*').order('created_at');
+  const { data } = await sb.from('team_messages').select('*').eq('cleared', false).order('created_at');
   const list = document.getElementById('teamMsgList');
-  if (!data || !data.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No team notes yet. Post something!</div>'; return; }
+  if (!data || !data.length) { 
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No team notes yet. Post something!</div>'; 
+    return; 
+  }
   list.innerHTML = data.map(m => {
     const imgHtml = m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
-    return `<div class="msg-item">
-      <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span></div>
+    return `<div class="msg-item" id="tmsg_${m.id}">
+      <div class="msg-meta">
+        ${avHtml(m.author)}
+        <span class="msg-author" style="margin-left:6px">${m.author}</span>
+        <span class="msg-time">${fmtDateTime(m.created_at)}</span>
+        <button onclick="clearTeamNote('${m.id}')" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'DM Sans',sans-serif;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Clear</button>
+      </div>
       <div class="msg-body">${highlightMentions(m.body)}${imgHtml}</div>
     </div>`;
   }).join('');
   list.scrollTop = list.scrollHeight;
+}
+
+async function clearTeamNote(id) {
+  await sb.from('team_messages').update({ cleared: true }).eq('id', id);
+  document.getElementById('tmsg_' + id)?.remove();
+  const list = document.getElementById('teamMsgList');
+  if (!list.querySelector('.msg-item')) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No team notes yet. Post something!</div>';
+  }
+}
+
+function handleTeamMsgKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendTeamMessage();
+  }
+}
+function handleMsgKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
 }
 
 async function sendTeamMessage() {
