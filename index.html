@@ -892,6 +892,7 @@ async function loadTasks(clientId) {
 
 function renderTasks() {
   const container = document.getElementById('taskContent');
+  const today = new Date().toISOString().split('T')[0];
   const periodStart = new Date(); periodStart.setDate(1); const ps = periodStart.toISOString().split('T')[0];
 
   // Only show tasks due today or overdue, or recurring tasks that are active today
