@@ -301,6 +301,8 @@
           <span>☀</span> My Day <span class="nav-badge" id="mydayBadge" style="display:none">0</span>
         </div>
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients</div>
+        <div class="nav-section">Team</div>
+        <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Notes</div>
         <div class="nav-section">Tools</div>
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation</div>
       </nav>
@@ -384,9 +386,50 @@
         <div class="tab-panel" id="tab-messages">
           <div class="card" style="padding:1.25rem">
             <div class="msg-list" id="msgList"></div>
-            <div class="msg-input-row">
-              <textarea class="msg-input" id="msgInput" rows="2" placeholder="Add a note or question…"></textarea>
-              <button class="btn btn-primary" onclick="sendMessage()">Send</button>
+            <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white">
+              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
+              <div id="imgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
+                <div style="position:relative;display:inline-block">
+                  <img id="imgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
+                  <button onclick="clearImg()" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0">×</button>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg)">
+                <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                  Attach image
+                  <input type="file" id="imgUpload" accept="image/*" style="display:none" onchange="handleImgSelect(event)" />
+                </label>
+                <button class="btn btn-primary btn-sm" onclick="sendMessage()">Send</button>
+              </div>
+            </div>
+            <div id="dropZoneHint" style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px">You can also drag and drop an image anywhere in this area</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TEAM NOTES -->
+      <div class="page" id="page-team">
+        <div class="page-header">
+          <div><div class="page-title">Team Notes</div><div class="page-sub">Internal communication for the Bald Ginger team</div></div>
+        </div>
+        <div class="card" style="padding:1.25rem">
+          <div class="msg-list" id="teamMsgList"><div class="empty"><span class="spinner"></span></div></div>
+          <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
+            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Post a note to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
+            <div id="teamImgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
+              <div style="position:relative;display:inline-block">
+                <img id="teamImgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
+                <button onclick="clearTeamImg()" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0">×</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg)">
+              <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                Attach image
+                <input type="file" id="teamImgUpload" accept="image/*" style="display:none" onchange="handleTeamImgSelect(event)" />
+              </label>
+              <button class="btn btn-primary btn-sm" onclick="sendTeamMessage()">Post</button>
             </div>
           </div>
         </div>
@@ -1177,18 +1220,203 @@ async function loadKPI(clientId) {
 }
 
 // ── MESSAGES ─────────────────────────────────────────────
+const RESEND_KEY = 're_hxzfDSMm_F6h84EHkG7S7QBwGLsqVw1Vj';
+const FROM_EMAIL = 'triple@baldginger.com';
+const TEAM_EMAILS = {
+  'Ed Hattrup':     'ed@baldginger.com',
+  'Jennifer Mills': 'jennifer@baldginger.com',
+  'Jen Crane':      'jen.crane@baldginger.com',
+  'Lydia Hattrup':  'lydia@baldginger.com'
+};
+
+// ── Image handling ────────────────────────────────────────
+let currentImgFile = null;
+let currentTeamImgFile = null;
+
+function handleImgSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  currentImgFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('imgPreview').src = ev.target.result;
+    document.getElementById('imgPreviewWrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearImg() {
+  currentImgFile = null;
+  document.getElementById('imgPreview').src = '';
+  document.getElementById('imgPreviewWrap').style.display = 'none';
+  document.getElementById('imgUpload').value = '';
+}
+function handleTeamImgSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  currentTeamImgFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('teamImgPreview').src = ev.target.result;
+    document.getElementById('teamImgPreviewWrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+function clearTeamImg() {
+  currentTeamImgFile = null;
+  document.getElementById('teamImgPreview').src = '';
+  document.getElementById('teamImgPreviewWrap').style.display = 'none';
+  document.getElementById('teamImgUpload').value = '';
+}
+
+async function uploadMsgImage(file, folder) {
+  const ext = file.name.split('.').pop();
+  const path = `${folder}/${Date.now()}.${ext}`;
+  const { data, error } = await sb.storage.from('message-images').upload(path, file, { contentType: file.type });
+  if (error) { console.error('Upload error:', error); return null; }
+  const { data: urlData } = sb.storage.from('message-images').getPublicUrl(path);
+  return urlData.publicUrl;
+}
+
+// ── @mention detection & email ────────────────────────────
+function detectMentions(text) {
+  const mentions = [];
+  const patterns = [
+    { pattern: /@ed/i,        name: 'Ed Hattrup' },
+    { pattern: /@jennifer/i,  name: 'Jennifer Mills' },
+    { pattern: /@jen/i,       name: 'Jen Crane' },
+    { pattern: /@lydia/i,     name: 'Lydia Hattrup' },
+  ];
+  patterns.forEach(p => { if (p.pattern.test(text)) mentions.push(p.name); });
+  return [...new Set(mentions)];
+}
+
+function highlightMentions(text) {
+  return text
+    .replace(/@Ed/gi, '<span style="color:var(--accent);font-weight:500">@Ed</span>')
+    .replace(/@Jennifer/gi, '<span style="color:var(--blue);font-weight:500">@Jennifer</span>')
+    .replace(/@Jen/gi, '<span style="color:var(--green);font-weight:500">@Jen</span>')
+    .replace(/@Lydia/gi, '<span style="color:var(--purple);font-weight:500">@Lydia</span>');
+}
+
+async function sendMentionEmail(mentionedName, author, context, body, imageUrl) {
+  const toEmail = TEAM_EMAILS[mentionedName];
+  if (!toEmail) return;
+  const imgHtml = imageUrl ? `<br><br><img src="${imageUrl}" style="max-width:400px;border-radius:6px;border:1px solid #e2e5ea" />` : '';
+  const emailBody = `
+    <div style="font-family:sans-serif;max-width:500px">
+      <div style="background:#1a1c1e;padding:16px 20px;border-radius:8px 8px 0 0">
+        <span style="color:#F5A623;font-size:16px;font-weight:bold">Triple</span>
+        <span style="color:rgba(255,255,255,.4);font-size:12px;margin-left:8px">by Bald Ginger</span>
+      </div>
+      <div style="border:1px solid #e2e5ea;border-top:none;border-radius:0 0 8px 8px;padding:20px">
+        <p style="color:#666;font-size:13px;margin:0 0 12px"><strong>${author}</strong> mentioned you in <strong>${context}</strong></p>
+        <div style="background:#f8f8f8;border-left:3px solid #C8511A;padding:12px 16px;border-radius:0 6px 6px 0;font-size:14px;color:#1a1c1e">${body}${imgHtml}</div>
+        <p style="margin:16px 0 0"><a href="https://team.baldginger.com" style="background:#C8511A;color:white;padding:8px 16px;border-radius:6px;text-decoration:none;font-size:13px">View in Triple</a></p>
+      </div>
+    </div>`;
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + RESEND_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: FROM_EMAIL, to: toEmail, subject: `${author} mentioned you in ${context}`, html: emailBody })
+    });
+  } catch(e) { console.error('Email send failed:', e); }
+}
+
+// ── Client messages ───────────────────────────────────────
+function renderMsgItem(m) {
+  const imgHtml = m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
+  return `<div class="msg-item">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span></div>
+    <div class="msg-body">${highlightMentions(m.body)}${imgHtml}</div>
+  </div>`;
+}
+
 async function loadMessages(clientId) {
   const { data } = await sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
   const list = document.getElementById('msgList');
   if (!data || !data.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">No messages yet</div>'; return; }
-  list.innerHTML = data.map(m=>`<div class="msg-item"><div class="msg-meta"><span class="msg-author">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span></div><div class="msg-body">${m.body}</div></div>`).join('');
+  list.innerHTML = data.map(renderMsgItem).join('');
+  list.scrollTop = list.scrollHeight;
 }
+
 async function sendMessage() {
   const body = document.getElementById('msgInput').value.trim();
-  if (!body || !currentClientId) return;
-  await sb.from('messages').insert({ client_id: currentClientId, author: document.getElementById('sidebarName').textContent, body });
+  if (!body && !currentImgFile) return;
+  if (!currentClientId) return;
+  const author = document.getElementById('sidebarName').textContent;
+  const client = allClients.find(c => c.id === currentClientId);
+  const context = client ? client.name : 'a client';
+
+  let imageUrl = null;
+  if (currentImgFile) imageUrl = await uploadMsgImage(currentImgFile, `client-${currentClientId}`);
+
+  await sb.from('messages').insert({ client_id: currentClientId, author, body: body || '📷 Image', image_url: imageUrl });
   document.getElementById('msgInput').value = '';
+  clearImg();
+
+  // Send mention emails
+  const mentions = detectMentions(body);
+  for (const name of mentions) {
+    if (name !== author) await sendMentionEmail(name, author, context, body, imageUrl);
+  }
   await loadMessages(currentClientId);
+}
+
+// Drag and drop for client messages
+document.addEventListener('DOMContentLoaded', () => {
+  const msgCard = document.querySelector('#tab-messages .card');
+  if (msgCard) {
+    msgCard.addEventListener('dragover', e => { e.preventDefault(); msgCard.style.outline = '2px dashed var(--accent)'; });
+    msgCard.addEventListener('dragleave', () => { msgCard.style.outline = ''; });
+    msgCard.addEventListener('drop', e => {
+      e.preventDefault(); msgCard.style.outline = '';
+      const file = e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) {
+        currentImgFile = file;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          document.getElementById('imgPreview').src = ev.target.result;
+          document.getElementById('imgPreviewWrap').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  }
+});
+
+// ── Team messages ─────────────────────────────────────────
+async function loadTeamMessages() {
+  const { data } = await sb.from('team_messages').select('*').order('created_at');
+  const list = document.getElementById('teamMsgList');
+  if (!data || !data.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No team notes yet. Post something!</div>'; return; }
+  list.innerHTML = data.map(m => {
+    const imgHtml = m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
+    return `<div class="msg-item">
+      <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span></div>
+      <div class="msg-body">${highlightMentions(m.body)}${imgHtml}</div>
+    </div>`;
+  }).join('');
+  list.scrollTop = list.scrollHeight;
+}
+
+async function sendTeamMessage() {
+  const body = document.getElementById('teamMsgInput').value.trim();
+  if (!body && !currentTeamImgFile) return;
+  const author = document.getElementById('sidebarName').textContent;
+
+  let imageUrl = null;
+  if (currentTeamImgFile) imageUrl = await uploadMsgImage(currentTeamImgFile, 'team');
+
+  await sb.from('team_messages').insert({ author, body: body || '📷 Image', image_url: imageUrl });
+  document.getElementById('teamMsgInput').value = '';
+  clearTeamImg();
+
+  const mentions = detectMentions(body);
+  for (const name of mentions) {
+    if (name !== author) await sendMentionEmail(name, author, 'Team Notes', body, imageUrl);
+  }
+  await loadTeamMessages();
 }
 
 // ── AUTOMATION ───────────────────────────────────────────
@@ -1220,6 +1448,7 @@ function showPage(name) {
   document.getElementById('page-' + name)?.classList.add('active');
   document.getElementById('nav-' + name)?.classList.add('active');
   if (name === 'automation') { const s = localStorage.getItem('autoUrl'); if (s) document.getElementById('autoScriptUrl').value = s; }
+  if (name === 'team') loadTeamMessages();
 }
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
