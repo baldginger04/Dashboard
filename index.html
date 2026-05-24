@@ -745,7 +745,8 @@ function renderMyDay(tasks, subs, today) {
   const all = [
     ...tasks.map(t => ({
       id: t.id, type: 'task', title: t.title,
-      client: t.clients?.name || '', due: t.next_due,
+      client: t.clients?.name || '', clientId: t.client_id || '',
+      due: t.next_due,
       daysOverdue: t.next_due ? Math.floor((new Date(today) - new Date(t.next_due)) / 86400000) : 0,
       freq: t.frequency
     })),
@@ -800,6 +801,9 @@ function mydayItem(t, today) {
     `<span style="color:var(--text3);font-size:11px">Today</span>`;
   const warning = isWarning ? `<div style="font-size:11px;color:var(--yellow);background:var(--yellow-bg);border:1px solid var(--yellow-border);border-radius:4px;padding:4px 8px;margin-top:4px">This task is ${t.daysOverdue} days overdue. Consider adjusting the frequency.</div>` : '';
   const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
+  const editBtn = t.type === 'task'
+    ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px" onclick="editFromMyDay('${t.id}','${t.clientId}')">Edit</button>`
+    : '';
   return `<div class="myday-item ${rowClass}">
     <div class="myday-check" onclick="${onClick}"></div>
     <div class="myday-body">
@@ -808,7 +812,22 @@ function mydayItem(t, today) {
       ${warning}
     </div>
     ${dueLabel}
+    ${editBtn}
   </div>`;
+}
+
+async function editFromMyDay(taskId, clientId) {
+  // Load client tasks if not already loaded for this client
+  if (clientId && clientId !== currentClientId) {
+    currentClientId = clientId;
+    const [t, s] = await Promise.all([
+      sb.from('tasks').select('*').eq('client_id', clientId).order('sort_order'),
+      sb.from('subtasks').select('*').eq('client_id', clientId).order('sort_order')
+    ]);
+    clientTasks = t.data || [];
+    clientSubtasks = s.data || [];
+  }
+  openTaskModal(clientId, '', taskId);
 }
 
 async function quickDoneTask(id) {
@@ -910,7 +929,23 @@ function renderTasks() {
   });
 
   if (!Object.keys(byCat).length) {
-    container.innerHTML = `<div class="empty">No tasks yet.<br><br><button class="btn btn-primary" onclick="openTaskModal()">+ Add Task</button></div>`;
+    // Check if there are future tasks (not yet due)
+    const futureTasks = clientTasks.filter(t => t.status !== 'Done' && t.next_due && t.next_due > today);
+    if (futureTasks.length > 0) {
+      container.innerHTML = `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:3rem">
+        <div style="font-size:32px;margin-bottom:.75rem">✅</div>
+        <div style="font-weight:500;color:var(--text);margin-bottom:.5rem">All caught up!</div>
+        <div style="font-size:13px;color:var(--text3)">No tasks due today or overdue.<br>${futureTasks.length} task${futureTasks.length>1?'s':''} coming up soon.</div>
+      </div>`;
+    } else if (clientTasks.length === 0) {
+      container.innerHTML = `<div class="empty">No tasks yet.<br><br><button class="btn btn-primary" onclick="openTaskModal()">+ Add Task</button></div>`;
+    } else {
+      container.innerHTML = `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:3rem">
+        <div style="font-size:32px;margin-bottom:.75rem">✅</div>
+        <div style="font-weight:500;color:var(--text);margin-bottom:.5rem">All caught up!</div>
+        <div style="font-size:13px;color:var(--text3)">No tasks due today or overdue for this client.</div>
+      </div>`;
+    }
     return;
   }
 
