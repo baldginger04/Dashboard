@@ -1351,14 +1351,18 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
       </div>
     </div>`;
   try {
-    await fetch('https://evfemokwtofbarjeezhu.supabase.co/functions/v1/smooth-endpoint', {
+    console.log('Sending mention email to:', toEmail);
+    const resp = await fetch('https://evfemokwtofbarjeezhu.supabase.co/functions/v1/smooth-endpoint', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + SB_KEY
+        'Authorization': 'Bearer ' + SB_KEY,
+        'apikey': SB_KEY
       },
       body: JSON.stringify({ to: toEmail, subject: `${author} mentioned you in ${context}`, html: emailBody })
     });
+    const result = await resp.text();
+    console.log('Email response status:', resp.status, 'body:', result);
   } catch(e) { console.error('Email send failed:', e); }
 }
 
