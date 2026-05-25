@@ -300,9 +300,12 @@
         <div class="nav-item active" onclick="showPage('myday')" id="nav-myday">
           <span>☀</span> My Day <span class="nav-badge" id="mydayBadge" style="display:none">0</span>
         </div>
+        <div class="nav-item" onclick="showPage('myweek')" id="nav-myweek">
+          <span>📅</span> My Week <span class="nav-badge" id="myweekBadge" style="display:none">0</span>
+        </div>
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients</div>
         <div class="nav-section">Team</div>
-        <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Notes</div>
+        <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat</div>
         <div class="nav-section">Tools</div>
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation</div>
       </nav>
@@ -328,6 +331,17 @@
           <button class="sort-btn" onclick="setSort('task')" id="sort-task">Task name</button>
         </div>
         <div id="mydayContent"><div class="empty"><span class="spinner"></span></div></div>
+      </div>
+
+      <!-- MY WEEK -->
+      <div class="page" id="page-myweek">
+        <div class="page-header">
+          <div>
+            <div class="page-title">My Week</div>
+            <div class="page-sub" id="myweekDate"></div>
+          </div>
+        </div>
+        <div id="myweekContent"><div class="empty"><span class="spinner"></span></div></div>
       </div>
 
       <!-- CLIENTS -->
@@ -408,15 +422,15 @@
         </div>
       </div>
 
-      <!-- TEAM NOTES -->
+      <!-- TEAM CHAT -->
       <div class="page" id="page-team">
         <div class="page-header">
-          <div><div class="page-title">Team Notes</div><div class="page-sub">Internal communication for the Bald Ginger team</div></div>
+          <div><div class="page-title">Team Chat</div><div class="page-sub">Internal communication for the Bald Ginger team</div></div>
         </div>
         <div class="card" style="padding:1.25rem">
           <div class="msg-list" id="teamMsgList"><div class="empty"><span class="spinner"></span></div></div>
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
-            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Post a note to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="handleTeamMsgKey(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
+            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Send a message to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="handleTeamMsgKey(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
             <div id="teamImgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
               <div style="position:relative;display:inline-block">
                 <img id="teamImgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -642,6 +656,7 @@ async function showApp() {
   document.getElementById('mydayDate').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
   await loadClients();
   await loadMyDay();
+  await loadMyWeek();
 }
 
 // ── CLIENTS ──────────────────────────────────────────────
@@ -732,6 +747,169 @@ async function loadMyDay() {
   else badge.style.display = 'none';
 
   renderMyDay(myTasks, mySubs, today);
+}
+
+// ── MY WEEK ──────────────────────────────────────────────
+async function loadMyWeek() {
+  const name = document.getElementById('sidebarName').textContent;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().split('T')[0];
+  const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 6);
+  const weekEndStr = weekEnd.toISOString().split('T')[0];
+
+  document.getElementById('myweekDate').textContent =
+    'Today through ' + weekEnd.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+
+  try {
+    const { data: tasks, error: te } = await sb.from('tasks')
+      .select('*, clients(name)')
+      .eq('assigned_to', name)
+      .neq('status', 'Done')
+      .order('next_due');
+    if (te) throw te;
+
+    const { data: subtasks, error: se } = await sb.from('subtasks')
+      .select('*, tasks(title,next_due,client_id), clients(name)')
+      .eq('assigned_to', name)
+      .neq('status', 'Done');
+    if (se) throw se;
+
+    const allSubsRes = await sb.from('subtasks').select('id,status,blocked_by');
+    const allSubs = allSubsRes.data || [];
+
+    // Filter tasks: due in window OR daily-recurring (which fire every day)
+    const dailyFreqs = ['daily','weekdays','every_other_weekday'];
+    const inWindow = d => d && d >= todayStr && d <= weekEndStr;
+
+    const weekTasks = (tasks || []).filter(t => {
+      if (dailyFreqs.includes(t.frequency)) return true;
+      // include overdue rolled-up to today, plus tasks due during the window
+      return t.next_due && t.next_due <= weekEndStr;
+    });
+
+    const weekSubs = (subtasks || []).filter(s => {
+      if (!s.blocked_by) return true;
+      const blocker = allSubs.find(x => x.id === s.blocked_by);
+      return !blocker || blocker.status === 'Done';
+    }).filter(s => {
+      const taskDue = s.tasks?.next_due;
+      return taskDue && taskDue <= weekEndStr;
+    });
+
+    const totalPending = weekTasks.length + weekSubs.length;
+    const badge = document.getElementById('myweekBadge');
+    if (totalPending > 0) { badge.textContent = totalPending; badge.style.display = 'inline'; }
+    else badge.style.display = 'none';
+
+    renderMyWeek(weekTasks, weekSubs, today, weekEnd);
+  } catch (err) {
+    console.error('loadMyWeek error:', err);
+    document.getElementById('myweekContent').innerHTML =
+      `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2rem;color:var(--red)">
+        Couldn't load this week's tasks. ${err.message || 'Please try again.'}
+      </div>`;
+  }
+}
+
+function renderMyWeek(tasks, subs, today, weekEnd) {
+  const todayStr = today.toISOString().split('T')[0];
+  const dailyFreqs = ['daily','weekdays','every_other_weekday'];
+  const isWeekday = d => { const dow = d.getDay(); return dow >= 1 && dow <= 5; };
+
+  // Build the 7-day range
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(d.getDate() + i);
+    days.push({ date: d, dateStr: d.toISOString().split('T')[0], items: [] });
+  }
+
+  // Flatten tasks + subs into one list, then bucket per day
+  const all = [
+    ...tasks.map(t => ({
+      id: t.id, type: 'task', title: t.title,
+      client: t.clients?.name || '', clientId: t.client_id || '',
+      due: t.next_due, freq: t.frequency
+    })),
+    ...subs.map(s => ({
+      id: s.id, type: 'subtask', title: s.title,
+      client: s.clients?.name || '',
+      due: s.tasks?.next_due,
+      parentTask: s.tasks?.title || ''
+    }))
+  ];
+
+  // Bucket each item into the right day(s)
+  all.forEach(item => {
+    // Daily-recurring tasks with no due date appear every applicable day
+    if (item.type === 'task' && dailyFreqs.includes(item.freq) && !item.due) {
+      days.forEach(d => {
+        if (item.freq === 'daily') d.items.push(item);
+        else if ((item.freq === 'weekdays' || item.freq === 'every_other_weekday') && isWeekday(d.date)) d.items.push(item);
+      });
+      return;
+    }
+    // Tasks overdue (due before today) bucket into Today
+    if (item.due && item.due < todayStr) {
+      days[0].items.push({ ...item, isOverdue: true,
+        daysOverdue: Math.floor((today - new Date(item.due)) / 86400000) });
+      return;
+    }
+    // Tasks within the window go in their day
+    const d = days.find(x => x.dateStr === item.due);
+    if (d) d.items.push(item);
+  });
+
+  // Check if completely empty
+  const anyItems = days.some(d => d.items.length);
+  if (!anyItems) {
+    document.getElementById('myweekContent').innerHTML =
+      '<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:3rem">No tasks scheduled for the next 7 days.</div>';
+    return;
+  }
+
+  let html = '';
+  const todayLabel = today.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  days.forEach((d, i) => {
+    const isToday = i === 0;
+    const label = isToday
+      ? 'Today · ' + todayLabel
+      : d.date.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+    const dotColor = isToday ? 'var(--accent)' : 'var(--text3)';
+    html += `<div class="myday-section">
+      <div class="myday-section-title">
+        <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};display:inline-block"></span>
+        ${label} ${d.items.length ? `(${d.items.length})` : ''}
+      </div>`;
+    if (!d.items.length) {
+      html += '<div style="font-size:12px;color:var(--text3);padding:.5rem 1.25rem .5rem 18px">Nothing scheduled.</div>';
+    } else {
+      d.items.forEach(item => { html += myweekItem(item); });
+    }
+    html += '</div>';
+  });
+  document.getElementById('myweekContent').innerHTML = html;
+}
+
+function myweekItem(t) {
+  const rowClass = t.isOverdue ? 'overdue-item' : '';
+  const dueLabel = t.isOverdue
+    ? `<span style="color:var(--red);font-size:11px;font-weight:500">${t.daysOverdue}d overdue</span>`
+    : (t.freq && ['daily','weekdays','every_other_weekday'].includes(t.freq) && !t.due
+        ? '<span style="color:var(--text3);font-size:11px">Recurring</span>'
+        : '');
+  const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
+  const editBtn = t.type === 'task' && t.clientId
+    ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px" onclick="editFromMyDay('${t.id}','${t.clientId}')">Edit</button>`
+    : '';
+  return `<div class="myday-item ${rowClass}">
+    <div class="myday-check" onclick="${onClick}"></div>
+    <div class="myday-body">
+      <div class="myday-task-name">${t.title}</div>
+      <div class="myday-client">${t.client}${t.parentTask ? ' · ' + t.parentTask : ''}</div>
+    </div>
+    ${dueLabel}
+    ${editBtn}
+  </div>`;
 }
 
 function setSort(s) {
@@ -841,11 +1019,13 @@ async function quickDoneTask(id) {
     }
   }
   loadMyDay();
+  loadMyWeek();
 }
 
 async function quickDoneSub(id) {
   await sb.from('subtasks').update({ status: 'Done', updated_at: new Date().toISOString() }).eq('id', id);
   loadMyDay();
+  loadMyWeek();
 }
 
 function calcNextDue(taskId) {
@@ -870,10 +1050,19 @@ function computeNextDue(freq, fDay, fDow, fMonth, fromDate) {
 async function openClient(id) {
   currentClientId = id;
   const c = allClients.find(x => x.id === id);
-  if (!c) return;
+  if (!c) {
+    console.error('openClient: client not found', id);
+    alert('Could not find that client. Please refresh and try again.');
+    return;
+  }
   document.getElementById('detailName').textContent = c.name;
   document.getElementById('detailMeta').textContent = (c.close_period||'') + (c.close_due_date ? ' · Due ' + c.close_due_date : '');
   document.getElementById('detailBadge').innerHTML = statusBadge(c.close_status);
+  // Reset content panels so we don't show stale data from previous client while loading
+  document.getElementById('taskContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  document.getElementById('accountContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  document.getElementById('kpiCards').innerHTML = '';
+  document.getElementById('msgList').innerHTML = '';
   showPage('client-detail');
   showTab('tasks');
   await Promise.all([loadTasks(id), loadAccounts(id), loadKPI(id), loadMessages(id)]);
@@ -881,13 +1070,23 @@ async function openClient(id) {
 
 // ── TASKS ────────────────────────────────────────────────
 async function loadTasks(clientId) {
-  const [t, s] = await Promise.all([
-    sb.from('tasks').select('*').eq('client_id', clientId).order('sort_order').order('created_at'),
-    sb.from('subtasks').select('*').eq('client_id', clientId).order('sort_order')
-  ]);
-  clientTasks = t.data || [];
-  clientSubtasks = s.data || [];
-  renderTasks();
+  try {
+    const [t, s] = await Promise.all([
+      sb.from('tasks').select('*').eq('client_id', clientId).order('sort_order').order('created_at'),
+      sb.from('subtasks').select('*').eq('client_id', clientId).order('sort_order')
+    ]);
+    if (t.error) throw t.error;
+    if (s.error) throw s.error;
+    clientTasks = t.data || [];
+    clientSubtasks = s.data || [];
+    renderTasks();
+  } catch (err) {
+    console.error('loadTasks error:', err);
+    document.getElementById('taskContent').innerHTML =
+      `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2rem;color:var(--red)">
+        Couldn't load tasks. ${err.message || 'Please try again.'}
+      </div>`;
+  }
 }
 
 function renderTasks() {
@@ -1195,13 +1394,25 @@ async function saveTask() {
 
   closeModal('taskModal');
   await loadTasks(clientId);
+  // Also refresh the cross-cutting views so a due date change shows up immediately
+  loadMyDay();
+  loadMyWeek();
 }
 
 // ── ACCOUNTS ─────────────────────────────────────────────
 async function loadAccounts(clientId) {
-  const { data } = await sb.from('client_accounts').select('*').eq('client_id', clientId).order('sort_order');
-  clientAccounts = data || [];
-  renderAccounts();
+  try {
+    const { data, error } = await sb.from('client_accounts').select('*').eq('client_id', clientId).order('sort_order');
+    if (error) throw error;
+    clientAccounts = data || [];
+    renderAccounts();
+  } catch (err) {
+    console.error('loadAccounts error:', err);
+    document.getElementById('accountContent').innerHTML =
+      `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2rem;color:var(--red)">
+        Couldn't load accounts. ${err.message || 'Please try again.'}
+      </div>`;
+  }
 }
 function renderAccounts() {
   const c = document.getElementById('accountContent');
@@ -1235,9 +1446,11 @@ async function deleteAcct(id) { if (!confirm('Delete this account?')) return; aw
 
 // ── KPI ──────────────────────────────────────────────────
 async function loadKPI(clientId) {
-  const { data } = await sb.from('kpi_data').select('*').eq('client_id', clientId).order('period');
   const kpiCards = document.getElementById('kpiCards');
-  if (!data || !data.length) { kpiCards.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No KPI data yet.</div>'; return; }
+  try {
+    const { data, error } = await sb.from('kpi_data').select('*').eq('client_id', clientId).order('period');
+    if (error) throw error;
+    if (!data || !data.length) { kpiCards.innerHTML = '<div style="color:var(--text3);font-size:13px;grid-column:1/-1">No KPI data yet.</div>'; return; }
   const l = data[data.length - 1];
   const pct = (c,r) => r ? Math.round(c/r*100) : null;
   const fp=pct(l.food_cost,l.food_revenue), lp=pct(l.liquor_cost,l.liquor_revenue), bp=pct(l.beer_cost,l.beer_revenue), wp=pct(l.wine_cost,l.wine_revenue), lab=pct(l.labor_cost,l.total_revenue);
@@ -1253,6 +1466,10 @@ async function loadKPI(clientId) {
   revenueChart = new Chart(document.getElementById('revenueChart'),{type:'bar',data:{labels:data.map(d=>d.period),datasets:[{label:'Revenue',data:data.map(d=>d.total_revenue||0),backgroundColor:'#C8511A22',borderColor:'#C8511A',borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'$'+(v/1000).toFixed(0)+'k'}}}}});
   if (costChart) costChart.destroy();
   costChart = new Chart(document.getElementById('costChart'),{type:'bar',data:{labels:['Food','Liquor','Beer','Wine','Labor'],datasets:[{label:'Cost %',data:[fp,lp,bp,wp,lab],backgroundColor:['#1a5fa822','#C8511A22','#1e7a4522','#8a650022','#b9323222'],borderColor:['#1a5fa8','#C8511A','#1e7a45','#8a6500','#b93232'],borderWidth:2,borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>v+'%'},max:50}}}});
+  } catch (err) {
+    console.error('loadKPI error:', err);
+    kpiCards.innerHTML = `<div style="color:var(--red);font-size:13px;grid-column:1/-1">Couldn't load KPI data. ${err.message || ''}</div>`;
+  }
 }
 
 // ── MESSAGES ─────────────────────────────────────────────
@@ -1376,11 +1593,17 @@ function renderMsgItem(m) {
 }
 
 async function loadMessages(clientId) {
-  const { data } = await sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
   const list = document.getElementById('msgList');
-  if (!data || !data.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">No messages yet</div>'; return; }
-  list.innerHTML = data.map(renderMsgItem).join('');
-  list.scrollTop = list.scrollHeight;
+  try {
+    const { data, error } = await sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
+    if (error) throw error;
+    if (!data || !data.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">No messages yet</div>'; return; }
+    list.innerHTML = data.map(renderMsgItem).join('');
+    list.scrollTop = list.scrollHeight;
+  } catch (err) {
+    console.error('loadMessages error:', err);
+    list.innerHTML = `<div style="color:var(--red);font-size:13px;text-align:center;padding:1rem">Couldn't load messages. ${err.message || ''}</div>`;
+  }
 }
 
 async function sendMessage() {
@@ -1433,7 +1656,7 @@ async function loadTeamMessages() {
   const { data } = await sb.from('team_messages').select('*').eq('cleared', false).order('created_at');
   const list = document.getElementById('teamMsgList');
   if (!data || !data.length) { 
-    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No team notes yet. Post something!</div>'; 
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No messages yet. Send something!</div>'; 
     return; 
   }
   list.innerHTML = data.map(m => {
@@ -1456,7 +1679,7 @@ async function clearTeamNote(id) {
   document.getElementById('tmsg_' + id)?.remove();
   const list = document.getElementById('teamMsgList');
   if (!list.querySelector('.msg-item')) {
-    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No team notes yet. Post something!</div>';
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No messages yet. Send something!</div>';
   }
 }
 
@@ -1489,7 +1712,7 @@ async function sendTeamMessage() {
   if (body) {
     const mentions = detectMentions(body);
     for (const name of mentions) {
-      if (name !== author) await sendMentionEmail(name, author, 'Team Notes', body, imageUrl);
+      if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, imageUrl);
     }
   }
   await loadTeamMessages();
@@ -1525,6 +1748,8 @@ function showPage(name) {
   document.getElementById('nav-' + name)?.classList.add('active');
   if (name === 'automation') { const s = localStorage.getItem('autoUrl'); if (s) document.getElementById('autoScriptUrl').value = s; }
   if (name === 'team') loadTeamMessages();
+  if (name === 'myday') loadMyDay();
+  if (name === 'myweek') loadMyWeek();
 }
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
