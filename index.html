@@ -189,8 +189,43 @@
     .myday-check.done{background:var(--green);border-color:var(--green);color:white}
     .myday-body{flex:1;min-width:0}
     .myday-task-name{font-size:13px;font-weight:500;color:var(--text)}
-    .myday-client{font-size:12px;color:var(--text3);margin-top:2px}
+    .myday-client{font-size:12px;color:var(--blue);font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .myday-due{font-size:11px;white-space:nowrap;flex-shrink:0}
+
+    /* MY WEEK columns */
+    .week-grid{display:grid;grid-template-columns:repeat(7, minmax(0, 1fr));gap:10px;align-items:start}
+    .week-col{background:white;border:1px solid var(--border);border-radius:10px;padding:.75rem;display:flex;flex-direction:column;min-height:400px;max-height:calc(100vh - 220px)}
+    .week-col.today{border-color:var(--accent);background:rgba(200,81,26,.03);box-shadow:0 1px 4px rgba(200,81,26,.08)}
+    .week-col-hdr{padding:.25rem .25rem .75rem;border-bottom:1px solid var(--border);margin-bottom:.5rem}
+    .week-col.today .week-col-hdr{border-bottom-color:rgba(200,81,26,.25)}
+    .week-col-day{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3)}
+    .week-col.today .week-col-day{color:var(--accent)}
+    .week-col-date{font-size:18px;font-weight:600;color:var(--text);line-height:1.1;margin-top:2px}
+    .week-col-count{font-size:11px;color:var(--text3);margin-top:2px}
+    .week-col-body{flex:1;overflow-y:auto;margin:0 -.25rem;padding:0 .25rem}
+    .week-col-body::-webkit-scrollbar{width:6px}
+    .week-col-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+    .week-card{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:.6rem .7rem;margin-bottom:6px;font-size:12px;transition:all .15s;display:flex;gap:8px;align-items:flex-start}
+    .week-card:hover{border-color:var(--accent);background:white}
+    .week-card.overdue-item{border-color:var(--red-border);background:var(--red-bg)}
+    .week-card-body{flex:1;min-width:0}
+    .week-card-title{font-weight:500;color:var(--text);font-size:12px;line-height:1.3;word-wrap:break-word}
+    .week-card-client{font-size:11px;color:var(--blue);font-weight:500;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .week-card-meta{font-size:10px;color:var(--text3);margin-top:3px}
+    .week-card-overdue{font-size:10px;color:var(--red);font-weight:600;margin-top:3px}
+    .week-card .myday-check{width:16px;height:16px;font-size:10px}
+    .week-col-empty{font-size:11px;color:var(--text3);font-style:italic;padding:1rem .25rem;text-align:center}
+
+    /* MY WEEK responsive — collapse to fewer columns on smaller screens */
+    @media (max-width: 1400px) {
+      .week-grid{grid-template-columns:repeat(4, minmax(0, 1fr))}
+    }
+    @media (max-width: 900px) {
+      .week-grid{grid-template-columns:repeat(2, minmax(0, 1fr))}
+    }
+    @media (max-width: 540px) {
+      .week-grid{grid-template-columns:1fr}
+    }
 
     /* ACCOUNTS */
     .account-item{padding:.75rem 1.25rem;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)}
@@ -877,48 +912,50 @@ function renderMyWeek(tasks, subs, today, weekEnd) {
     return;
   }
 
-  let html = '';
-  const todayLabel = today.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+  let html = '<div class="week-grid">';
   days.forEach((d, i) => {
     const isToday = i === 0;
-    const label = isToday
-      ? 'Today · ' + todayLabel
-      : d.date.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
-    const dotColor = isToday ? 'var(--accent)' : 'var(--text3)';
-    html += `<div class="myday-section">
-      <div class="myday-section-title">
-        <span style="width:8px;height:8px;border-radius:50%;background:${dotColor};display:inline-block"></span>
-        ${label} ${d.items.length ? `(${d.items.length})` : ''}
-      </div>`;
+    const dayName = d.date.toLocaleDateString('en-US',{weekday:'short'});
+    const dateLabel = d.date.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    html += `<div class="week-col ${isToday ? 'today' : ''}">
+      <div class="week-col-hdr">
+        <div class="week-col-day">${isToday ? 'Today' : dayName}</div>
+        <div class="week-col-date">${dateLabel}</div>
+        <div class="week-col-count">${d.items.length} task${d.items.length === 1 ? '' : 's'}</div>
+      </div>
+      <div class="week-col-body">`;
     if (!d.items.length) {
-      html += '<div style="font-size:12px;color:var(--text3);padding:.5rem 1.25rem .5rem 18px">Nothing scheduled.</div>';
+      html += '<div class="week-col-empty">Nothing scheduled</div>';
     } else {
       d.items.forEach(item => { html += myweekItem(item); });
     }
-    html += '</div>';
+    html += `</div></div>`;
   });
+  html += '</div>';
   document.getElementById('myweekContent').innerHTML = html;
 }
 
 function myweekItem(t) {
   const rowClass = t.isOverdue ? 'overdue-item' : '';
-  const dueLabel = t.isOverdue
-    ? `<span style="color:var(--red);font-size:11px;font-weight:500">${t.daysOverdue}d overdue</span>`
-    : (t.freq && ['daily','weekdays','every_other_weekday'].includes(t.freq) && !t.due
-        ? '<span style="color:var(--text3);font-size:11px">Recurring</span>'
-        : '');
-  const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
-  const editBtn = t.type === 'task' && t.clientId
-    ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px" onclick="editFromMyDay('${t.id}','${t.clientId}')">Edit</button>`
+  const overdueLabel = t.isOverdue
+    ? `<div class="week-card-overdue">${t.daysOverdue}d overdue</div>`
     : '';
-  return `<div class="myday-item ${rowClass}">
+  const recurringLabel = t.freq && ['daily','weekdays','every_other_weekday'].includes(t.freq) && !t.due
+    ? '<div class="week-card-meta">Recurring</div>'
+    : '';
+  const parentLabel = t.parentTask
+    ? `<div class="week-card-meta">${t.parentTask}</div>`
+    : '';
+  const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
+  return `<div class="week-card ${rowClass}">
     <div class="myday-check" onclick="${onClick}"></div>
-    <div class="myday-body">
-      <div class="myday-task-name">${t.title}</div>
-      <div class="myday-client">${t.client}${t.parentTask ? ' · ' + t.parentTask : ''}</div>
+    <div class="week-card-body">
+      <div class="week-card-title">${t.title}</div>
+      ${t.client ? `<div class="week-card-client">${t.client}</div>` : ''}
+      ${parentLabel}
+      ${overdueLabel}
+      ${recurringLabel}
     </div>
-    ${dueLabel}
-    ${editBtn}
   </div>`;
 }
 
