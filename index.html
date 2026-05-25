@@ -712,41 +712,51 @@ async function loadMyDay() {
   const name = document.getElementById('sidebarName').textContent;
   const today = new Date().toISOString().split('T')[0];
 
-  const { data: tasks } = await sb.from('tasks')
-    .select('*, clients(name)')
-    .eq('assigned_to', name)
-    .neq('status', 'Done')
-    .order('next_due');
+  try {
+    const { data: tasks, error: te } = await sb.from('tasks')
+      .select('*, clients(name)')
+      .eq('assigned_to', name)
+      .neq('status', 'Done')
+      .order('next_due');
+    if (te) throw te;
 
-  const { data: subtasks } = await sb.from('subtasks')
-    .select('*, tasks(title,next_due,client_id), clients(name)')
-    .eq('assigned_to', name)
-    .neq('status', 'Done');
+    const { data: subtasks, error: se } = await sb.from('subtasks')
+      .select('*, tasks(title,next_due,client_id), clients(name)')
+      .eq('assigned_to', name)
+      .neq('status', 'Done');
+    if (se) throw se;
 
-  const allSubsRes = await sb.from('subtasks').select('id,status,blocked_by');
-  const allSubs = allSubsRes.data || [];
+    const allSubsRes = await sb.from('subtasks').select('id,status,blocked_by');
+    const allSubs = allSubsRes.data || [];
 
-  const myTasks = (tasks || []).filter(t => {
-    if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
-    return t.next_due <= today;
-  });
+    const myTasks = (tasks || []).filter(t => {
+      if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
+      return t.next_due <= today;
+    });
 
-  const mySubs = (subtasks || []).filter(s => {
-    if (!s.blocked_by) return true;
-    const blocker = allSubs.find(x => x.id === s.blocked_by);
-    return !blocker || blocker.status === 'Done';
-  }).filter(s => {
-    const taskDue = s.tasks?.next_due;
-    if (!taskDue) return true;
-    return taskDue <= today;
-  });
+    const mySubs = (subtasks || []).filter(s => {
+      if (!s.blocked_by) return true;
+      const blocker = allSubs.find(x => x.id === s.blocked_by);
+      return !blocker || blocker.status === 'Done';
+    }).filter(s => {
+      const taskDue = s.tasks?.next_due;
+      if (!taskDue) return true;
+      return taskDue <= today;
+    });
 
-  const totalPending = myTasks.length + mySubs.length;
-  const badge = document.getElementById('mydayBadge');
-  if (totalPending > 0) { badge.textContent = totalPending; badge.style.display = 'inline'; }
-  else badge.style.display = 'none';
+    const totalPending = myTasks.length + mySubs.length;
+    const badge = document.getElementById('mydayBadge');
+    if (totalPending > 0) { badge.textContent = totalPending; badge.style.display = 'inline'; }
+    else badge.style.display = 'none';
 
-  renderMyDay(myTasks, mySubs, today);
+    renderMyDay(myTasks, mySubs, today);
+  } catch (err) {
+    console.error('loadMyDay error:', err);
+    document.getElementById('mydayContent').innerHTML =
+      `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2rem;color:var(--red)">
+        Couldn't load today's tasks. ${err.message || 'Please try again.'}
+      </div>`;
+  }
 }
 
 // ── MY WEEK ──────────────────────────────────────────────
@@ -1009,23 +1019,79 @@ async function editFromMyDay(taskId, clientId) {
 }
 
 async function quickDoneTask(id) {
-  const nextDue = calcNextDue(id);
-  await sb.from('tasks').update({ status: 'Done', updated_at: new Date().toISOString() }).eq('id', id);
-  if (nextDue) {
-    const task = await sb.from('tasks').select('*').eq('id', id).single();
-    if (task.data) {
-      const { id: _id, created_at, ...rest } = task.data;
-      await sb.from('tasks').insert({ ...rest, status: 'Not Started', next_due: nextDue, period: nextDue.substring(0,7).replace('-',''), created_at: new Date().toISOString() });
+  // Optimistic UI: hide the item immediately so the user can keep clicking other tasks
+  // without waiting for the network round-trip.
+  hideMydayItem(id);
+
+  try {
+    // Fetch the full task so we have all frequency info, even if we're on My Day
+    // and clientTasks doesn't contain this task.
+    const { data: task, error: fetchErr } = await sb.from('tasks').select('*').eq('id', id).single();
+    if (fetchErr) throw fetchErr;
+
+    const now = new Date().toISOString();
+    const { error: updateErr } = await sb.from('tasks')
+      .update({ status: 'Done', updated_at: now })
+      .eq('id', id);
+    if (updateErr) throw updateErr;
+
+    // If this is a recurring task, create the next instance
+    if (task && task.frequency && task.frequency !== 'one_time') {
+      const nextDue = computeNextDue(
+        task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month,
+        task.next_due || new Date().toISOString().split('T')[0]
+      );
+      if (nextDue) {
+        const { id: _id, created_at, ...rest } = task;
+        await sb.from('tasks').insert({
+          ...rest, status: 'Not Started', next_due: nextDue,
+          period: nextDue.substring(0,7).replace('-',''),
+          created_at: now, updated_at: now
+        });
+      }
     }
+  } catch (err) {
+    console.error('quickDoneTask error:', err);
+    alert('Could not mark task done: ' + (err.message || 'Please try again.'));
+  } finally {
+    // Refresh the views regardless — keeps everything in sync with the database
+    loadMyDay();
+    loadMyWeek();
   }
-  loadMyDay();
-  loadMyWeek();
 }
 
 async function quickDoneSub(id) {
-  await sb.from('subtasks').update({ status: 'Done', updated_at: new Date().toISOString() }).eq('id', id);
-  loadMyDay();
-  loadMyWeek();
+  hideMydayItem(id);
+  try {
+    const { error } = await sb.from('subtasks')
+      .update({ status: 'Done', updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  } catch (err) {
+    console.error('quickDoneSub error:', err);
+    alert('Could not mark subtask done: ' + (err.message || 'Please try again.'));
+  } finally {
+    loadMyDay();
+    loadMyWeek();
+  }
+}
+
+// Find the My Day/Week item containing this task or subtask check and remove it from the DOM
+// for instant visual feedback. The data refresh will run in the background.
+function hideMydayItem(id) {
+  document.querySelectorAll('.myday-check').forEach(check => {
+    const handler = check.getAttribute('onclick') || '';
+    if (handler.includes(`'${id}'`)) {
+      const item = check.closest('.myday-item');
+      if (item) {
+        item.style.transition = 'opacity .2s, max-height .2s';
+        item.style.opacity = '0';
+        item.style.pointerEvents = 'none';
+        // Also decrement any nearby section count so the header doesn't lie momentarily
+        setTimeout(() => { item.style.display = 'none'; }, 200);
+      }
+    }
+  });
 }
 
 function calcNextDue(taskId) {
