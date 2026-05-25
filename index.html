@@ -673,6 +673,28 @@ function showLogin() {
   document.getElementById('appShell').style.display = 'none';
 }
 async function showApp() {
+  // ── TEAM-ONLY GUARD ─────────────────────────────────────
+  // Triple is a Bald Ginger staff app. Non-team users (clients) belong in the portal.
+  // Check profiles.is_team; if false or no profile, sign out and redirect.
+  try {
+    const { data: profile, error: profileErr } = await sb
+      .from('profiles')
+      .select('is_team, active')
+      .eq('id', currentUser.id)
+      .single();
+    if (profileErr || !profile || profile.is_team !== true || profile.active === false) {
+      await sb.auth.signOut();
+      // Redirect to the client portal; their session was just cleared so the portal will show its login.
+      window.location.href = '/client-portal/';
+      return;
+    }
+  } catch (e) {
+    console.error('Team guard error:', e);
+    await sb.auth.signOut();
+    window.location.href = '/client-portal/';
+    return;
+  }
+
   document.getElementById('loginScreen').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   const email = currentUser?.email || '';
