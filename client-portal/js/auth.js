@@ -23,7 +23,7 @@ export async function getSession() {
 
 /**
  * Load everything we need about the logged-in user:
- *   - their profile row (display_name, is_team)
+ *   - their profile row (full_name, is_team)
  *   - the list of clients they have access to
  * Returns: { profile, clients }
  */
@@ -31,7 +31,7 @@ export async function loadUserContext(userId) {
   // Profile
   const { data: profile, error: pErr } = await sb
     .from('profiles')
-    .select('id, email, display_name, is_team')
+    .select('id, email, full_name, is_team, active')
     .eq('id', userId)
     .single();
   if (pErr) throw pErr;

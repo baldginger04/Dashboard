@@ -8,7 +8,7 @@ import { loadMessages, sendMessage, unsubscribeMessages } from './messages.js';
 // App state
 const state = {
   user: null,        // auth user
-  profile: null,     // profiles row (display_name, is_team)
+  profile: null,     // profiles row (full_name, is_team)
   clients: [],       // [{id, name}]
   currentClientId: null,
 };
@@ -97,7 +97,7 @@ async function enterApp(user) {
   }
 
   // Populate user card
-  const displayName = state.profile.display_name || state.profile.email;
+  const displayName = state.profile.full_name || state.profile.email;
   $('userName').textContent = displayName;
   $('userRole').textContent = state.profile.is_team ? 'Team member' : 'Client';
   $('userAvatar').textContent = initials(displayName);
@@ -178,7 +178,7 @@ async function handleSend() {
   try {
     await sendMessage({
       clientId: state.currentClientId,
-      author: state.profile.display_name || state.profile.email,
+      author: state.profile.full_name || state.profile.email,
       body,
       isTeam: !!state.profile.is_team,
     });
