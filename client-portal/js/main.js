@@ -1,9 +1,15 @@
 // =====================================================================
-// main.js — entry point. Wires auth, client switcher, and pages.
+// main.js — entry point. Wires auth, client switcher, tabs, and pages.
 // =====================================================================
 import { sb, LAST_CLIENT_KEY } from './config.js';
 import { signIn, signOut, getSession, loadUserContext, onAuthChange } from './auth.js';
 import { loadMessages, sendMessage, unsubscribeMessages } from './messages.js';
+import { mountFinancials, unmountFinancials } from './financials.js';
+import { mountKPI, unmountKPI } from './kpi.js';
+
+const LAST_TAB_KEY = 'bg_client_portal_last_tab';
+const DEFAULT_TAB = 'financials';
+const TABS = ['financials', 'kpi', 'projections', 'messages'];
 
 // App state
 const state = {
@@ -11,6 +17,7 @@ const state = {
   profile: null,     // profiles row (full_name, is_team)
   clients: [],       // [{id, name}]
   currentClientId: null,
+  currentTab: DEFAULT_TAB,
 };
 
 // DOM refs (filled in on DOMContentLoaded)
@@ -108,13 +115,19 @@ async function enterApp(user) {
   $('loginScreen').style.display = 'none';
   $('appShell').style.display = 'block';
 
-  // Pick a client and load it
+  // Restore last tab (defaults to financials)
+  const savedTab = localStorage.getItem(LAST_TAB_KEY);
+  state.currentTab = TABS.includes(savedTab) ? savedTab : DEFAULT_TAB;
+  highlightNav(state.currentTab);
+  showPane(state.currentTab);
+
+  // Pick a client and mount the current tab
   if (state.clients.length === 0) {
     showNoClients();
   } else {
     const saved = localStorage.getItem(LAST_CLIENT_KEY);
     const initial = state.clients.find((c) => c.id === saved) || state.clients[0];
-    setCurrentClient(initial.id);
+    await setCurrentClient(initial.id);
   }
 }
 
@@ -124,11 +137,20 @@ function bindAppShell() {
     // onAuthChange fires → showLogin()
   });
 
-  $('clientSelect').addEventListener('change', (e) => {
-    setCurrentClient(e.target.value);
+  $('clientSelect').addEventListener('change', async (e) => {
+    await setCurrentClient(e.target.value);
   });
 
-  // Composer
+  // Tab nav (event delegation)
+  $('sidebarNav').addEventListener('click', async (e) => {
+    const item = e.target.closest('.nav-item');
+    if (!item || !item.dataset.tab) return;
+    const next = item.dataset.tab;
+    if (!TABS.includes(next) || next === state.currentTab) return;
+    await switchTab(next);
+  });
+
+  // Composer (messages)
   $('composerSend').addEventListener('click', handleSend);
   $('composerInput').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -145,29 +167,116 @@ function populateClientSwitcher() {
     .join('');
 }
 
-function setCurrentClient(clientId) {
+async function setCurrentClient(clientId) {
   state.currentClientId = clientId;
   localStorage.setItem(LAST_CLIENT_KEY, clientId);
   $('clientSelect').value = clientId;
 
   const client = state.clients.find((c) => c.id === clientId);
-  $('pageTitle').textContent = client ? client.name : 'Messages';
-  $('pageSub').textContent = 'Client-specific messages with the Bald Ginger team';
+  updatePageHeader(client);
 
-  // Show the messages page (only page for now)
+  // Hide the no-clients banner; remount whichever tab is active
   $('noClientsState').style.display = 'none';
-  $('messagesPage').style.display = 'block';
-
-  loadMessages(clientId, $('msgList'), state.user.id);
+  await mountCurrentTab();
 }
 
 function showNoClients() {
-  $('messagesPage').style.display = 'none';
+  TABS.forEach((t) => { const el = $(`tab-${t}`); if (el) el.style.display = 'none'; });
   $('noClientsState').style.display = 'block';
   $('pageTitle').textContent = 'Welcome';
   $('pageSub').textContent = '';
 }
 
+// ---------------------------------------------------------------------
+// Tab routing
+// ---------------------------------------------------------------------
+
+const TAB_TITLES = {
+  financials:  { title: 'Financials',                 sub: 'P&L, Prime Sheet, and other monthly documents' },
+  kpi:         { title: 'KPI Dashboard',              sub: 'Current Prime Sheet at a glance' },
+  projections: { title: 'Projections',                sub: 'Forward-looking forecasts' },
+  messages:    { title: 'Client Specific Messages',   sub: 'Conversation with the Bald Ginger team' },
+};
+
+async function switchTab(next) {
+  // Unmount the current tab (cleanup hooks)
+  unmountCurrentTab();
+
+  state.currentTab = next;
+  localStorage.setItem(LAST_TAB_KEY, next);
+
+  highlightNav(next);
+  showPane(next);
+
+  updatePageHeader(state.clients.find((c) => c.id === state.currentClientId));
+
+  // Mount the new tab (only if we have a client)
+  if (state.currentClientId) await mountCurrentTab();
+}
+
+function highlightNav(tab) {
+  document.querySelectorAll('.nav-item[data-tab]').forEach((el) => {
+    el.classList.toggle('active', el.dataset.tab === tab);
+  });
+}
+
+function showPane(tab) {
+  TABS.forEach((t) => {
+    const el = $(`tab-${t}`);
+    if (el) el.style.display = (t === tab ? 'block' : 'none');
+  });
+}
+
+function updatePageHeader(client) {
+  const meta = TAB_TITLES[state.currentTab] || { title: '—', sub: '' };
+  // For Messages, prefer the client name as the title (keeps prior behavior).
+  if (state.currentTab === 'messages' && client) {
+    $('pageTitle').textContent = client.name;
+  } else {
+    $('pageTitle').textContent = meta.title;
+  }
+  $('pageSub').textContent = meta.sub;
+}
+
+async function mountCurrentTab() {
+  const t = state.currentTab;
+  const clientId = state.currentClientId;
+  if (!clientId) return;
+
+  try {
+    if (t === 'financials') {
+      await mountFinancials({
+        clientId,
+        isTeam: !!state.profile.is_team,
+        userId: state.user.id,
+      });
+    } else if (t === 'kpi') {
+      await mountKPI({ clientId });
+    } else if (t === 'messages') {
+      await loadMessages(clientId, $('msgList'), state.user.id);
+    }
+    // projections: nothing to mount; it's a static "coming soon" card.
+  } catch (err) {
+    // Defensive: mount functions also handle their own errors, but if one
+    // throws synchronously, we don't want it to break tab switching.
+    console.error(`mount(${t}) failed:`, err);
+  }
+}
+
+function unmountCurrentTab() {
+  const t = state.currentTab;
+  try {
+    if (t === 'financials') unmountFinancials();
+    else if (t === 'kpi')   unmountKPI();
+    else if (t === 'messages') unsubscribeMessages();
+  } catch (err) {
+    console.error(`unmount(${t}) failed:`, err);
+  }
+}
+
+// ---------------------------------------------------------------------
+// Messages (existing logic kept for the messages tab)
+// ---------------------------------------------------------------------
 async function handleSend() {
   const input = $('composerInput');
   const body = input.value.trim();
