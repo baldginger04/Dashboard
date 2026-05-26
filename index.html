@@ -816,6 +816,11 @@ function reloadActiveView() {
 }
 
 // ── MY DAY ───────────────────────────────────────────────
+// Cache the last-loaded My Day data so click handlers can mutate locally
+// and re-render without a DB round-trip. This dodges Supabase read-after-write
+// races where a fresh SELECT can briefly return the old status.
+let myDayCache = { tasks: [], subs: [], today: null };
+
 async function loadMyDay() {
   const name = document.getElementById('sidebarName').textContent;
   const today = new Date().toISOString().split('T')[0];
@@ -864,6 +869,9 @@ async function loadMyDay() {
     const badge = document.getElementById('mydayBadge');
     if (totalPending > 0) { badge.textContent = totalPending; badge.style.display = 'inline'; }
     else badge.style.display = 'none';
+
+    // Cache for local mutation by click handlers (no re-fetch needed)
+    myDayCache = { tasks: myTasks, subs: mySubs, today };
 
     renderMyDay(myTasks, mySubs, today);
   } catch (err) {
@@ -1183,39 +1191,59 @@ function applyDomStatus(id, status) {
   });
 }
 
+// Mutate a task/sub in the local My Day cache and re-render. This is how we
+// move a card between columns without re-querying the DB (which has a
+// read-after-write race that can return the OLD status). The DB write still
+// happens in the background; the local cache is the source of truth for the UI
+// until the next full reload.
+function mutateCacheStatus(id, type, newStatus) {
+  if (!myDayCache.tasks && !myDayCache.subs) return;
+  const arr = type === 'task' ? myDayCache.tasks : myDayCache.subs;
+  const idx = arr.findIndex(x => x.id === id);
+  if (idx === -1) return;
+  if (newStatus === 'Done') {
+    // Remove from cache — Done items disappear from My Day
+    arr.splice(idx, 1);
+  } else {
+    arr[idx].status = newStatus;
+  }
+  // Re-render with the mutated cache
+  renderMyDay(myDayCache.tasks, myDayCache.subs, myDayCache.today);
+  // Update the badge count
+  const total = myDayCache.tasks.length + myDayCache.subs.length;
+  const badge = document.getElementById('mydayBadge');
+  if (total > 0) { badge.textContent = total; badge.style.display = 'inline'; }
+  else badge.style.display = 'none';
+}
+
 async function cycleTaskStatus(id) {
-  if (inFlightTasks.has(id)) return; // already updating — ignore extra clicks
+  if (inFlightTasks.has(id)) return;
   const cur = readDomStatus(id);
   if (cur === 'Done') return;
 
   if (cur === 'Not Started') {
     inFlightTasks.add(id);
-    applyDomStatus(id, 'In Progress'); // optimistic — instant visual feedback
+    // Mutate cache + re-render immediately. Card moves columns INSTANTLY.
+    mutateCacheStatus(id, 'task', 'In Progress');
     try {
-      // Use .select() so Supabase waits for and returns the updated row.
-      // Without .select(), the update can return before the row is queryable,
-      // which means the immediately-following loadMyDay() reads stale data.
       const { data, error } = await sb.from('tasks')
         .update({ status: 'In Progress', updated_at: new Date().toISOString() })
         .eq('id', id)
         .select()
         .single();
       if (error) throw error;
-      if (!data || data.status !== 'In Progress') {
-        throw new Error('Update returned no row — likely an RLS policy is blocking it.');
-      }
-      // Now reload — the DB has confirmed the change
-      await reloadActiveView();
+      if (!data) throw new Error('Update returned no row — likely an RLS policy is blocking it.');
     } catch (err) {
       console.error('cycleTaskStatus error:', err);
-      applyDomStatus(id, 'Not Started'); // rollback
+      // Rollback: reload fresh from DB
       alert("Couldn't update task status. " + (err.message || ''));
+      loadMyDay();
     } finally {
       inFlightTasks.delete(id);
     }
     return;
   }
-  // cur === 'In Progress' → finish it (quickDoneTask already reloads)
+  // cur === 'In Progress' → finish it
   quickDoneTask(id);
 }
 
@@ -1226,7 +1254,7 @@ async function cycleSubStatus(id) {
 
   if (cur === 'Not Started') {
     inFlightSubs.add(id);
-    applyDomStatus(id, 'In Progress');
+    mutateCacheStatus(id, 'sub', 'In Progress');
     try {
       const { data, error } = await sb.from('subtasks')
         .update({ status: 'In Progress', updated_at: new Date().toISOString() })
@@ -1234,14 +1262,11 @@ async function cycleSubStatus(id) {
         .select()
         .single();
       if (error) throw error;
-      if (!data || data.status !== 'In Progress') {
-        throw new Error('Update returned no row — likely an RLS policy is blocking it.');
-      }
-      await reloadActiveView();
+      if (!data) throw new Error('Update returned no row — likely an RLS policy is blocking it.');
     } catch (err) {
       console.error('cycleSubStatus error:', err);
-      applyDomStatus(id, 'Not Started');
       alert("Couldn't update subtask status. " + (err.message || ''));
+      loadMyDay();
     } finally {
       inFlightSubs.delete(id);
     }
@@ -1251,9 +1276,9 @@ async function cycleSubStatus(id) {
 }
 
 async function quickDoneTask(id) {
-  // Optimistic UI: hide the item immediately so the user can keep clicking other tasks
-  // without waiting for the network round-trip.
-  hideMydayItem(id);
+  // Remove from local cache + re-render immediately (no DB read)
+  mutateCacheStatus(id, 'task', 'Done');
+  hideMydayItem(id); // belt + suspenders for any other view (e.g. My Week list)
 
   try {
     // Fetch the full task so we have all frequency info, even if we're on My Day
@@ -1285,13 +1310,13 @@ async function quickDoneTask(id) {
   } catch (err) {
     console.error('quickDoneTask error:', err);
     alert('Could not mark task done: ' + (err.message || 'Please try again.'));
-  } finally {
-    // Refresh whichever view is visible — saves wasted queries to the other one
-    reloadActiveView();
+    // On failure, do a full reload to get back to truth
+    loadMyDay();
   }
 }
 
 async function quickDoneSub(id) {
+  mutateCacheStatus(id, 'sub', 'Done');
   hideMydayItem(id);
   try {
     const { error } = await sb.from('subtasks')
@@ -1301,8 +1326,7 @@ async function quickDoneSub(id) {
   } catch (err) {
     console.error('quickDoneSub error:', err);
     alert('Could not mark subtask done: ' + (err.message || 'Please try again.'));
-  } finally {
-    reloadActiveView();
+    loadMyDay();
   }
 }
 
