@@ -34,12 +34,6 @@
     .login-btn{width:100%;padding:11px;background:var(--accent);color:white;border:none;border-radius:6px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:opacity .15s;margin-top:.5rem}
     .login-btn:hover{opacity:.88}
     .login-err{font-size:12px;color:#f87171;margin-top:.75rem;text-align:center}
-    .login-ok{font-size:12px;color:#86efac;margin-top:.75rem;text-align:center}
-    .login-hint{font-size:11px;color:rgba(255,255,255,.4);margin-top:.5rem;text-align:center;line-height:1.4}
-    .login-title{font-size:18px;font-family:'DM Serif Display',serif;color:white;margin-bottom:.25rem;text-align:center}
-
-    /* RESET PASSWORD */
-    #resetScreen{display:none;align-items:center;justify-content:center;min-height:100vh;background:#0d0d0b}
 
     /* SHELL */
     #appShell{display:none}
@@ -342,20 +336,6 @@
     <div class="field"><label>Password</label><input type="password" id="loginPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()" /></div>
     <button class="login-btn" onclick="doLogin()">Sign in</button>
     <div class="login-err" id="loginErr"></div>
-  </div>
-</div>
-
-<!-- RESET PASSWORD -->
-<div id="resetScreen">
-  <div class="login-card">
-    <div class="login-title">Set your password</div>
-    <div class="login-sub" id="resetSub">Welcome — please choose a password to finish signing in</div>
-    <div class="field"><label>New password</label><input type="password" id="resetPassword" placeholder="At least 8 characters" /></div>
-    <div class="field"><label>Confirm password</label><input type="password" id="resetPasswordConfirm" placeholder="Re-enter password" onkeydown="if(event.key==='Enter')doResetPassword()" /></div>
-    <button class="login-btn" onclick="doResetPassword()">Save password</button>
-    <div class="login-err" id="resetErr"></div>
-    <div class="login-ok" id="resetOk"></div>
-    <div class="login-hint">After saving, you'll be signed into Triple.</div>
   </div>
 </div>
 
@@ -715,65 +695,10 @@ let revenueChart = null;
 let costChart = null;
 
 // ── AUTH ─────────────────────────────────────────────────
-// `inRecoveryFlow` is set when Supabase fires PASSWORD_RECOVERY. While true, we refuse
-// to enter the app — the user must complete `updateUser({ password })` first. This prevents
-// a half-finished recovery session from silently logging someone in if they navigate away
-// and come back, and it's the foundation for any future "change password" flow from settings.
-let inRecoveryFlow = false;
-
 async function init() {
-  // The auth state listener catches everything that happens AFTER page load:
-  // PASSWORD_RECOVERY from URL hash, SIGNED_IN from doLogin(), SIGNED_OUT from doLogout(),
-  // TOKEN_REFRESHED from autoRefreshToken.
-  sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'PASSWORD_RECOVERY') {
-      inRecoveryFlow = true;
-      currentUser = session?.user || null;
-      showResetScreen();
-      return;
-    }
-    if (event === 'SIGNED_OUT') {
-      inRecoveryFlow = false;
-      currentUser = null;
-      showLogin();
-      return;
-    }
-    // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION
-    if (session) {
-      currentUser = session.user;
-      if (inRecoveryFlow) { showResetScreen(); return; }
-      await showApp();
-    } else {
-      showLogin();
-    }
-  });
-
-  // For the initial page load we DON'T call sb.auth.getSession() — it can deadlock on
-  // certain page loads, leaving the app stuck on the login screen even when there's a
-  // valid stored session. Instead we read the stored auth blob directly. If a session
-  // looks present and non-expired, we hand-construct a user and enter the app. The
-  // Supabase client will pick up the token from localStorage on its next request, and
-  // any real auth problem (expired, revoked) surfaces as a failed data query, at which
-  // point we sign out and the listener routes back to login.
-  try {
-    const raw = window.localStorage.getItem('triple-auth');
-    if (!raw) { showLogin(); return; }
-    const stored = JSON.parse(raw);
-    const expiresAt = stored?.expires_at; // unix seconds
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (!stored?.access_token || !stored?.user || (expiresAt && expiresAt < nowSec)) {
-      // No token, malformed blob, or expired. Clear it and show login.
-      window.localStorage.removeItem('triple-auth');
-      showLogin();
-      return;
-    }
-    // We have a plausibly-valid session in storage. Enter the app optimistically.
-    currentUser = stored.user;
-    await showApp();
-  } catch (e) {
-    console.error('init failed to read stored session:', e);
-    showLogin();
-  }
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) { currentUser = session.user; await showApp(); }
+  sb.auth.onAuthStateChange(async (_e, s) => { if (s) { currentUser = s.user; await showApp(); } else showLogin(); });
 }
 async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
@@ -783,60 +708,11 @@ async function doLogin() {
   if (error) document.getElementById('loginErr').textContent = 'Incorrect email or password. Please try again.';
 }
 async function doLogout() { await sb.auth.signOut(); showLogin(); }
-
-// ── PASSWORD RESET ───────────────────────────────────────
-function showResetScreen() {
-  document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('appShell').style.display = 'none';
-  document.getElementById('resetScreen').style.display = 'flex';
-  // Clean the recovery tokens out of the URL so a refresh doesn't re-trigger anything.
-  if (window.location.hash) {
-    history.replaceState(null, '', window.location.pathname + window.location.search);
-  }
-  // Personalize the subtitle if we know who it is.
-  const sub = document.getElementById('resetSub');
-  if (currentUser?.email && sub) {
-    sub.textContent = `Signed in as ${currentUser.email} — choose a password to finish`;
-  }
-  document.getElementById('resetPassword').value = '';
-  document.getElementById('resetPasswordConfirm').value = '';
-  document.getElementById('resetErr').textContent = '';
-  document.getElementById('resetOk').textContent = '';
-  setTimeout(() => document.getElementById('resetPassword').focus(), 50);
-}
-async function doResetPassword() {
-  const pw  = document.getElementById('resetPassword').value;
-  const pw2 = document.getElementById('resetPasswordConfirm').value;
-  const errEl = document.getElementById('resetErr');
-  const okEl  = document.getElementById('resetOk');
-  errEl.textContent = '';
-  okEl.textContent  = '';
-  // Client-side mirror of Supabase's defaults. Supabase is still the source of truth and
-  // will reject with its own message if its rules are stricter than ours.
-  if (pw.length < 8)        { errEl.textContent = 'Password must be at least 8 characters.'; return; }
-  if (pw !== pw2)           { errEl.textContent = 'Passwords do not match.'; return; }
-  const { error } = await sb.auth.updateUser({ password: pw });
-  if (error) {
-    errEl.textContent = error.message || 'Could not update password. Please try again.';
-    return;
-  }
-  okEl.textContent = 'Password saved. Signing you in…';
-  inRecoveryFlow = false;
-  // The session is already valid; route to the app.
-  document.getElementById('resetScreen').style.display = 'none';
-  await showApp();
-}
-
 function showLogin() {
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appShell').style.display = 'none';
-  document.getElementById('resetScreen').style.display = 'none';
 }
 async function showApp() {
-  // Recovery guard: if a password reset is mid-flight, don't enter the app.
-  // The auth state listener routes to showResetScreen() — this is belt-and-suspenders.
-  if (inRecoveryFlow) { showResetScreen(); return; }
-
   // ── TEAM-ONLY GUARD ─────────────────────────────────────
   // Triple is a Bald Ginger staff app. Non-team users (clients) belong in the portal.
   // Check profiles.is_team; if false or no profile, sign out and redirect.
@@ -860,7 +736,6 @@ async function showApp() {
   }
 
   document.getElementById('loginScreen').style.display = 'none';
-  document.getElementById('resetScreen').style.display = 'none';
   document.getElementById('appShell').style.display = 'block';
   const email = currentUser?.email || '';
   const name = email.includes('ed@') ? 'Ed Hattrup' :
@@ -2310,19 +2185,10 @@ document.addEventListener('visibilitychange', async () => {
   lastVisibleAt = Date.now();
   // If we were idle more than 30s, re-verify the session and refresh whatever's on screen.
   if (idleMs < 30000) return;
-  // Check the stored session directly instead of calling sb.auth.getSession(), which
-  // can hang. If the token is missing or expired, the next data query will fail and
-  // we'll sign out; until then, refresh whatever's on screen.
   try {
-    const raw = window.localStorage.getItem('triple-auth');
-    const stored = raw ? JSON.parse(raw) : null;
-    const expiresAt = stored?.expires_at;
-    const nowSec = Math.floor(Date.now() / 1000);
-    if (!stored?.access_token || (expiresAt && expiresAt < nowSec)) {
-      showLogin();
-      return;
-    }
-  } catch (_) { /* if storage is unreadable, fall through and let queries fail naturally */ }
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { showLogin(); return; }
+  } catch (_) { /* swallow — onAuthStateChange handles real auth failures */ }
   // Refresh the current page's data
   const active = document.querySelector('.nav-item.active');
   const id = active?.id || '';
