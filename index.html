@@ -188,8 +188,8 @@
     .myday-sort{display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
     .sort-btn{padding:5px 14px;border-radius:20px;font-size:12px;border:1px solid var(--border);background:white;color:var(--text2);cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif}
     .sort-btn.active{background:var(--accent);color:white;border-color:var(--accent)}
-    /* MY DAY — 3-column Kanban */
-    .myday-kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+    /* MY DAY — 2-column Kanban (Open | In Progress) */
+    .myday-kanban{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;align-items:start}
     .myday-col{background:#fafaf8;border:1px solid var(--border);border-radius:10px;padding:10px;min-height:120px}
     .myday-col-hdr{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:.5rem;display:flex;align-items:center;gap:8px;padding:0 4px}
     .myday-col-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -666,7 +666,15 @@
 <script>
 const SB_URL = 'https://evfemokwtofbarjeezhu.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2ZmVtb2t3dG9mYmFyamVlemh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NDUxMjQsImV4cCI6MjA5NTEyMTEyNH0.B9OSeB9CEP0TX80dJWpBPAIP6IEhYIzYlYKe4WL-6B0';
-const sb = supabase.createClient(SB_URL, SB_KEY);
+const sb = supabase.createClient(SB_URL, SB_KEY, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    storage: window.localStorage,
+    storageKey: 'triple-auth'
+  }
+});
 
 const USERS = ['Ed Hattrup','Jennifer Mills','Jen Crane','Lydia Hattrup'];
 const FREQ_LABELS = {daily:'Every day',weekdays:'Every weekday',every_other_weekday:'Every other weekday',weekly:'Weekly',monthly:'Monthly',quarterly:'Quarterly',annually:'Annually'};
@@ -1060,11 +1068,10 @@ function renderMyDay(tasks, subs, today) {
     return 0;
   });
 
-  // Group into 3 Kanban columns by status. "Open" surfaces tasks not yet started.
-  // Done column shows tasks completed today (so the user can see what they finished).
+  // Group into 2 Kanban columns by status. Done tasks disappear immediately
+  // (recurring tasks repopulate on next due date; one-time tasks are gone for good).
   const open = all.filter(t => t.status === 'Not Started');
   const inProgress = all.filter(t => t.status === 'In Progress');
-  const doneToday = all.filter(t => t.status === 'Done'); // typically empty since loader excludes Done
 
   let html = '';
   if (!all.length) {
@@ -1081,12 +1088,6 @@ function renderMyDay(tasks, subs, today) {
         <div class="myday-col-hdr"><span class="myday-col-dot" style="background:var(--accent)"></span>In Progress <span class="myday-col-count">${inProgress.length}</span></div>
         <div class="myday-col-body">
           ${inProgress.length ? inProgress.map(t => mydayItem(t, today)).join('') : '<div class="myday-col-empty">Nothing in progress</div>'}
-        </div>
-      </div>
-      <div class="myday-col">
-        <div class="myday-col-hdr"><span class="myday-col-dot" style="background:var(--green)"></span>Done <span class="myday-col-count">${doneToday.length}</span></div>
-        <div class="myday-col-body">
-          ${doneToday.length ? doneToday.map(t => mydayItem(t, today)).join('') : '<div class="myday-col-empty">Nothing done yet</div>'}
         </div>
       </div>
     </div>`;
@@ -1114,7 +1115,8 @@ function mydayItem(t, today) {
   const clientLabel = t.client
     ? `<span class="myday-client-inline">${t.client}${t.parentTask ? ' · ' + t.parentTask : ''}</span>`
     : '';
-  return `<div class="myday-item ${rowClass}">
+  const dataAttr = t.type === 'task' ? `data-task-id="${t.id}"` : `data-sub-id="${t.id}"`;
+  return `<div class="myday-item ${rowClass}" ${dataAttr}>
     <div class="${checkClass}" onclick="${onClick}">${checkInner}</div>
     <div class="myday-title">${t.title}</div>
     ${clientLabel}
@@ -1140,44 +1142,79 @@ async function editFromMyDay(taskId, clientId) {
 // Click on the My Day circle ADVANCES the task one step in the workflow:
 // Not Started → In Progress → Done. The Done step delegates to quickDoneTask
 // so recurring-task logic + optimistic UI still work.
+//
+// CLICK-LOCK: We track in-flight task IDs to prevent double-clicks from racing.
+// OPTIMISTIC UI: We read the visible status from the DOM (rather than re-querying
+// the DB) so the first click responds instantly — no spinner, no waiting.
+const inFlightTasks = new Set();
+const inFlightSubs = new Set();
+
+function readDomStatus(id) {
+  const el = document.querySelector(`[data-task-id="${id}"] .myday-check, [data-sub-id="${id}"] .myday-check`);
+  if (!el) return 'Not Started';
+  if (el.classList.contains('done')) return 'Done';
+  if (el.classList.contains('in-progress')) return 'In Progress';
+  return 'Not Started';
+}
+
+function applyDomStatus(id, status) {
+  document.querySelectorAll(`[data-task-id="${id}"] .myday-check, [data-sub-id="${id}"] .myday-check`).forEach(el => {
+    el.classList.remove('in-progress', 'done');
+    el.textContent = '';
+    if (status === 'In Progress') { el.classList.add('in-progress'); el.textContent = '◐'; }
+    else if (status === 'Done')   { el.classList.add('done');        el.textContent = '✓'; }
+  });
+}
+
 async function cycleTaskStatus(id) {
-  try {
-    const { data: task, error } = await sb.from('tasks').select('status').eq('id', id).single();
-    if (error) throw error;
-    const cur = task?.status || 'Not Started';
-    if (cur === 'Done') return; // already done — no-op
-    if (cur === 'Not Started') {
-      // Bump to In Progress
-      await sb.from('tasks').update({ status: 'In Progress', updated_at: new Date().toISOString() }).eq('id', id);
-      loadMyDay();
-      loadMyWeek();
-      return;
+  if (inFlightTasks.has(id)) return; // already updating — ignore extra clicks
+  const cur = readDomStatus(id);
+  if (cur === 'Done') return;
+
+  if (cur === 'Not Started') {
+    inFlightTasks.add(id);
+    applyDomStatus(id, 'In Progress'); // optimistic — instant visual feedback
+    try {
+      const { error } = await sb.from('tasks')
+        .update({ status: 'In Progress', updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('cycleTaskStatus error:', err);
+      applyDomStatus(id, 'Not Started'); // rollback
+      alert("Couldn't update task status. " + (err.message || ''));
+    } finally {
+      inFlightTasks.delete(id);
     }
-    // cur === 'In Progress' → finish it (this also handles recurring + optimistic UI)
-    quickDoneTask(id);
-  } catch (err) {
-    console.error('cycleTaskStatus error:', err);
-    alert("Couldn't update task status. " + (err.message || ''));
+    return;
   }
+  // cur === 'In Progress' → finish it
+  quickDoneTask(id);
 }
 
 async function cycleSubStatus(id) {
-  try {
-    const { data: sub, error } = await sb.from('subtasks').select('status').eq('id', id).single();
-    if (error) throw error;
-    const cur = sub?.status || 'Not Started';
-    if (cur === 'Done') return;
-    if (cur === 'Not Started') {
-      await sb.from('subtasks').update({ status: 'In Progress', updated_at: new Date().toISOString() }).eq('id', id);
-      loadMyDay();
-      loadMyWeek();
-      return;
+  if (inFlightSubs.has(id)) return;
+  const cur = readDomStatus(id);
+  if (cur === 'Done') return;
+
+  if (cur === 'Not Started') {
+    inFlightSubs.add(id);
+    applyDomStatus(id, 'In Progress');
+    try {
+      const { error } = await sb.from('subtasks')
+        .update({ status: 'In Progress', updated_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (err) {
+      console.error('cycleSubStatus error:', err);
+      applyDomStatus(id, 'Not Started');
+      alert("Couldn't update subtask status. " + (err.message || ''));
+    } finally {
+      inFlightSubs.delete(id);
     }
-    quickDoneSub(id);
-  } catch (err) {
-    console.error('cycleSubStatus error:', err);
-    alert("Couldn't update subtask status. " + (err.message || ''));
+    return;
   }
+  quickDoneSub(id);
 }
 
 async function quickDoneTask(id) {
@@ -2083,6 +2120,29 @@ function relTime(iso) { if(!iso)return'—'; const d=Math.floor((Date.now()-new 
 function fmtDateTime(iso) { if(!iso)return''; return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
 
 document.querySelectorAll('.modal-overlay').forEach(m => { m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }); });
+
+// When the tab becomes visible after being hidden, verify the session is still
+// valid and refresh any data the user is currently looking at. This is the
+// belt-and-suspenders pairing with autoRefreshToken to stop spurious logouts.
+let lastVisibleAt = Date.now();
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible') return;
+  const idleMs = Date.now() - lastVisibleAt;
+  lastVisibleAt = Date.now();
+  // If we were idle more than 30s, re-verify the session and refresh whatever's on screen.
+  if (idleMs < 30000) return;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { showLogin(); return; }
+  } catch (_) { /* swallow — onAuthStateChange handles real auth failures */ }
+  // Refresh the current page's data
+  const active = document.querySelector('.nav-item.active');
+  const id = active?.id || '';
+  if (id === 'nav-myday')   loadMyDay();
+  if (id === 'nav-myweek')  loadMyWeek();
+  if (id === 'nav-team')    loadTeamMessages();
+});
+
 init();
 </script>
 </body>
