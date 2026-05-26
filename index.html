@@ -106,8 +106,14 @@
     .av-ed{background:#C8511A}.av-jennifer{background:#1a5fa8}.av-jen{background:#1e7a45}.av-lydia{background:#5b3fa8}.av-default{background:#888}
 
     /* CLIENT DETAIL */
-    .back-btn{font-size:13px;color:var(--accent);cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:4px;padding:0;margin-bottom:1rem;transition:opacity .15s}
+    .back-btn{font-size:13px;color:var(--accent);cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:4px;padding:0;transition:opacity .15s}
     .back-btn:hover{opacity:.7}
+    .detail-topbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem;flex-wrap:wrap}
+    .client-switch-wrap{display:flex;align-items:center;gap:8px}
+    .client-switch-label{font-size:12px;color:var(--text3);font-weight:500}
+    .client-switcher{font-family:'DM Sans',sans-serif;font-size:13px;background:white;border:1px solid var(--border);border-radius:6px;padding:.4rem .65rem;color:var(--text);cursor:pointer;min-width:200px;outline:none;transition:border-color .15s}
+    .client-switcher:hover{border-color:var(--accent)}
+    .client-switcher:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(200,81,26,.15)}
 
     /* TABS */
     .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
@@ -425,7 +431,13 @@
 
       <!-- CLIENT DETAIL -->
       <div class="page" id="page-client-detail">
-        <button class="back-btn" onclick="showPage('clients')">← Back to clients</button>
+        <div class="detail-topbar">
+          <button class="back-btn" onclick="showPage('clients')">← All clients</button>
+          <div class="client-switch-wrap">
+            <label for="clientSwitcher" class="client-switch-label">Jump to:</label>
+            <select id="clientSwitcher" class="client-switcher" onchange="switchClient(this.value)"></select>
+          </div>
+        </div>
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
           <div>
             <div style="font-family:'DM Serif Display',serif;font-size:26px" id="detailName"></div>
@@ -1274,6 +1286,7 @@ async function openClient(id) {
   document.getElementById('detailName').textContent = c.name;
   document.getElementById('detailMeta').textContent = (c.close_period||'') + (c.close_due_date ? ' · Due ' + c.close_due_date : '');
   document.getElementById('detailBadge').innerHTML = statusBadge(c.close_status);
+  populateClientSwitcher(id);
   // Reset content panels so we don't show stale data from previous client while loading
   document.getElementById('taskContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
   document.getElementById('accountContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -1288,6 +1301,22 @@ async function openClient(id) {
   if (closeEl) closeEl.classList.add('active');
   if (upEl) upEl.classList.remove('active');
   await Promise.all([loadTasks(id), loadAccounts(id), loadKPI(id), loadMessages(id)]);
+}
+
+// Populates the header dropdown with every client. The currently-open client
+// is selected. allClients is already sorted alphabetically by loadClients().
+function populateClientSwitcher(currentId) {
+  const sel = document.getElementById('clientSwitcher');
+  if (!sel) return;
+  sel.innerHTML = allClients.map(c =>
+    `<option value="${c.id}"${c.id === currentId ? ' selected' : ''}>${c.name}</option>`
+  ).join('');
+}
+
+// Called from the dropdown's onchange — jumps directly to another client.
+function switchClient(id) {
+  if (!id || id === currentClientId) return;
+  openClient(id);
 }
 
 // ── TASKS ────────────────────────────────────────────────
