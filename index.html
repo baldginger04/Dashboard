@@ -804,26 +804,40 @@ function filterClients() {
   }));
 }
 
+// Only reload the view the user is currently looking at. Every reload is 3 queries
+// to Supabase, so reloading both My Day AND My Week on every click is wasteful when
+// only one is visible. This single function replaces every `loadMyDay(); loadMyWeek();` pair.
+function reloadActiveView() {
+  const active = document.querySelector('.nav-item.active');
+  const id = active?.id || '';
+  if (id === 'nav-myday')   return loadMyDay();
+  if (id === 'nav-myweek')  return loadMyWeek();
+  // Other views (team messages, automation, client detail) handle their own refresh.
+}
+
 // ── MY DAY ───────────────────────────────────────────────
 async function loadMyDay() {
   const name = document.getElementById('sidebarName').textContent;
   const today = new Date().toISOString().split('T')[0];
 
   try {
-    const { data: tasks, error: te } = await sb.from('tasks')
-      .select('*, clients(name)')
-      .eq('assigned_to', name)
-      .neq('status', 'Done')
-      .order('next_due');
-    if (te) throw te;
-
-    const { data: subtasks, error: se } = await sb.from('subtasks')
-      .select('*, tasks(title,next_due,client_id), clients(name)')
-      .eq('assigned_to', name)
-      .neq('status', 'Done');
-    if (se) throw se;
-
-    const allSubsRes = await sb.from('subtasks').select('id,task_id,status,blocked_by');
+    // Fire all three queries in parallel — was serial, ~3x slower.
+    const [tasksRes, subsRes, allSubsRes] = await Promise.all([
+      sb.from('tasks')
+        .select('*, clients(name)')
+        .eq('assigned_to', name)
+        .neq('status', 'Done')
+        .order('next_due'),
+      sb.from('subtasks')
+        .select('*, tasks(title,next_due,client_id), clients(name)')
+        .eq('assigned_to', name)
+        .neq('status', 'Done'),
+      sb.from('subtasks').select('id,task_id,status,blocked_by')
+    ]);
+    if (tasksRes.error) throw tasksRes.error;
+    if (subsRes.error)  throw subsRes.error;
+    const tasks = tasksRes.data;
+    const subtasks = subsRes.data;
     const allSubs = allSubsRes.data || [];
 
     // Tasks that have ANY subtasks are "parent" tasks — hide them from My Day.
@@ -873,20 +887,23 @@ async function loadMyWeek() {
     'Today through ' + weekEnd.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
 
   try {
-    const { data: tasks, error: te } = await sb.from('tasks')
-      .select('*, clients(name)')
-      .eq('assigned_to', name)
-      .neq('status', 'Done')
-      .order('next_due');
-    if (te) throw te;
-
-    const { data: subtasks, error: se } = await sb.from('subtasks')
-      .select('*, tasks(title,next_due,client_id), clients(name)')
-      .eq('assigned_to', name)
-      .neq('status', 'Done');
-    if (se) throw se;
-
-    const allSubsRes = await sb.from('subtasks').select('id,task_id,status,blocked_by');
+    // Fire all three queries in parallel
+    const [tasksRes, subsRes, allSubsRes] = await Promise.all([
+      sb.from('tasks')
+        .select('*, clients(name)')
+        .eq('assigned_to', name)
+        .neq('status', 'Done')
+        .order('next_due'),
+      sb.from('subtasks')
+        .select('*, tasks(title,next_due,client_id), clients(name)')
+        .eq('assigned_to', name)
+        .neq('status', 'Done'),
+      sb.from('subtasks').select('id,task_id,status,blocked_by')
+    ]);
+    if (tasksRes.error) throw tasksRes.error;
+    if (subsRes.error)  throw subsRes.error;
+    const tasks = tasksRes.data;
+    const subtasks = subsRes.data;
     const allSubs = allSubsRes.data || [];
 
     // Tasks that have ANY subtasks are "parent" tasks — hide them from My Week.
@@ -1188,8 +1205,7 @@ async function cycleTaskStatus(id) {
         throw new Error('Update returned no row — likely an RLS policy is blocking it.');
       }
       // Now reload — the DB has confirmed the change
-      await loadMyDay();
-      loadMyWeek();
+      await reloadActiveView();
     } catch (err) {
       console.error('cycleTaskStatus error:', err);
       applyDomStatus(id, 'Not Started'); // rollback
@@ -1221,8 +1237,7 @@ async function cycleSubStatus(id) {
       if (!data || data.status !== 'In Progress') {
         throw new Error('Update returned no row — likely an RLS policy is blocking it.');
       }
-      await loadMyDay();
-      loadMyWeek();
+      await reloadActiveView();
     } catch (err) {
       console.error('cycleSubStatus error:', err);
       applyDomStatus(id, 'Not Started');
@@ -1271,9 +1286,8 @@ async function quickDoneTask(id) {
     console.error('quickDoneTask error:', err);
     alert('Could not mark task done: ' + (err.message || 'Please try again.'));
   } finally {
-    // Refresh the views regardless — keeps everything in sync with the database
-    loadMyDay();
-    loadMyWeek();
+    // Refresh whichever view is visible — saves wasted queries to the other one
+    reloadActiveView();
   }
 }
 
@@ -1288,8 +1302,7 @@ async function quickDoneSub(id) {
     console.error('quickDoneSub error:', err);
     alert('Could not mark subtask done: ' + (err.message || 'Please try again.'));
   } finally {
-    loadMyDay();
-    loadMyWeek();
+    reloadActiveView();
   }
 }
 
@@ -1762,8 +1775,7 @@ async function saveTask() {
   closeModal('taskModal');
   await loadTasks(clientId);
   // Also refresh the cross-cutting views so a due date change shows up immediately
-  loadMyDay();
-  loadMyWeek();
+  reloadActiveView();
 }
 
 // ── ACCOUNTS ─────────────────────────────────────────────
