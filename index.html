@@ -728,10 +728,9 @@ let costChart = null;
 let inRecoveryFlow = false;
 
 async function init() {
-  // The auth state listener fires INITIAL_SESSION on every page load with the stored session
-  // (or null), and PASSWORD_RECOVERY when the URL hash carries a recovery token. We rely
-  // entirely on this — no separate getSession() probe, because that call can deadlock when
-  // both a stored session and a recent recovery flow are present.
+  // The auth state listener catches everything that happens AFTER page load:
+  // PASSWORD_RECOVERY from URL hash, SIGNED_IN from doLogin(), SIGNED_OUT from doLogout(),
+  // TOKEN_REFRESHED from autoRefreshToken.
   sb.auth.onAuthStateChange(async (event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
       inRecoveryFlow = true;
@@ -748,16 +747,39 @@ async function init() {
     // SIGNED_IN, TOKEN_REFRESHED, USER_UPDATED, INITIAL_SESSION
     if (session) {
       currentUser = session.user;
-      if (inRecoveryFlow) {
-        // Recovery still in progress — don't show the app until the password is set.
-        showResetScreen();
-        return;
-      }
+      if (inRecoveryFlow) { showResetScreen(); return; }
       await showApp();
     } else {
       showLogin();
     }
   });
+
+  // For the initial page load we DON'T call sb.auth.getSession() — it can deadlock on
+  // certain page loads, leaving the app stuck on the login screen even when there's a
+  // valid stored session. Instead we read the stored auth blob directly. If a session
+  // looks present and non-expired, we hand-construct a user and enter the app. The
+  // Supabase client will pick up the token from localStorage on its next request, and
+  // any real auth problem (expired, revoked) surfaces as a failed data query, at which
+  // point we sign out and the listener routes back to login.
+  try {
+    const raw = window.localStorage.getItem('triple-auth');
+    if (!raw) { showLogin(); return; }
+    const stored = JSON.parse(raw);
+    const expiresAt = stored?.expires_at; // unix seconds
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!stored?.access_token || !stored?.user || (expiresAt && expiresAt < nowSec)) {
+      // No token, malformed blob, or expired. Clear it and show login.
+      window.localStorage.removeItem('triple-auth');
+      showLogin();
+      return;
+    }
+    // We have a plausibly-valid session in storage. Enter the app optimistically.
+    currentUser = stored.user;
+    await showApp();
+  } catch (e) {
+    console.error('init failed to read stored session:', e);
+    showLogin();
+  }
 }
 async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
@@ -2294,10 +2316,19 @@ document.addEventListener('visibilitychange', async () => {
   lastVisibleAt = Date.now();
   // If we were idle more than 30s, re-verify the session and refresh whatever's on screen.
   if (idleMs < 30000) return;
+  // Check the stored session directly instead of calling sb.auth.getSession(), which
+  // can hang. If the token is missing or expired, the next data query will fail and
+  // we'll sign out; until then, refresh whatever's on screen.
   try {
-    const { data: { session } } = await sb.auth.getSession();
-    if (!session) { showLogin(); return; }
-  } catch (_) { /* swallow — onAuthStateChange handles real auth failures */ }
+    const raw = window.localStorage.getItem('triple-auth');
+    const stored = raw ? JSON.parse(raw) : null;
+    const expiresAt = stored?.expires_at;
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!stored?.access_token || (expiresAt && expiresAt < nowSec)) {
+      showLogin();
+      return;
+    }
+  } catch (_) { /* if storage is unreadable, fall through and let queries fail naturally */ }
   // Refresh the current page's data
   const active = document.querySelector('.nav-item.active');
   const id = active?.id || '';
