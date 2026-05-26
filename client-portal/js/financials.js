@@ -16,7 +16,7 @@
 import { sb } from './config.js';
 
 const BUCKET = 'financials';
-const LOAD_TIMEOUT_MS = 10_000;
+const LOAD_TIMEOUT_MS = 30_000;
 
 // Per-tab state.
 let state = {
@@ -159,7 +159,20 @@ async function loadAndRenderFiles({ force = false } = {}) {
   container.innerHTML = '<div class="state-msg"><span class="spinner"></span> Loading files…</div>';
 
   try {
-    const files = await withTimeout(fetchFiles(state.clientId), LOAD_TIMEOUT_MS);
+    let files;
+    try {
+      // First attempt: race against the timeout.
+      files = await withTimeout(fetchFiles(state.clientId), LOAD_TIMEOUT_MS);
+    } catch (firstErr) {
+      // If it timed out (and only then), the database was likely cold-started.
+      // Try once more silently — the DB is warm now and this should be quick.
+      if (firstErr && firstErr.code === 'TIMEOUT') {
+        container.innerHTML = '<div class="state-msg"><span class="spinner"></span> Warming up…</div>';
+        files = await withTimeout(fetchFiles(state.clientId), LOAD_TIMEOUT_MS);
+      } else {
+        throw firstErr;
+      }
+    }
     state.files = files;
     renderFileList();
   } catch (err) {

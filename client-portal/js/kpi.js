@@ -7,7 +7,7 @@
 import { sb } from './config.js';
 import { downloadAsBuffer, renderWorkbookHTML, bindSheetTabs } from './financials.js';
 
-const LOAD_TIMEOUT_MS = 10_000;
+const LOAD_TIMEOUT_MS = 30_000;
 
 let state = {
   clientId: null,
@@ -28,7 +28,17 @@ async function loadAndRender() {
   host.innerHTML = '<div class="state-msg"><span class="spinner"></span> Loading KPI dashboard…</div>';
 
   try {
-    const file = await withTimeout(fetchLatestPrimeSheet(state.clientId), LOAD_TIMEOUT_MS);
+    let file;
+    try {
+      file = await withTimeout(fetchLatestPrimeSheet(state.clientId), LOAD_TIMEOUT_MS);
+    } catch (firstErr) {
+      if (firstErr && firstErr.code === 'TIMEOUT') {
+        host.innerHTML = '<div class="state-msg"><span class="spinner"></span> Warming up…</div>';
+        file = await withTimeout(fetchLatestPrimeSheet(state.clientId), LOAD_TIMEOUT_MS);
+      } else {
+        throw firstErr;
+      }
+    }
     if (!file) {
       host.innerHTML = `
         <div class="card empty-card">
