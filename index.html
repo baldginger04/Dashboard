@@ -115,6 +115,10 @@
     .tab:hover{color:var(--text)}
     .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
     .tab-panel{display:none}.tab-panel.active{display:block}
+    .sub-tabs{display:flex;gap:4px;margin-bottom:1rem;background:#f5f4f0;border-radius:8px;padding:4px;width:fit-content}
+    .sub-tab{padding:.4rem .9rem;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;border-radius:6px;transition:all .15s}
+    .sub-tab:hover{color:var(--text)}
+    .sub-tab.active{background:white;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.06)}
 
     /* TASK CATEGORY */
     .task-cat{margin-bottom:1rem;background:white;border:1px solid var(--border);border-radius:10px;overflow:hidden}
@@ -178,19 +182,29 @@
     .myday-sort{display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
     .sort-btn{padding:5px 14px;border-radius:20px;font-size:12px;border:1px solid var(--border);background:white;color:var(--text2);cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif}
     .sort-btn.active{background:var(--accent);color:white;border-color:var(--accent)}
-    .myday-section{margin-bottom:1.5rem}
-    .myday-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:.75rem;display:flex;align-items:center;gap:8px}
-    .myday-item{background:white;border:1px solid var(--border);border-radius:8px;padding:.875rem 1.25rem;margin-bottom:8px;display:flex;align-items:center;gap:12px;transition:all .15s}
-    .myday-item:hover{border-color:var(--accent);box-shadow:0 2px 8px rgba(200,81,26,.08)}
+    /* MY DAY — 3-column Kanban */
+    .myday-kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;align-items:start}
+    .myday-col{background:#fafaf8;border:1px solid var(--border);border-radius:10px;padding:10px;min-height:120px}
+    .myday-col-hdr{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:.5rem;display:flex;align-items:center;gap:8px;padding:0 4px}
+    .myday-col-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+    .myday-col-count{margin-left:auto;background:white;border:1px solid var(--border);border-radius:10px;padding:1px 8px;font-size:10px;color:var(--text3)}
+    .myday-col-body{display:flex;flex-direction:column;gap:6px}
+    .myday-col-empty{font-size:12px;color:var(--text3);text-align:center;padding:1rem 0;font-style:italic}
+    /* Tighter row: title and client name on the same line */
+    .myday-item{background:white;border:1px solid var(--border);border-radius:7px;padding:.5rem .75rem;display:flex;align-items:center;gap:10px;transition:all .15s;font-size:13px}
+    .myday-item:hover{border-color:var(--accent);box-shadow:0 1px 4px rgba(200,81,26,.08)}
     .myday-item.overdue-item{border-color:var(--red-border);background:var(--red-bg)}
     .myday-item.warning-item{border-color:var(--yellow-border);background:var(--yellow-bg)}
-    .myday-check{width:20px;height:20px;border-radius:50%;border:1.5px solid #ccc;background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;transition:all .15s;flex-shrink:0}
-    .myday-check:hover{border-color:var(--green);background:var(--green-bg)}
+    .myday-check{width:18px;height:18px;border-radius:50%;border:1.5px solid #ccc;background:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;line-height:1;transition:all .15s;flex-shrink:0}
+    .myday-check:hover{border-color:var(--accent);background:#fff5ee}
+    .myday-check.in-progress{background:var(--accent);border-color:var(--accent);color:white}
     .myday-check.done{background:var(--green);border-color:var(--green);color:white}
-    .myday-body{flex:1;min-width:0}
-    .myday-task-name{font-size:13px;font-weight:500;color:var(--text)}
-    .myday-client{font-size:12px;color:#A86F00;font-weight:500;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .myday-title{flex:1;min-width:0;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+    .myday-client-inline{font-size:12px;color:#A86F00;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;flex-shrink:1}
     .myday-due{font-size:11px;white-space:nowrap;flex-shrink:0}
+    @media (max-width: 900px){
+      .myday-kanban{grid-template-columns:1fr}
+    }
 
     /* MY WEEK columns */
     .week-grid{display:grid;grid-template-columns:repeat(7, minmax(0, 1fr));gap:10px;align-items:start}
@@ -425,7 +439,13 @@
           <div class="tab" onclick="showTab('kpi')">KPI Dashboard</div>
           <div class="tab" onclick="showTab('messages')">Client Specific Messages</div>
         </div>
-        <div class="tab-panel active" id="tab-tasks"><div id="taskContent"><div class="empty"><span class="spinner"></span></div></div></div>
+        <div class="tab-panel active" id="tab-tasks">
+          <div class="sub-tabs">
+            <div class="sub-tab active" id="subtab-close" onclick="showTaskView('close')">Close Checklist</div>
+            <div class="sub-tab" id="subtab-upcoming" onclick="showTaskView('upcoming')">Upcoming Tasks</div>
+          </div>
+          <div id="taskContent"><div class="empty"><span class="spinner"></span></div></div>
+        </div>
         <div class="tab-panel" id="tab-accounts"><div id="accountContent"><div class="empty"><span class="spinner"></span></div></div></div>
         <div class="tab-panel" id="tab-kpi">
           <div class="kpi-grid" id="kpiCards"></div>
@@ -1005,13 +1025,15 @@ function renderMyDay(tasks, subs, today) {
       client: t.clients?.name || '', clientId: t.client_id || '',
       due: t.next_due,
       daysOverdue: t.next_due ? Math.floor((new Date(today) - new Date(t.next_due)) / 86400000) : 0,
-      freq: t.frequency
+      freq: t.frequency,
+      status: t.status || 'Not Started'
     })),
     ...subs.map(s => ({
       id: s.id, type: 'subtask', title: s.title,
       client: s.clients?.name || '', due: s.tasks?.next_due,
       daysOverdue: s.tasks?.next_due ? Math.floor((new Date(today) - new Date(s.tasks.next_due)) / 86400000) : 0,
-      parentTask: s.tasks?.title || ''
+      parentTask: s.tasks?.title || '',
+      status: s.status || 'Not Started'
     }))
   ];
 
@@ -1026,25 +1048,36 @@ function renderMyDay(tasks, subs, today) {
     return 0;
   });
 
-  const overdue = all.filter(t => t.daysOverdue > 0);
-  const dueToday = all.filter(t => t.daysOverdue <= 0);
+  // Group into 3 Kanban columns by status. "Open" surfaces tasks not yet started.
+  // Done column shows tasks completed today (so the user can see what they finished).
+  const open = all.filter(t => t.status === 'Not Started');
+  const inProgress = all.filter(t => t.status === 'In Progress');
+  const doneToday = all.filter(t => t.status === 'Done'); // typically empty since loader excludes Done
 
   let html = '';
   if (!all.length) {
     html = '<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:3rem">All caught up! No pending tasks for today.</div>';
   } else {
-    if (overdue.length) {
-      html += `<div class="myday-section">
-        <div class="myday-section-title"><span style="width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block"></span>Overdue (${overdue.length})</div>`;
-      overdue.forEach(t => { html += mydayItem(t, today); });
-      html += '</div>';
-    }
-    if (dueToday.length) {
-      html += `<div class="myday-section">
-        <div class="myday-section-title"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block"></span>Due Today (${dueToday.length})</div>`;
-      dueToday.forEach(t => { html += mydayItem(t, today); });
-      html += '</div>';
-    }
+    html = `<div class="myday-kanban">
+      <div class="myday-col">
+        <div class="myday-col-hdr"><span class="myday-col-dot" style="background:#999"></span>Open <span class="myday-col-count">${open.length}</span></div>
+        <div class="myday-col-body">
+          ${open.length ? open.map(t => mydayItem(t, today)).join('') : '<div class="myday-col-empty">No open tasks</div>'}
+        </div>
+      </div>
+      <div class="myday-col">
+        <div class="myday-col-hdr"><span class="myday-col-dot" style="background:var(--accent)"></span>In Progress <span class="myday-col-count">${inProgress.length}</span></div>
+        <div class="myday-col-body">
+          ${inProgress.length ? inProgress.map(t => mydayItem(t, today)).join('') : '<div class="myday-col-empty">Nothing in progress</div>'}
+        </div>
+      </div>
+      <div class="myday-col">
+        <div class="myday-col-hdr"><span class="myday-col-dot" style="background:var(--green)"></span>Done <span class="myday-col-count">${doneToday.length}</span></div>
+        <div class="myday-col-body">
+          ${doneToday.length ? doneToday.map(t => mydayItem(t, today)).join('') : '<div class="myday-col-empty">Nothing done yet</div>'}
+        </div>
+      </div>
+    </div>`;
   }
   document.getElementById('mydayContent').innerHTML = html;
 }
@@ -1054,20 +1087,25 @@ function mydayItem(t, today) {
   const isWarning = t.daysOverdue >= 3;
   const rowClass = isWarning ? 'warning-item' : isOverdue ? 'overdue-item' : '';
   const dueLabel = !t.due ? '<span style="color:var(--text3);font-size:11px">Daily</span>' :
-    isOverdue ? `<span style="color:var(--red);font-size:11px;font-weight:500">${t.daysOverdue}d overdue</span>` :
+    isOverdue ? `<span style="color:var(--red);font-size:11px;font-weight:500">${t.daysOverdue}d</span>` :
     `<span style="color:var(--text3);font-size:11px">Today</span>`;
-  const warning = isWarning ? `<div style="font-size:11px;color:var(--yellow);background:var(--yellow-bg);border:1px solid var(--yellow-border);border-radius:4px;padding:4px 8px;margin-top:4px">This task is ${t.daysOverdue} days overdue. Consider adjusting the frequency.</div>` : '';
-  const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
+  // Click the circle to ADVANCE status: Open → In Progress → Done
+  const onClick = t.type === 'task' ? `cycleTaskStatus('${t.id}')` : `cycleSubStatus('${t.id}')`;
+  // Visual hint of current status on the circle
+  let checkClass = 'myday-check';
+  let checkInner = '';
+  if (t.status === 'In Progress') { checkClass += ' in-progress'; checkInner = '◐'; }
+  else if (t.status === 'Done') { checkClass += ' done'; checkInner = '✓'; }
   const editBtn = t.type === 'task'
-    ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px" onclick="editFromMyDay('${t.id}','${t.clientId}')">Edit</button>`
+    ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px;padding:2px 8px" onclick="editFromMyDay('${t.id}','${t.clientId}')">Edit</button>`
+    : '';
+  const clientLabel = t.client
+    ? `<span class="myday-client-inline">${t.client}${t.parentTask ? ' · ' + t.parentTask : ''}</span>`
     : '';
   return `<div class="myday-item ${rowClass}">
-    <div class="myday-check" onclick="${onClick}"></div>
-    <div class="myday-body">
-      <div class="myday-task-name">${t.title}</div>
-      <div class="myday-client">${t.client}${t.parentTask ? ' · ' + t.parentTask : ''}</div>
-      ${warning}
-    </div>
+    <div class="${checkClass}" onclick="${onClick}">${checkInner}</div>
+    <div class="myday-title">${t.title}</div>
+    ${clientLabel}
     ${dueLabel}
     ${editBtn}
   </div>`;
@@ -1085,6 +1123,49 @@ async function editFromMyDay(taskId, clientId) {
     clientSubtasks = s.data || [];
   }
   openTaskModal(clientId, '', taskId);
+}
+
+// Click on the My Day circle ADVANCES the task one step in the workflow:
+// Not Started → In Progress → Done. The Done step delegates to quickDoneTask
+// so recurring-task logic + optimistic UI still work.
+async function cycleTaskStatus(id) {
+  try {
+    const { data: task, error } = await sb.from('tasks').select('status').eq('id', id).single();
+    if (error) throw error;
+    const cur = task?.status || 'Not Started';
+    if (cur === 'Done') return; // already done — no-op
+    if (cur === 'Not Started') {
+      // Bump to In Progress
+      await sb.from('tasks').update({ status: 'In Progress', updated_at: new Date().toISOString() }).eq('id', id);
+      loadMyDay();
+      loadMyWeek();
+      return;
+    }
+    // cur === 'In Progress' → finish it (this also handles recurring + optimistic UI)
+    quickDoneTask(id);
+  } catch (err) {
+    console.error('cycleTaskStatus error:', err);
+    alert("Couldn't update task status. " + (err.message || ''));
+  }
+}
+
+async function cycleSubStatus(id) {
+  try {
+    const { data: sub, error } = await sb.from('subtasks').select('status').eq('id', id).single();
+    if (error) throw error;
+    const cur = sub?.status || 'Not Started';
+    if (cur === 'Done') return;
+    if (cur === 'Not Started') {
+      await sb.from('subtasks').update({ status: 'In Progress', updated_at: new Date().toISOString() }).eq('id', id);
+      loadMyDay();
+      loadMyWeek();
+      return;
+    }
+    quickDoneSub(id);
+  } catch (err) {
+    console.error('cycleSubStatus error:', err);
+    alert("Couldn't update subtask status. " + (err.message || ''));
+  }
 }
 
 async function quickDoneTask(id) {
@@ -1200,6 +1281,12 @@ async function openClient(id) {
   document.getElementById('msgList').innerHTML = '';
   showPage('client-detail');
   showTab('tasks');
+  // Reset the Close Checklist / Upcoming Tasks sub-tab to "close" for each new client
+  taskView = 'close';
+  const closeEl = document.getElementById('subtab-close');
+  const upEl = document.getElementById('subtab-upcoming');
+  if (closeEl) closeEl.classList.add('active');
+  if (upEl) upEl.classList.remove('active');
   await Promise.all([loadTasks(id), loadAccounts(id), loadKPI(id), loadMessages(id)]);
 }
 
@@ -1214,7 +1301,8 @@ async function loadTasks(clientId) {
     if (s.error) throw s.error;
     clientTasks = t.data || [];
     clientSubtasks = s.data || [];
-    renderTasks();
+    if (taskView === 'upcoming') renderUpcomingTasks();
+    else renderTasks();
   } catch (err) {
     console.error('loadTasks error:', err);
     document.getElementById('taskContent').innerHTML =
@@ -1222,6 +1310,66 @@ async function loadTasks(clientId) {
         Couldn't load tasks. ${err.message || 'Please try again.'}
       </div>`;
   }
+}
+
+// Tracks which sub-tab is showing inside the Close Checklist tab:
+// 'close' (default) = current-due/overdue tasks grouped by section
+// 'upcoming' = all future tasks for this client, sorted by next_due ascending
+let taskView = 'close';
+
+function showTaskView(view) {
+  taskView = view;
+  document.getElementById('subtab-close').classList.toggle('active', view === 'close');
+  document.getElementById('subtab-upcoming').classList.toggle('active', view === 'upcoming');
+  if (view === 'upcoming') renderUpcomingTasks();
+  else renderTasks();
+}
+
+function renderUpcomingTasks() {
+  const container = document.getElementById('taskContent');
+  const today = new Date().toISOString().split('T')[0];
+
+  // Hide parent tasks whose subtasks already cover the workflow;
+  // hide Done tasks; only show tasks with a future or today next_due.
+  const parentIds = new Set(clientSubtasks.map(s => s.task_id));
+  const upcoming = (clientTasks || [])
+    .filter(t => t.status !== 'Done')
+    .filter(t => !parentIds.has(t.id))
+    .filter(t => t.next_due && t.next_due > today)
+    .sort((a, b) => a.next_due < b.next_due ? -1 : a.next_due > b.next_due ? 1 : 0);
+
+  if (!upcoming.length) {
+    container.innerHTML = `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:3rem">
+      <div style="font-size:32px;margin-bottom:.75rem">📅</div>
+      <div style="font-weight:500;color:var(--text);margin-bottom:.5rem">No upcoming tasks</div>
+      <div style="font-size:13px;color:var(--text3)">All future-dated tasks will appear here, sorted by next due date.</div>
+    </div>`;
+    return;
+  }
+
+  let html = '<div style="background:white;border:1px solid var(--border);border-radius:10px;overflow:hidden">';
+  html += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+  html += '<thead><tr style="background:#fafaf8;text-align:left">' +
+    '<th style="padding:.6rem .9rem;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600">Task</th>' +
+    '<th style="padding:.6rem .9rem;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600">Category</th>' +
+    '<th style="padding:.6rem .9rem;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600">Assigned</th>' +
+    '<th style="padding:.6rem .9rem;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600">Frequency</th>' +
+    '<th style="padding:.6rem .9rem;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600">Next Due</th>' +
+    '</tr></thead><tbody>';
+  upcoming.forEach((t, i) => {
+    const due = new Date(t.next_due + 'T00:00:00');
+    const dueFmt = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const bg = i % 2 === 0 ? 'white' : '#fafaf8';
+    html += `<tr style="background:${bg};border-top:1px solid var(--border);cursor:pointer" onclick="openTaskModal('${currentClientId}','${t.category || ''}','${t.id}')">` +
+      `<td style="padding:.6rem .9rem;font-weight:500">${t.title}</td>` +
+      `<td style="padding:.6rem .9rem;color:var(--text2)">${t.category || '-'}</td>` +
+      `<td style="padding:.6rem .9rem;color:var(--text2)">${t.assigned_to || '-'}</td>` +
+      `<td style="padding:.6rem .9rem;color:var(--text2)">${(t.frequency || 'one_time').replace(/_/g,' ')}</td>` +
+      `<td style="padding:.6rem .9rem;color:var(--text2)">${dueFmt}</td>` +
+      `</tr>`;
+  });
+  html += '</tbody></table></div>';
+  container.innerHTML = html;
 }
 
 function renderTasks() {
