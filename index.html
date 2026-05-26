@@ -1179,6 +1179,9 @@ async function cycleTaskStatus(id) {
         .update({ status: 'In Progress', updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
+      // Reload so the card moves from Open → In Progress column
+      loadMyDay();
+      loadMyWeek();
     } catch (err) {
       console.error('cycleTaskStatus error:', err);
       applyDomStatus(id, 'Not Started'); // rollback
@@ -1188,7 +1191,7 @@ async function cycleTaskStatus(id) {
     }
     return;
   }
-  // cur === 'In Progress' → finish it
+  // cur === 'In Progress' → finish it (quickDoneTask already reloads)
   quickDoneTask(id);
 }
 
@@ -1205,6 +1208,8 @@ async function cycleSubStatus(id) {
         .update({ status: 'In Progress', updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
+      loadMyDay();
+      loadMyWeek();
     } catch (err) {
       console.error('cycleSubStatus error:', err);
       applyDomStatus(id, 'Not Started');
