@@ -783,10 +783,15 @@ async function loadMyDay() {
       .neq('status', 'Done');
     if (se) throw se;
 
-    const allSubsRes = await sb.from('subtasks').select('id,status,blocked_by');
+    const allSubsRes = await sb.from('subtasks').select('id,task_id,status,blocked_by');
     const allSubs = allSubsRes.data || [];
 
+    // Tasks that have ANY subtasks are "parent" tasks — hide them from My Day.
+    // Only their subtasks should surface (gated by the blocked_by chain below).
+    const parentTaskIds = new Set(allSubs.map(s => s.task_id));
+
     const myTasks = (tasks || []).filter(t => {
+      if (parentTaskIds.has(t.id)) return false;
       if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
       return t.next_due <= today;
     });
@@ -841,14 +846,19 @@ async function loadMyWeek() {
       .neq('status', 'Done');
     if (se) throw se;
 
-    const allSubsRes = await sb.from('subtasks').select('id,status,blocked_by');
+    const allSubsRes = await sb.from('subtasks').select('id,task_id,status,blocked_by');
     const allSubs = allSubsRes.data || [];
+
+    // Tasks that have ANY subtasks are "parent" tasks — hide them from My Week.
+    // Only their subtasks should surface (gated by the blocked_by chain below).
+    const parentTaskIds = new Set(allSubs.map(s => s.task_id));
 
     // Filter tasks: due in window OR daily-recurring (which fire every day)
     const dailyFreqs = ['daily','weekdays','every_other_weekday'];
     const inWindow = d => d && d >= todayStr && d <= weekEndStr;
 
     const weekTasks = (tasks || []).filter(t => {
+      if (parentTaskIds.has(t.id)) return false;
       if (dailyFreqs.includes(t.frequency)) return true;
       // include overdue rolled-up to today, plus tasks due during the window
       return t.next_due && t.next_due <= weekEndStr;
