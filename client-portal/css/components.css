@@ -174,3 +174,280 @@
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ===================================================================
+   Phase 1 additions: tabs, financials, KPI, projections
+   =================================================================== */
+
+/* ---------- TAB PANES ---------- */
+/* All panes share the same container styling — just toggle display. */
+.tab-pane { animation: fadeIn .15s ease-out; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+
+/* ---------- UPLOAD CARD ---------- */
+.upload-card { margin-bottom: 1.25rem; }
+.upload-card-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-bottom: .9rem;
+}
+
+.upload-form { display: flex; flex-direction: column; gap: .5rem; }
+.upload-row {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr auto;
+  gap: .65rem;
+  align-items: end;
+}
+.field-stack { display: flex; flex-direction: column; gap: 4px; }
+.field-stack label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.field-stack input[type="file"],
+.field-stack input[type="month"],
+.field-stack select {
+  padding: 8px 10px;
+  border: 1px solid var(--border2);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  background: var(--bg2);
+  color: var(--text);
+  outline: none;
+  transition: border-color .12s;
+}
+.field-stack input[type="month"]:focus,
+.field-stack select:focus,
+.field-stack input[type="file"]:focus { border-color: var(--accent); }
+
+.upload-status {
+  font-size: 12px;
+  color: var(--text2);
+  min-height: 1.2em;
+}
+.upload-status.ok    { color: var(--green); }
+.upload-status.error { color: var(--red); }
+
+/* ---------- FINANCIALS: PERIOD GROUPS ---------- */
+.period-group { margin-bottom: 1.25rem; }
+.period-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .55rem;
+}
+.period-group-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--text);
+}
+.period-group-meta {
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: .05em;
+}
+
+/* Archive accordion */
+.archive-section { margin-top: 2rem; }
+.archive-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: .65rem .9rem;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  user-select: none;
+  transition: background .12s, color .12s;
+}
+.archive-toggle:hover { background: var(--border); color: var(--text); }
+.archive-toggle .chev { transition: transform .15s; }
+.archive-toggle.is-open .chev { transform: rotate(90deg); }
+.archive-body { margin-top: .75rem; display: none; }
+.archive-body.is-open { display: block; }
+
+/* ---------- FILE ROW ---------- */
+.file-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 6px;
+  transition: border-color .12s, box-shadow .12s;
+}
+.file-row:hover { border-color: var(--border2); box-shadow: var(--shadow-sm); }
+.file-row .file-name {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.file-row .file-meta {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+.file-type-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.file-type-tag.pl            { background: var(--blue-bg);  color: var(--blue);  border: 1px solid var(--blue-border); }
+.file-type-tag.pl_detail     { background: var(--blue-bg);  color: var(--blue);  border: 1px solid var(--blue-border); opacity: .8; }
+.file-type-tag.prime_sheet   { background: #fef3e6;          color: var(--accent); border: 1px solid #f5c89a; }
+.file-type-tag.balance_sheet { background: var(--green-bg); color: var(--green); border: 1px solid var(--green-border); }
+.file-type-tag.other         { background: var(--bg3);       color: var(--text2); border: 1px solid var(--border2); }
+
+.file-row .actions { display: flex; gap: 6px; }
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px; height: 30px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text2);
+  font-size: 14px;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.icon-btn:hover { color: var(--text); border-color: var(--border2); background: var(--bg3); }
+.icon-btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* ---------- XLSX PREVIEW ---------- */
+.xlsx-preview {
+  margin-top: 8px;
+  padding: 0;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: auto;
+  max-height: 520px;
+}
+.xlsx-preview table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.xlsx-preview td, .xlsx-preview th {
+  padding: 5px 9px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+  background: var(--bg2);
+}
+.xlsx-preview th {
+  background: var(--bg3);
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+}
+.xlsx-preview tr:first-child td,
+.xlsx-preview tr:first-child th { font-weight: 600; }
+
+/* Sheet tabs (for xlsx with multiple sheets) */
+.sheet-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: .5rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.sheet-tab {
+  padding: 5px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+  color: var(--text2);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.sheet-tab.active { background: var(--accent); color: white; border-color: var(--accent); }
+.sheet-tab:not(.active):hover { color: var(--text); border-color: var(--border2); }
+
+/* ---------- COMING SOON ---------- */
+.coming-soon {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+.coming-soon-icon {
+  font-size: 48px;
+  margin-bottom: 1rem;
+}
+.coming-soon h2 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--text);
+  margin-bottom: .5rem;
+  font-weight: 400;
+}
+.coming-soon p {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.6;
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+/* ---------- EMPTY STATES (per-tab) ---------- */
+.empty-card {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+.empty-card .empty-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+.empty-card .empty-sub {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.5;
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+/* ---------- RETRY BUTTON (timeout fallback) ---------- */
+.retry-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text2);
+  font-size: 13px;
+}
+.retry-state .btn { margin-top: .75rem; }
+
+/* ---------- TIGHTEN UP ON NARROW SCREENS ---------- */
+@media (max-width: 760px) {
+  .upload-row { grid-template-columns: 1fr; }
+  .file-row { grid-template-columns: 1fr auto; }
+  .file-row .actions { grid-column: 1 / -1; justify-content: flex-end; }
+}
