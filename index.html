@@ -1175,12 +1175,20 @@ async function cycleTaskStatus(id) {
     inFlightTasks.add(id);
     applyDomStatus(id, 'In Progress'); // optimistic — instant visual feedback
     try {
-      const { error } = await sb.from('tasks')
+      // Use .select() so Supabase waits for and returns the updated row.
+      // Without .select(), the update can return before the row is queryable,
+      // which means the immediately-following loadMyDay() reads stale data.
+      const { data, error } = await sb.from('tasks')
         .update({ status: 'In Progress', updated_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
-      // Reload so the card moves from Open → In Progress column
-      loadMyDay();
+      if (!data || data.status !== 'In Progress') {
+        throw new Error('Update returned no row — likely an RLS policy is blocking it.');
+      }
+      // Now reload — the DB has confirmed the change
+      await loadMyDay();
       loadMyWeek();
     } catch (err) {
       console.error('cycleTaskStatus error:', err);
@@ -1204,11 +1212,16 @@ async function cycleSubStatus(id) {
     inFlightSubs.add(id);
     applyDomStatus(id, 'In Progress');
     try {
-      const { error } = await sb.from('subtasks')
+      const { data, error } = await sb.from('subtasks')
         .update({ status: 'In Progress', updated_at: new Date().toISOString() })
-        .eq('id', id);
+        .eq('id', id)
+        .select()
+        .single();
       if (error) throw error;
-      loadMyDay();
+      if (!data || data.status !== 'In Progress') {
+        throw new Error('Update returned no row — likely an RLS policy is blocking it.');
+      }
+      await loadMyDay();
       loadMyWeek();
     } catch (err) {
       console.error('cycleSubStatus error:', err);
