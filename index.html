@@ -692,13 +692,7 @@ const sb = supabase.createClient(SB_URL, SB_KEY, {
     persistSession: true,
     detectSessionInUrl: true,
     storage: window.localStorage,
-    storageKey: 'triple-auth',
-    // Disable navigator.locks coordination. supabase-js v2 uses it to serialize auth
-    // operations across tabs, but it can deadlock on certain page-load paths — particularly
-    // when there's a stored session AND a recent recovery flow. Since Triple is normally
-    // used in one tab at a time, the cross-tab coordination isn't worth the lockup risk.
-    // The lock fn just runs its callback immediately with no locking.
-    lock: async (_name, _timeout, fn) => fn()
+    storageKey: 'triple-auth'
   }
 });
 
