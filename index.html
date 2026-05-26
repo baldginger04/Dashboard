@@ -692,7 +692,13 @@ const sb = supabase.createClient(SB_URL, SB_KEY, {
     persistSession: true,
     detectSessionInUrl: true,
     storage: window.localStorage,
-    storageKey: 'triple-auth'
+    storageKey: 'triple-auth',
+    // Disable navigator.locks coordination. supabase-js v2 uses it to serialize auth
+    // operations across tabs, but it can deadlock on certain page-load paths — particularly
+    // when there's a stored session AND a recent recovery flow. Since Triple is normally
+    // used in one tab at a time, the cross-tab coordination isn't worth the lockup risk.
+    // The lock fn just runs its callback immediately with no locking.
+    lock: async (_name, _timeout, fn) => fn()
   }
 });
 
@@ -722,7 +728,10 @@ let costChart = null;
 let inRecoveryFlow = false;
 
 async function init() {
-  // Listen FIRST so we catch PASSWORD_RECOVERY if it fires synchronously from the URL hash.
+  // The auth state listener fires INITIAL_SESSION on every page load with the stored session
+  // (or null), and PASSWORD_RECOVERY when the URL hash carries a recovery token. We rely
+  // entirely on this — no separate getSession() probe, because that call can deadlock when
+  // both a stored session and a recent recovery flow are present.
   sb.auth.onAuthStateChange(async (event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
       inRecoveryFlow = true;
@@ -749,11 +758,6 @@ async function init() {
       showLogin();
     }
   });
-
-  // Also probe the current session in case onAuthStateChange doesn't fire on this load.
-  const { data: { session } } = await sb.auth.getSession();
-  if (session && !inRecoveryFlow) { currentUser = session.user; await showApp(); }
-  else if (!session) { showLogin(); }
 }
 async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
