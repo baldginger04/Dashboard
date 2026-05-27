@@ -106,6 +106,21 @@
     .badge-done{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
     .badge-progress{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border)}
     .badge-pending{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+
+    /* CLIENT ROW TINTS — shade the whole row on the All Clients page by close_status
+       so progress is visible at a glance. Reddish for In Progress (active work),
+       green for Done (this month's close wrapped up). Hover keeps the tint but
+       a touch darker so click affordance is preserved. */
+    tr.row-in-progress td { background: #fef0ea !important; }
+    tr.row-in-progress:hover td { background: #fde3d8 !important; }
+    tr.row-done td { background: var(--green-bg) !important; }
+    tr.row-done:hover td { background: #d1ebd9 !important; }
+
+    /* Clickable status badge on the client detail page — gets a subtle hover cue
+       so users discover they can click to cycle. Plain badges (in tables) stay static. */
+    .badge.is-clickable { cursor: pointer; transition: opacity .12s, transform .08s; user-select: none; }
+    .badge.is-clickable:hover { opacity: .85; }
+    .badge.is-clickable:active { transform: scale(.97); }
     .badge-overdue{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
     .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
 
@@ -931,14 +946,21 @@ function renderClientsTable(clients) {
   });
   const tbody = document.getElementById('clientsTbody');
   if (!sorted.length) { tbody.innerHTML='<tr><td colspan="5"><div class="empty">No clients found</div></td></tr>'; return; }
-  tbody.innerHTML = sorted.map(c=>`
-    <tr onclick="openClient('${c.id}')">
+  tbody.innerHTML = sorted.map(c=>{
+    // Tint the row to reflect close progress at a glance. "Not Started" rows stay
+    // plain so they don't visually compete with active work.
+    const rowClass = c.close_status === 'In Progress' ? 'row-in-progress'
+                   : c.close_status === 'Done'        ? 'row-done'
+                   : '';
+    return `
+    <tr class="${rowClass}" onclick="openClient('${c.id}')">
       <td style="font-weight:500">${c.name}</td>
       <td>${avHtml(c.preparer)} <span style="font-size:13px;color:var(--text2);margin-left:6px">${c.preparer||'—'}</span></td>
       <td>${c.reviewer?avHtml(c.reviewer)+'<span style="font-size:13px;color:var(--text2);margin-left:6px">'+c.reviewer+'</span>':'<span style="color:var(--text3)">—</span>'}</td>
       <td style="font-size:12px;color:var(--text3)">${c.close_due_date||'—'}</td>
       <td>${statusBadge(c.close_status)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 }
 function sortClients(key) {
   if (clientSortKey === key) clientSortDir *= -1; else { clientSortKey = key; clientSortDir = 1; }
@@ -1967,7 +1989,11 @@ async function openClient(id) {
   }
   document.getElementById('detailName').textContent = c.name;
   document.getElementById('detailMeta').textContent = (c.close_period||'') + (c.close_due_date ? ' · Due ' + c.close_due_date : '');
-  document.getElementById('detailBadge').innerHTML = statusBadge(c.close_status);
+  // Clickable status badge — cycles Not Started -> In Progress -> Done -> Not Started.
+  // The cycleCloseStatus() function handles the warn-if-tasks-incomplete check
+  // when moving to Done, and writes the new status to the DB.
+  document.getElementById('detailBadge').innerHTML = statusBadge(c.close_status, true);
+  document.getElementById('detailBadge').onclick = () => cycleCloseStatus(c.id);
   populateClientSwitcher(id);
   // Reset content panels so we don't show stale data from previous client while loading
   document.getElementById('taskContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -2918,11 +2944,57 @@ function tzFormatDate(ymd, opts) {
 // only for "what date is today" decisions.
 function tzNowIso() { return new Date().toISOString(); }
 
-function statusBadge(s) {
-  if (s === 'Done') return '<span class="badge badge-done"><span class="dot"></span>Done</span>';
-  if (s === 'In Progress') return '<span class="badge badge-progress"><span class="dot"></span>In Progress</span>';
-  return '<span class="badge badge-pending"><span class="dot"></span>Not Started</span>';
+// Renders the close-status pill. When `clickable` is true (used on the client
+// detail page header), adds the .is-clickable class for hover affordance — the
+// click handler itself is wired separately on the badge container.
+function statusBadge(s, clickable) {
+  const extra = clickable ? ' is-clickable' : '';
+  const title = clickable ? ' title="Click to change status"' : '';
+  if (s === 'Done') return `<span class="badge badge-done${extra}"${title}><span class="dot"></span>Done</span>`;
+  if (s === 'In Progress') return `<span class="badge badge-progress${extra}"${title}><span class="dot"></span>In Progress</span>`;
+  return `<span class="badge badge-pending${extra}"${title}><span class="dot"></span>Not Started</span>`;
 }
+
+// Cycle the client's close status: Not Started -> In Progress -> Done -> Not Started.
+// When moving to Done, if any tasks (or subtasks) for this client aren't done yet,
+// surface a confirm dialog so the user can decide whether to override. After a
+// successful update we refresh both detailBadge (header pill) and the row tint on
+// the All Clients table by patching allClients in place and re-rendering.
+async function cycleCloseStatus(clientId) {
+  const c = allClients.find(x => x.id === clientId);
+  if (!c) return;
+  const cur = c.close_status || 'Not Started';
+  const next = cur === 'Not Started' ? 'In Progress'
+             : cur === 'In Progress' ? 'Done'
+             : 'Not Started';
+  // Guardrail: moving to Done while open work remains. Count non-Done tasks and
+  // non-Done subtasks separately so the message is informative. Run in parallel.
+  if (next === 'Done') {
+    const [tRes, sRes] = await Promise.all([
+      sb.from('tasks').select('id', { count: 'exact', head: true }).eq('client_id', clientId).neq('status', 'Done'),
+      sb.from('subtasks').select('id, tasks!inner(client_id)', { count: 'exact', head: true }).eq('tasks.client_id', clientId).neq('status', 'Done'),
+    ]);
+    const openTasks = tRes.count || 0;
+    const openSubs = sRes.count || 0;
+    if (openTasks + openSubs > 0) {
+      const bits = [];
+      if (openTasks) bits.push(`${openTasks} task${openTasks===1?'':'s'}`);
+      if (openSubs)  bits.push(`${openSubs} subtask${openSubs===1?'':'s'}`);
+      const ok = confirm(`${c.name} still has ${bits.join(' and ')} not marked Done.\n\nMark the close Done anyway?`);
+      if (!ok) return;
+    }
+  }
+  // Write. On error, leave UI unchanged so user can retry.
+  const { error } = await sb.from('clients').update({ close_status: next }).eq('id', clientId);
+  if (error) { alert("Couldn't update status: " + error.message); return; }
+  // Patch local cache so we don't need a full reload, then re-render both views.
+  c.close_status = next;
+  document.getElementById('detailBadge').innerHTML = statusBadge(next, true);
+  // Also refresh the All Clients table in case the user navigates back; respects
+  // any active filter by re-running the filterClients pipeline.
+  filterClients();
+}
+
 function avClass(n) { if(!n)return'av-default'; if(n.includes('Ed'))return'av-ed'; if(n.includes('Jennifer'))return'av-jennifer'; if(n.includes('Lydia'))return'av-lydia'; if(n.includes('Jen'))return'av-jen'; return'av-default'; }
 function avHtml(n) { if(!n)return''; const i=n.split(' ').map(w=>w[0]).join('').substring(0,2); return`<span class="avatar ${avClass(n)}">${i}</span>`; }
 function fmt(v) { return v ? '$' + Math.round(v).toLocaleString() : '—'; }
