@@ -361,6 +361,16 @@
     .empty{text-align:center;padding:3rem;color:var(--text3);font-size:13px}
     .spinner{display:inline-block;width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ALL CAUGHT UP — celebratory empty state for My Day when nothing's pending.
+       Headline stays fixed; the rotator below cycles through ALL_CAUGHT_UP_MESSAGES
+       with a fade. Messages are stacked absolutely in a fixed-height box and we
+       toggle the .is-active class via a JS interval to advance them. */
+    .all-caught-up{background:white;border:1px solid var(--border);border-radius:10px;padding:3rem 2rem;text-align:center}
+    .all-caught-up-headline{font-size:20px;font-weight:600;color:var(--accent);margin-bottom:.75rem;font-family:'DM Serif Display',serif;font-style:italic}
+    .all-caught-up-rotator{position:relative;height:24px;font-size:14px;color:var(--text2)}
+    .all-caught-up-msg{position:absolute;top:0;left:0;right:0;opacity:0;transition:opacity .6s ease}
+    .all-caught-up-msg.is-active{opacity:1}
     .section-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
     .section-title{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text2)}
     .divider{height:1px;background:var(--border);margin:1.25rem 0}
@@ -758,6 +768,47 @@ function freqLabel(freq, interval) {
   return plural[freq] ? `Every ${n} ${plural[freq]}` : (FREQ_LABELS[freq] || freq || '');
 }
 const CATS = ['General','Payroll','Tax','Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close','Payables','Additional Items'];
+
+// Messages that rotate under the "All caught up!" headline on My Day when there's
+// nothing pending. Add/edit freely — the rotator auto-cycles all of them.
+const ALL_CAUGHT_UP_MESSAGES = [
+  'Pour yourself a drink and relax!',
+  'Have you thought about catching up on your shows?',
+  'Go take a walk outside.',
+  "Text someone you haven't talked to in a while.",
+  "Read that book you've been meaning to crack open.",
+  'Maybe a nap?',
+  'Touch some grass.',
+  "You've earned a snack.",
+  'Stretch. Your back will thank you.',
+  'Go check on the dog.'
+];
+
+// Holds the setInterval ID for the rotator so we can clear it before starting
+// a new one (every renderMyDay call could otherwise stack timers and leak).
+let allCaughtUpTimer = null;
+
+// Start the fade-rotation through ALL_CAUGHT_UP_MESSAGES. Called from renderMyDay
+// when the empty state is shown. Picks a random starting message so reloading
+// doesn't always show "Pour yourself a drink" first.
+function startAllCaughtUpRotator() {
+  if (allCaughtUpTimer) { clearInterval(allCaughtUpTimer); allCaughtUpTimer = null; }
+  const msgs = document.querySelectorAll('.all-caught-up-msg');
+  if (msgs.length <= 1) return;  // nothing to rotate
+  let i = Math.floor(Math.random() * msgs.length);
+  msgs.forEach((m, idx) => m.classList.toggle('is-active', idx === i));
+  allCaughtUpTimer = setInterval(() => {
+    // Verify the rotator is still in the DOM — if user navigated away, stop.
+    if (!document.body.contains(msgs[0])) {
+      clearInterval(allCaughtUpTimer);
+      allCaughtUpTimer = null;
+      return;
+    }
+    msgs[i].classList.remove('is-active');
+    i = (i + 1) % msgs.length;
+    msgs[i].classList.add('is-active');
+  }, 5000);
+}
 
 let currentUser = null;
 // When Ed (admin) impersonates another team member from the "View as" dropdown,
@@ -1319,7 +1370,15 @@ function renderMyDay(tasks, subs, today) {
 
   let html = '';
   if (!all.length) {
-    html = '<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:3rem">All caught up! No pending tasks for today.</div>';
+    // Build all the rotator messages up front; CSS positions them stacked
+    // and the JS rotator (startAllCaughtUpRotator) toggles .is-active to fade.
+    const msgsHtml = ALL_CAUGHT_UP_MESSAGES
+      .map(m => `<div class="all-caught-up-msg">${m}</div>`)
+      .join('');
+    html = `<div class="all-caught-up">
+      <div class="all-caught-up-headline">All caught up! You're the best!</div>
+      <div class="all-caught-up-rotator">${msgsHtml}</div>
+    </div>`;
   } else {
     html = `<div class="myday-kanban">
       <div class="myday-col">
@@ -1337,6 +1396,14 @@ function renderMyDay(tasks, subs, today) {
     </div>`;
   }
   document.getElementById('mydayContent').innerHTML = html;
+  // Kick off the rotator if we just rendered the empty state. If we rendered
+  // the Kanban, ensure any previous timer is killed so it doesn't leak.
+  if (!all.length) {
+    startAllCaughtUpRotator();
+  } else if (allCaughtUpTimer) {
+    clearInterval(allCaughtUpTimer);
+    allCaughtUpTimer = null;
+  }
 }
 
 function mydayItem(t, today) {
