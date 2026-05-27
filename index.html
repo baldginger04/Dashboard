@@ -1298,35 +1298,22 @@ function mutateCacheStatus(id, type, newStatus) {
   else badge.style.display = 'none';
 }
 
+// One-click Done for task cards on My Day. These are always atomic (the My Day
+// data load filters out any task that has subtasks), so the In Progress middle
+// step doesn't add value — workers either start a task or they don't, and the
+// extra click was friction. Subtask cards still cycle through In Progress
+// because they ARE the sequential workflow.
 async function cycleTaskStatus(id) {
   if (inFlightTasks.has(id)) return;
   const cur = readDomStatus(id);
   if (cur === 'Done') return;
-
-  if (cur === 'Not Started') {
-    inFlightTasks.add(id);
-    // Mutate cache + re-render immediately. Card moves columns INSTANTLY.
-    mutateCacheStatus(id, 'task', 'In Progress');
-    try {
-      const { data, error } = await sb.from('tasks')
-        .update({ status: 'In Progress', updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      if (!data) throw new Error('Update returned no row — likely an RLS policy is blocking it.');
-    } catch (err) {
-      console.error('cycleTaskStatus error:', err);
-      // Rollback: reload fresh from DB
-      alert("Couldn't update task status. " + (err.message || ''));
-      loadMyDay();
-    } finally {
-      inFlightTasks.delete(id);
-    }
-    return;
+  // No In Progress middle step — go straight to Done.
+  inFlightTasks.add(id);
+  try {
+    await quickDoneTask(id);
+  } finally {
+    inFlightTasks.delete(id);
   }
-  // cur === 'In Progress' → finish it
-  quickDoneTask(id);
 }
 
 async function cycleSubStatus(id) {
