@@ -861,7 +861,7 @@ async function doLogin() {
   const { error } = await sb.auth.signInWithPassword({ email, password: pass });
   if (error) document.getElementById('loginErr').textContent = 'Incorrect email or password. Please try again.';
 }
-async function doLogout() { await sb.auth.signOut(); showLogin(); }
+async function doLogout() { unsubscribeMyRealtime(); await sb.auth.signOut(); showLogin(); }
 function showLogin() {
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('appShell').style.display = 'none';
@@ -911,6 +911,9 @@ async function showApp() {
   await loadClients();
   await loadMyDay();
   await loadMyWeek();
+  // Open realtime subscriptions for My Day / My Week. Initially scoped to the
+  // logged-in user; setViewingAs() re-targets when Ed uses the view-as dropdown.
+  subscribeMyRealtime(name);
 }
 
 // ── CLIENTS ──────────────────────────────────────────────
@@ -1030,6 +1033,10 @@ function setViewingAs(name) {
     const selfFirst = document.getElementById('sidebarName').textContent.split(' ')[0];
     document.getElementById('mydayGreeting').textContent = `${greeting}, ${selfFirst}`;
   }
+  // Re-target the realtime subscription to the new viewing user, so inbound
+  // changes match whatever's currently on screen. getViewingUserName() returns
+  // either the impersonated name or the logged-in user.
+  subscribeMyRealtime(getViewingUserName());
   reloadActiveView();
 }
 function clearViewingAs() { setViewingAs(''); }
@@ -1055,6 +1062,64 @@ function reloadActiveView() {
 // and re-render without a DB round-trip. This dodges Supabase read-after-write
 // races where a fresh SELECT can briefly return the old status.
 let myDayCache = { tasks: [], subs: [], today: null };
+
+// ── REALTIME SUBSCRIPTIONS ───────────────────────────────
+// Supabase Realtime keeps My Day / My Week in sync across sessions. The main
+// payoff is multi-user sync — when Lydia checks a task off at her desk, Ed (or
+// anyone using view-as on Lydia) sees it disappear from their screen without
+// refreshing. Secondary benefit: catches missed updates when the local optimistic
+// path has a race or the WebSocket fired before the local mutation completes.
+//
+// Strategy: one channel watching all task/subtask changes for the *current
+// viewing user* (which is the actual user, or the impersonated user when Ed is
+// using view-as). On any change, debounce 250ms and reload the active My view.
+// We don't try to surgically patch the cache — the inbound row doesn't have the
+// joined `clients(name)` data the UI needs anyway. A reload is the simple correct
+// answer and the debounce keeps it cheap.
+let myRealtimeChannel = null;
+let myRealtimeDebounce = null;
+
+// Stand up subscriptions for the given assignee name. Tears down any previous
+// channel first. Safe to call multiple times — called on initial load and
+// every time the view-as target changes.
+function subscribeMyRealtime(assigneeName) {
+  unsubscribeMyRealtime();
+  if (!assigneeName) return;
+  // postgres_changes filter syntax: column=eq.value. Filtering server-side means
+  // we only receive events for rows that actually affect this user's view.
+  const filter = `assigned_to=eq.${assigneeName}`;
+  myRealtimeChannel = sb
+    .channel(`myday-${assigneeName}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter }, handleMyRealtimeChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'subtasks', filter }, handleMyRealtimeChange)
+    .subscribe();
+}
+
+function unsubscribeMyRealtime() {
+  if (myRealtimeChannel) {
+    sb.removeChannel(myRealtimeChannel);
+    myRealtimeChannel = null;
+  }
+  if (myRealtimeDebounce) {
+    clearTimeout(myRealtimeDebounce);
+    myRealtimeDebounce = null;
+  }
+}
+
+// Inbound realtime event. Debounce so a burst of changes (e.g. someone batch-
+// editing several subtasks) collapses into one reload.
+function handleMyRealtimeChange(_payload) {
+  if (myRealtimeDebounce) clearTimeout(myRealtimeDebounce);
+  myRealtimeDebounce = setTimeout(() => {
+    myRealtimeDebounce = null;
+    // Only reload if the user is actually on a My view — if they're poking around
+    // a client's task list, no need to spend a query on My Day data they aren't seeing.
+    const active = document.querySelector('.nav-item.active');
+    const id = active?.id || '';
+    if (id === 'nav-myday')  loadMyDay();
+    if (id === 'nav-myweek') loadMyWeek();
+  }, 250);
+}
 
 async function loadMyDay() {
   // Either the user themselves OR (when Ed is impersonating) the chosen team
