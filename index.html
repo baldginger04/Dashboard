@@ -299,6 +299,16 @@
     .msg-author{font-size:12px;font-weight:600;color:var(--text)}
     .msg-time{font-size:11px;color:var(--text3)}
     .msg-body{font-size:13px;color:var(--text);line-height:1.5}
+    /* Resolved (cleared) messages — body text gets struck through and faded, and a small
+       "Resolved" badge sits next to the timestamp. Same look on team and client side; on
+       team side it only appears when "Show resolved" is toggled on. */
+    .msg-item.is-resolved{opacity:.65;background:#fafbfc}
+    .msg-item.is-resolved .msg-body{text-decoration:line-through;text-decoration-color:var(--text3)}
+    .msg-resolved-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);border-radius:4px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
+    /* Per-message Clear/Unclear button. Always visible (not hover-revealed) per design;
+       muted by default, picks up the accent color on hover. */
+    .msg-clear-btn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'DM Sans',sans-serif;transition:all .15s}
+    .msg-clear-btn:hover{border-color:var(--accent);color:var(--accent)}
     .msg-input-row{display:flex;gap:8px}
     .msg-input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif;outline:none;background:white;transition:border-color .15s;resize:none}
     .msg-input:focus{border-color:var(--accent)}
@@ -537,6 +547,16 @@
         </div>
         <div class="tab-panel" id="tab-messages">
           <div class="card" style="padding:1.25rem">
+            <!-- Single-line header above the message list. Show-resolved toggle is right-aligned;
+                 the spacer label on the left is just so the toggle hugs the right edge without
+                 floating in space. State of the toggle is stored on the input element itself. -->
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;font-size:12px;color:var(--text3)">
+              <span></span>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+                <input type="checkbox" id="showResolvedToggle" onchange="loadMessages(currentClientId)" style="cursor:pointer">
+                Show resolved
+              </label>
+            </div>
             <div class="msg-list" id="msgList"></div>
             <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white">
               <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="handleMsgKey(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'DM Sans',sans-serif;font-size:13px;outline:none"></textarea>
@@ -2575,20 +2595,49 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
 }
 
 // ── Client messages ───────────────────────────────────────
+// `cleared` (boolean column on `messages`) means a team member has resolved the
+// thread/message. On the team side, cleared messages are HIDDEN by default and
+// only visible when the "Show resolved" toggle is on — at which point they
+// render with strikethrough + a "Resolved" badge. Clients always see them in
+// the resolved style (never hidden). Anyone on the team can toggle the state.
 function renderMsgItem(m) {
   const imgHtml = m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
-  return `<div class="msg-item">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span></div>
+  const isResolved = !!m.cleared;
+  const badgeHtml = isResolved ? `<span class="msg-resolved-badge">✓ Resolved</span>` : '';
+  // Button label flips based on current state. onclick calls the same toggle
+  // function either way; the function reads the row's current state and flips it.
+  const btnLabel = isResolved ? 'Unmark' : '✓ Clear';
+  const btnHtml = `<button class="msg-clear-btn" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button>`;
+  return `<div class="msg-item${isResolved ? ' is-resolved' : ''}" id="cmsg_${m.id}">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${badgeHtml}${btnHtml}</div>
     <div class="msg-body">${highlightMentions(m.body)}${imgHtml}</div>
   </div>`;
 }
 
+// Flip the cleared boolean on a single message row. Called from the per-message
+// Clear/Unmark button. After the update, reload the list so the new state (and
+// visibility, if "Show resolved" is off) renders correctly.
+async function toggleMsgCleared(id, currentlyCleared) {
+  const { error } = await sb.from('messages').update({ cleared: !currentlyCleared }).eq('id', id);
+  if (error) { alert("Couldn't update message: " + error.message); return; }
+  await loadMessages(currentClientId);
+}
+
 async function loadMessages(clientId) {
   const list = document.getElementById('msgList');
+  // Toggle defaults to off → hide cleared messages. When on, show everything
+  // (cleared messages render with strikethrough + Resolved badge via renderMsgItem).
+  const showResolved = document.getElementById('showResolvedToggle')?.checked || false;
   try {
-    const { data, error } = await sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
+    let query = sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
+    if (!showResolved) query = query.eq('cleared', false);
+    const { data, error } = await query;
     if (error) throw error;
-    if (!data || !data.length) { list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">No messages yet</div>'; return; }
+    if (!data || !data.length) {
+      const emptyMsg = showResolved ? 'No messages yet' : 'No active messages. Toggle "Show resolved" to see cleared ones.';
+      list.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">${emptyMsg}</div>`;
+      return;
+    }
     list.innerHTML = data.map(renderMsgItem).join('');
     list.scrollTop = list.scrollHeight;
   } catch (err) {
