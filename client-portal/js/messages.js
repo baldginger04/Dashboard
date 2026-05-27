@@ -47,7 +47,9 @@ export async function sendMessage({ clientId, author, body, isTeam }) {
   // optimistically append. Keeping it simple for now.
 }
 
-/** Subscribe to realtime inserts for this client's messages. */
+/** Subscribe to realtime inserts AND updates for this client's messages.
+ *  Updates matter because Triple users can mark messages cleared/uncleared,
+ *  and the portal should reflect that state change without a refresh. */
 function subscribeRealtime(clientId) {
   if (currentChannel) {
     sb.removeChannel(currentChannel);
@@ -65,6 +67,16 @@ function subscribeRealtime(clientId) {
         filter: `client_id=eq.${clientId}`,
       },
       (payload) => appendMessage(payload.new)
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `client_id=eq.${clientId}`,
+      },
+      (payload) => updateMessage(payload.new)
     )
     .subscribe();
 }
@@ -100,6 +112,22 @@ function appendMessage(msg) {
   currentRenderTarget.scrollTop = currentRenderTarget.scrollHeight;
 }
 
+/** Replace a message in place when an UPDATE comes in via realtime.
+ *  Most commonly: the team marked it cleared/uncleared in Triple. We swap
+ *  the DOM node so the resolved styling appears/disappears without scrolling
+ *  the chat back to the bottom or re-rendering anything else. */
+function updateMessage(msg) {
+  if (!currentRenderTarget) return;
+  const existing = currentRenderTarget.querySelector(`[data-msg-id="${CSS.escape(String(msg.id))}"]`);
+  if (!existing) return;
+  // Build the new node from HTML and swap it in. Using a template div as an
+  // adapter since insertAdjacentHTML doesn't replace, only insert.
+  const tpl = document.createElement('template');
+  tpl.innerHTML = renderOne(msg).trim();
+  const fresh = tpl.content.firstElementChild;
+  if (fresh) existing.replaceWith(fresh);
+}
+
 function renderOne(msg) {
   // "is-mine" means the bubble was sent by the currently logged-in user.
   // We compare by author name since that's how Triple stores it. (Future
@@ -109,14 +137,21 @@ function renderOne(msg) {
   const mine = inferMine(msg);
   const side = mine ? 'is-mine' : 'is-them';
   const teamBadge = msg.is_team ? '<span class="badge-team">Team</span>' : '';
+  // A "cleared" message is one the team has marked as resolved over in Triple.
+  // The portal can't mark or unmark — clients only see the visual state. We
+  // fade the bubble and add a small "Resolved" badge so they know the team
+  // considers the matter handled.
+  const resolvedClass = msg.cleared ? ' is-resolved' : '';
+  const resolvedBadge = msg.cleared ? '<span class="badge-resolved">✓ Resolved</span>' : '';
   const img = msg.image_url
     ? `<img src="${escape(msg.image_url)}" alt="attachment" />`
     : '';
   return `
-    <div class="msg ${side}">
+    <div class="msg ${side}${resolvedClass}" data-msg-id="${escape(msg.id)}">
       <div class="msg-meta">
         <span class="msg-author">${escape(msg.author || 'Unknown')}</span>
         ${teamBadge}
+        ${resolvedBadge}
         <span class="msg-time">${formatTime(msg.created_at)}</span>
       </div>
       <div class="msg-bubble">${escape(msg.body || '')}${img}</div>
