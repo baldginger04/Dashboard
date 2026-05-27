@@ -747,10 +747,11 @@ async function showApp() {
   document.getElementById('sidebarAvatar').textContent = initials;
   document.getElementById('sidebarAvatar').className = 'user-avatar ' + avClass(name);
   document.getElementById('sidebarRole').textContent = email.includes('ed@') ? 'Owner' : 'Preparer';
-  const h = new Date().getHours();
-  const greeting = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  // Greeting and date are based on the user's Central time, not browser local.
+  const centralHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: BG_TZ, hour: 'numeric', hour12: false }).format(new Date()), 10);
+  const greeting = centralHour < 12 ? 'Good morning' : centralHour < 17 ? 'Good afternoon' : 'Good evening';
   document.getElementById('mydayGreeting').textContent = greeting + ', ' + name.split(' ')[0];
-  document.getElementById('mydayDate').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  document.getElementById('mydayDate').textContent = tzFormatDate(tzToday(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   await loadClients();
   await loadMyDay();
   await loadMyWeek();
@@ -823,7 +824,7 @@ let myDayCache = { tasks: [], subs: [], today: null };
 
 async function loadMyDay() {
   const name = document.getElementById('sidebarName').textContent;
-  const today = new Date().toISOString().split('T')[0];
+  const today = tzToday();
 
   try {
     // Fire all three queries in parallel — was serial, ~3x slower.
@@ -886,13 +887,11 @@ async function loadMyDay() {
 // ── MY WEEK ──────────────────────────────────────────────
 async function loadMyWeek() {
   const name = document.getElementById('sidebarName').textContent;
-  const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().split('T')[0];
-  const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + 6);
-  const weekEndStr = weekEnd.toISOString().split('T')[0];
+  const todayStr = tzToday();
+  const weekEndStr = tzAddDays(todayStr, 6);
 
   document.getElementById('myweekDate').textContent =
-    'Today through ' + weekEnd.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+    'Today through ' + tzFormatDate(weekEndStr, { weekday: 'long', month: 'long', day: 'numeric' });
 
   try {
     // Fire all three queries in parallel
@@ -920,7 +919,6 @@ async function loadMyWeek() {
 
     // Filter tasks: due in window OR daily-recurring (which fire every day)
     const dailyFreqs = ['daily','weekdays','every_other_weekday'];
-    const inWindow = d => d && d >= todayStr && d <= weekEndStr;
 
     const weekTasks = (tasks || []).filter(t => {
       if (parentTaskIds.has(t.id)) return false;
@@ -943,7 +941,7 @@ async function loadMyWeek() {
     if (totalPending > 0) { badge.textContent = totalPending; badge.style.display = 'inline'; }
     else badge.style.display = 'none';
 
-    renderMyWeek(weekTasks, weekSubs, today, weekEnd);
+    renderMyWeek(weekTasks, weekSubs, todayStr, weekEndStr);
   } catch (err) {
     console.error('loadMyWeek error:', err);
     document.getElementById('myweekContent').innerHTML =
@@ -953,16 +951,15 @@ async function loadMyWeek() {
   }
 }
 
-function renderMyWeek(tasks, subs, today, weekEnd) {
-  const todayStr = today.toISOString().split('T')[0];
+function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
   const dailyFreqs = ['daily','weekdays','every_other_weekday'];
-  const isWeekday = d => { const dow = d.getDay(); return dow >= 1 && dow <= 5; };
+  const isWeekdayStr = ymd => { const dow = tzDayOfWeek(ymd); return dow >= 1 && dow <= 5; };
 
-  // Build the 7-day range
+  // Build the 7-day range as YYYY-MM-DD strings (Central-aware).
   const days = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(today); d.setDate(d.getDate() + i);
-    days.push({ date: d, dateStr: d.toISOString().split('T')[0], items: [] });
+    const dateStr = tzAddDays(todayStr, i);
+    days.push({ dateStr, items: [] });
   }
 
   // Flatten tasks + subs into one list, then bucket per day
@@ -980,20 +977,27 @@ function renderMyWeek(tasks, subs, today, weekEnd) {
     }))
   ];
 
+  // daysBetween: count of calendar days from a → b in Central. Both are YYYY-MM-DD.
+  // We anchor each at UTC noon (same trick as tzAddDays) so the divide is exact.
+  const daysBetween = (a, b) => {
+    const ad = new Date(Date.UTC(...a.split('-').map((v,i)=>i===1?+v-1:+v), 12, 0, 0));
+    const bd = new Date(Date.UTC(...b.split('-').map((v,i)=>i===1?+v-1:+v), 12, 0, 0));
+    return Math.round((ad - bd) / 86400000);
+  };
+
   // Bucket each item into the right day(s)
   all.forEach(item => {
     // Daily-recurring tasks with no due date appear every applicable day
     if (item.type === 'task' && dailyFreqs.includes(item.freq) && !item.due) {
       days.forEach(d => {
         if (item.freq === 'daily') d.items.push(item);
-        else if ((item.freq === 'weekdays' || item.freq === 'every_other_weekday') && isWeekday(d.date)) d.items.push(item);
+        else if ((item.freq === 'weekdays' || item.freq === 'every_other_weekday') && isWeekdayStr(d.dateStr)) d.items.push(item);
       });
       return;
     }
     // Tasks overdue (due before today) bucket into Today
     if (item.due && item.due < todayStr) {
-      days[0].items.push({ ...item, isOverdue: true,
-        daysOverdue: Math.floor((today - new Date(item.due)) / 86400000) });
+      days[0].items.push({ ...item, isOverdue: true, daysOverdue: daysBetween(todayStr, item.due) });
       return;
     }
     // Tasks within the window go in their day
@@ -1012,8 +1016,8 @@ function renderMyWeek(tasks, subs, today, weekEnd) {
   let html = '<div class="week-grid">';
   days.forEach((d, i) => {
     const isToday = i === 0;
-    const dayName = d.date.toLocaleDateString('en-US',{weekday:'short'});
-    const dateLabel = d.date.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const dayName = tzFormatDate(d.dateStr, { weekday: 'short' });
+    const dateLabel = tzFormatDate(d.dateStr, { month: 'short', day: 'numeric' });
     html += `<div class="week-col ${isToday ? 'today' : ''}">
       <div class="week-col-hdr">
         <div class="week-col-day">${isToday ? 'Today' : dayName}</div>
@@ -1064,19 +1068,27 @@ function setSort(s) {
 }
 
 function renderMyDay(tasks, subs, today) {
+  // daysBetween: count of calendar days from `today` (YYYY-MM-DD) back to a due date.
+  // UTC noon anchors avoid any DST drift; the math is purely on date components.
+  const daysBetween = (a, b) => {
+    if (!a || !b) return 0;
+    const ad = new Date(Date.UTC(...a.split('-').map((v,i)=>i===1?+v-1:+v), 12, 0, 0));
+    const bd = new Date(Date.UTC(...b.split('-').map((v,i)=>i===1?+v-1:+v), 12, 0, 0));
+    return Math.round((ad - bd) / 86400000);
+  };
   const all = [
     ...tasks.map(t => ({
       id: t.id, type: 'task', title: t.title,
       client: t.clients?.name || '', clientId: t.client_id || '',
       due: t.next_due,
-      daysOverdue: t.next_due ? Math.floor((new Date(today) - new Date(t.next_due)) / 86400000) : 0,
+      daysOverdue: t.next_due ? daysBetween(today, t.next_due) : 0,
       freq: t.frequency,
       status: t.status || 'Not Started'
     })),
     ...subs.map(s => ({
       id: s.id, type: 'subtask', title: s.title,
       client: s.clients?.name || '', due: s.tasks?.next_due,
-      daysOverdue: s.tasks?.next_due ? Math.floor((new Date(today) - new Date(s.tasks.next_due)) / 86400000) : 0,
+      daysOverdue: s.tasks?.next_due ? daysBetween(today, s.tasks.next_due) : 0,
       parentTask: s.tasks?.title || '',
       status: s.status || 'Not Started'
     }))
@@ -1296,7 +1308,7 @@ async function quickDoneTask(id) {
     if (task && task.frequency && task.frequency !== 'one_time') {
       const nextDue = computeNextDue(
         task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month,
-        task.next_due || new Date().toISOString().split('T')[0]
+        task.next_due || tzToday()
       );
       if (nextDue) {
         const { id: _id, created_at, ...rest } = task;
@@ -1351,19 +1363,31 @@ function hideMydayItem(id) {
 function calcNextDue(taskId) {
   const task = clientTasks.find(t => t.id === taskId);
   if (!task || !task.frequency) return null;
-  return computeNextDue(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || new Date().toISOString().split('T')[0]);
+  return computeNextDue(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || tzToday());
 }
 
+// Compute the next due date given a frequency rule and a starting YYYY-MM-DD.
+// All math is done on UTC date components anchored at noon (avoids DST edge cases),
+// then we read back UTC year/month/day to produce the YYYY-MM-DD result. Day-of-week
+// checks use UTC getUTCDay() since the anchor is UTC noon — consistent with the
+// rest of the helpers in this app.
 function computeNextDue(freq, fDay, fDow, fMonth, fromDate) {
-  const d = new Date(fromDate);
-  if (freq === 'daily') { d.setDate(d.getDate() + 1); }
-  else if (freq === 'weekdays') { do { d.setDate(d.getDate() + 1); } while ([0,6].includes(d.getDay())); }
-  else if (freq === 'every_other_weekday') { let count = 0; do { d.setDate(d.getDate() + 1); if (![0,6].includes(d.getDay())) count++; } while (count < 2); }
-  else if (freq === 'weekly') { d.setDate(d.getDate() + 7); }
-  else if (freq === 'monthly') { d.setMonth(d.getMonth() + 1); if (fDay) d.setDate(fDay); }
-  else if (freq === 'quarterly') { d.setMonth(d.getMonth() + 3); if (fDay) d.setDate(fDay); }
-  else if (freq === 'annually') { d.setFullYear(d.getFullYear() + 1); if (fMonth) d.setMonth(fMonth - 1); if (fDay) d.setDate(fDay); }
-  return d.toISOString().split('T')[0];
+  const [y, m, dy] = fromDate.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1, dy, 12, 0, 0));
+  const toYmd = () => {
+    const yy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    return `${yy}-${mm}-${dd}`;
+  };
+  if (freq === 'daily') { d.setUTCDate(d.getUTCDate() + 1); }
+  else if (freq === 'weekdays') { do { d.setUTCDate(d.getUTCDate() + 1); } while ([0,6].includes(d.getUTCDay())); }
+  else if (freq === 'every_other_weekday') { let count = 0; do { d.setUTCDate(d.getUTCDate() + 1); if (![0,6].includes(d.getUTCDay())) count++; } while (count < 2); }
+  else if (freq === 'weekly') { d.setUTCDate(d.getUTCDate() + 7); }
+  else if (freq === 'monthly') { d.setUTCMonth(d.getUTCMonth() + 1); if (fDay) d.setUTCDate(fDay); }
+  else if (freq === 'quarterly') { d.setUTCMonth(d.getUTCMonth() + 3); if (fDay) d.setUTCDate(fDay); }
+  else if (freq === 'annually') { d.setUTCFullYear(d.getUTCFullYear() + 1); if (fMonth) d.setUTCMonth(fMonth - 1); if (fDay) d.setUTCDate(fDay); }
+  return toYmd();
 }
 
 // ── CLIENT DETAIL ────────────────────────────────────────
@@ -1448,7 +1472,7 @@ function showTaskView(view) {
 
 function renderUpcomingTasks() {
   const container = document.getElementById('taskContent');
-  const today = new Date().toISOString().split('T')[0];
+  const today = tzToday();
 
   // Hide parent tasks whose subtasks already cover the workflow;
   // hide Done tasks; only show tasks with a future or today next_due.
@@ -1478,8 +1502,7 @@ function renderUpcomingTasks() {
     '<th style="padding:.6rem .9rem;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600">Next Due</th>' +
     '</tr></thead><tbody>';
   upcoming.forEach((t, i) => {
-    const due = new Date(t.next_due + 'T00:00:00');
-    const dueFmt = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const dueFmt = tzFormatDate(t.next_due, { month: 'short', day: 'numeric', year: 'numeric' });
     const bg = i % 2 === 0 ? 'white' : '#fafaf8';
     html += `<tr style="background:${bg};border-top:1px solid var(--border);cursor:pointer" onclick="openTaskModal('${currentClientId}','${t.category || ''}','${t.id}')">` +
       `<td style="padding:.6rem .9rem;font-weight:500">${t.title}</td>` +
@@ -1495,22 +1518,19 @@ function renderUpcomingTasks() {
 
 function renderTasks() {
   const container = document.getElementById('taskContent');
-  const today = new Date().toISOString().split('T')[0];
-  const periodStart = new Date(); periodStart.setDate(1); const ps = periodStart.toISOString().split('T')[0];
+  const today = tzToday();
 
   // Only show tasks due today or overdue, or recurring tasks that are active today
-  const todayDate = new Date(today);
-  const todayDay = todayDate.getDay(); // 0=Sun, 6=Sat
+  const todayDay = tzDayOfWeek(today); // 0=Sun, 6=Sat
   const isWeekday = todayDay >= 1 && todayDay <= 5;
 
   function isTaskDueToday(t) {
     if (t.status === 'Done') return false; // handled by show completed toggle
     const startsOn = t.starts_on || t.next_due;
-    const startDate = startsOn ? new Date(startsOn) : null;
     const freq = t.frequency || 'monthly';
 
-    // If starts in the future, never show
-    if (startDate && startDate > todayDate) return false;
+    // If starts in the future, never show. starts_on is YYYY-MM-DD, compare as string.
+    if (startsOn && startsOn > today) return false;
 
     // Check by frequency
     if (freq === 'daily') return true;
@@ -1588,7 +1608,14 @@ function toggleCompleted(cat) {
 function renderTaskItem(task, today) {
   const subs = clientSubtasks.filter(s => s.task_id === task.id);
   const isDone = task.status === 'Done';
-  const daysOverdue = task.next_due && task.next_due < today && !isDone ? Math.floor((new Date(today) - new Date(task.next_due)) / 86400000) : 0;
+  // Days overdue from `today` (YYYY-MM-DD, Central) back to task.next_due.
+  // Both anchored at UTC noon for safe date arithmetic.
+  let daysOverdue = 0;
+  if (task.next_due && task.next_due < today && !isDone) {
+    const a = new Date(Date.UTC(...today.split('-').map((v,i)=>i===1?+v-1:+v), 12, 0, 0));
+    const b = new Date(Date.UTC(...task.next_due.split('-').map((v,i)=>i===1?+v-1:+v), 12, 0, 0));
+    daysOverdue = Math.round((a - b) / 86400000);
+  }
   const isOverdue = daysOverdue > 0;
   const isWarning = daysOverdue >= 3;
   const rowClass = isDone ? 'done-row' : isWarning ? 'warning-row' : isOverdue ? 'overdue-row' : '';
@@ -1684,8 +1711,8 @@ function openTaskModal(clientId, category, taskId) {
   document.getElementById('tmTitle').value = '';
   document.getElementById('tmNotes').value = '';
   document.getElementById('tmAssigned').value = '';
-  document.getElementById('tmStartsOn').value = new Date().toISOString().split('T')[0];
-  document.getElementById('tmNextDue').value = new Date().toISOString().split('T')[0];
+  document.getElementById('tmStartsOn').value = tzToday();
+  document.getElementById('tmNextDue').value = tzToday();
   document.getElementById('tmClientId').value = clientId || currentClientId || '';
   document.getElementById('tmTaskId').value = taskId || '';
   if (category) document.getElementById('tmCategory').value = category;
@@ -2162,6 +2189,60 @@ function showTab(name) {
 }
 
 // ── HELPERS ──────────────────────────────────────────────
+
+// ── Timezone-aware date helpers ─────────────────────────
+// Bald Ginger operates entirely in Central time. Without forcing a timezone, JS
+// dates default to either UTC (via toISOString) or whatever the browser thinks is
+// local — which means after 6-7 PM Central, anything keyed off `new Date()` rolls
+// over to tomorrow because UTC has already crossed midnight. These helpers route
+// every "what day is it" decision through America/Chicago so the app's notion of
+// "today" matches Ed's wall clock, regardless of browser timezone.
+const BG_TZ = 'America/Chicago';
+const _tzDateFmt = new Intl.DateTimeFormat('en-CA', { timeZone: BG_TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+// Returns today's date in Central as YYYY-MM-DD. Use this anywhere old code did
+// `new Date().toISOString().split('T')[0]`.
+function tzToday() {
+  // en-CA locale conveniently outputs YYYY-MM-DD already.
+  return _tzDateFmt.format(new Date());
+}
+// Returns the Central day-of-week (0=Sun, 6=Sat) for a YYYY-MM-DD string.
+// We parse the string as a date-only value (Central noon to avoid any DST edge),
+// then ask Intl what day of week that is in Central. Using noon as the anchor
+// means even DST transitions can't accidentally roll us into the prior/next day.
+function tzDayOfWeek(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  // Construct a UTC instant at noon Central. -06:00 in standard, -05:00 in DST;
+  // 12:00Z is always inside the same Central calendar date as the YMD given,
+  // so the weekday answer is stable.
+  const utcNoon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const wkFmt = new Intl.DateTimeFormat('en-US', { timeZone: BG_TZ, weekday: 'short' });
+  const wk = wkFmt.format(utcNoon);
+  return ({ Sun:0, Mon:1, Tue:2, Wed:3, Thu:4, Fri:5, Sat:6 })[wk];
+}
+// Adds n days to a YYYY-MM-DD string, returns YYYY-MM-DD. Date math is done
+// in UTC at noon (see above) so DST never shifts the result by a day.
+function tzAddDays(ymd, n) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  t.setUTCDate(t.getUTCDate() + n);
+  const yy = t.getUTCFullYear();
+  const mm = String(t.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(t.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+// Formats a YYYY-MM-DD string for display, in Central. Same shape as
+// `new Date(...).toLocaleDateString('en-US', opts)` but timezone-safe.
+function tzFormatDate(ymd, opts) {
+  if (!ymd) return '';
+  const [y, m, d] = ymd.split('-').map(Number);
+  const utcNoon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  return utcNoon.toLocaleDateString('en-US', { timeZone: BG_TZ, ...opts });
+}
+// "Now" but as an ISO string suitable for updated_at fields. Same as `new Date().toISOString()`
+// — we don't need timezone for stored timestamps (those are absolute moments in time),
+// only for "what date is today" decisions.
+function tzNowIso() { return new Date().toISOString(); }
+
 function statusBadge(s) {
   if (s === 'Done') return '<span class="badge badge-done"><span class="dot"></span>Done</span>';
   if (s === 'In Progress') return '<span class="badge badge-progress"><span class="dot"></span>In Progress</span>';
@@ -2171,7 +2252,7 @@ function avClass(n) { if(!n)return'av-default'; if(n.includes('Ed'))return'av-ed
 function avHtml(n) { if(!n)return''; const i=n.split(' ').map(w=>w[0]).join('').substring(0,2); return`<span class="avatar ${avClass(n)}">${i}</span>`; }
 function fmt(v) { return v ? '$' + Math.round(v).toLocaleString() : '—'; }
 function relTime(iso) { if(!iso)return'—'; const d=Math.floor((Date.now()-new Date(iso))/1000); if(d<3600)return Math.floor(d/60)+'m ago'; if(d<86400)return Math.floor(d/3600)+'h ago'; return Math.floor(d/86400)+'d ago'; }
-function fmtDateTime(iso) { if(!iso)return''; return new Date(iso).toLocaleDateString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
+function fmtDateTime(iso) { if(!iso)return''; return new Date(iso).toLocaleDateString('en-US',{timeZone:BG_TZ,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}); }
 
 document.querySelectorAll('.modal-overlay').forEach(m => { m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }); });
 
