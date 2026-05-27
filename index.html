@@ -1123,7 +1123,6 @@ function myweekItem(t, colDateStr) {
   const menuId = `week-${t.id}-${colDateStr || 'x'}`;
   const statusMenu = t.type === 'task' ? `
     <div class="status-menu" id="statusMenu-${menuId}">
-      <div class="status-menu-item ${t.status === 'Not Started' || !t.status ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Not Started')"><span class="status-menu-dot" style="background:#ccc"></span>Not Started</div>
       <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
       <div class="status-menu-item" onclick="setTaskStatus(event,'${t.id}','Done')"><span class="status-menu-dot" style="background:var(--green)"></span>Mark Done</div>
@@ -1267,7 +1266,6 @@ function mydayItem(t, today) {
   // shouldn't have Waiting/Stuck since they're part of a sequential workflow).
   const statusMenu = t.type === 'task' ? `
     <div class="status-menu" id="statusMenu-${t.id}">
-      <div class="status-menu-item ${t.status === 'Not Started' || !t.status ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Not Started')"><span class="status-menu-dot" style="background:#ccc"></span>Not Started</div>
       <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
       <div class="status-menu-item" onclick="setTaskStatus(event,'${t.id}','Done')"><span class="status-menu-dot" style="background:var(--green)"></span>Mark Done</div>
@@ -1951,7 +1949,6 @@ function renderTaskItem(task, today) {
   const menuId = `client-${task.id}`;
   const statusMenu = !isDone ? `
     <div class="status-menu" id="statusMenu-${menuId}">
-      <div class="status-menu-item ${task.status === 'Not Started' || !task.status ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Not Started')"><span class="status-menu-dot" style="background:#ccc"></span>Not Started</div>
       <div class="status-menu-item ${task.status === 'Waiting on Client' ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Waiting on Client')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${task.status === 'Stuck' ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Stuck')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
       <div class="status-menu-item" onclick="setTaskStatus(event,'${task.id}','Done')"><span class="status-menu-dot" style="background:var(--green)"></span>Mark Done</div>
