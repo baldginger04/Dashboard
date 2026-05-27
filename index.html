@@ -865,7 +865,12 @@ function reloadActiveView() {
   const id = active?.id || '';
   if (id === 'nav-myday')   return loadMyDay();
   if (id === 'nav-myweek')  return loadMyWeek();
-  // Other views (team messages, automation, client detail) handle their own refresh.
+  // Client detail view doesn't have a nav-item; detect it by visibility of the
+  // detail panel + an active currentClientId. Refresh the client's tasks so
+  // status changes show up immediately.
+  const detailVisible = document.getElementById('page-client-detail')?.style.display !== 'none';
+  if (detailVisible && currentClientId) return loadTasks(currentClientId);
+  // Other views (team messages, automation) handle their own refresh.
 }
 
 // ── MY DAY ───────────────────────────────────────────────
@@ -1080,7 +1085,7 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
     if (!d.items.length) {
       html += '<div class="week-col-empty">Nothing scheduled</div>';
     } else {
-      d.items.forEach(item => { html += myweekItem(item); });
+      d.items.forEach(item => { html += myweekItem(item, d.dateStr); });
     }
     html += `</div></div>`;
   });
@@ -1088,7 +1093,7 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
   document.getElementById('myweekContent').innerHTML = html;
 }
 
-function myweekItem(t) {
+function myweekItem(t, colDateStr) {
   const isWaiting = t.status === 'Waiting on Client';
   const isStuck   = t.status === 'Stuck';
   // Status takes precedence over generic overdue tint for the same reason as My Day.
@@ -1109,13 +1114,35 @@ function myweekItem(t) {
   if (isWaiting) statusPill = '<div class="status-pill waiting" style="margin-top:3px">Waiting on Client</div>';
   else if (isStuck) statusPill = '<div class="status-pill stuck" style="margin-top:3px">Stuck</div>';
   const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
+
+  // Status menu — tasks only, same as My Day. Subtasks don't get Waiting/Stuck
+  // since they're sequential workflow steps.
+  // The menu DOM id is namespaced with "week-" because the same task could
+  // appear on multiple cards (daily-recurring tasks span the whole week);
+  // otherwise duplicate IDs would break toggleStatusMenu.
+  const menuId = `week-${t.id}-${colDateStr || 'x'}`;
+  const statusMenu = t.type === 'task' ? `
+    <div class="status-menu" id="statusMenu-${menuId}">
+      <div class="status-menu-item ${t.status === 'Not Started' || !t.status ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Not Started')"><span class="status-menu-dot" style="background:#ccc"></span>Not Started</div>
+      <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
+      <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
+      <div class="status-menu-item" onclick="setTaskStatus(event,'${t.id}','Done')"><span class="status-menu-dot" style="background:var(--green)"></span>Mark Done</div>
+    </div>` : '';
+  const chevron = t.type === 'task'
+    ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${menuId}')" title="Set status">▾</div>`
+    : '';
+
   // Edit button — opens the same task modal used in the Clients view. For
   // subtasks, the modal opens against the parent task.
   const editBtn = t.clientId
     ? `<button class="btn btn-ghost btn-sm week-card-edit" onclick="event.stopPropagation();editFromMyView('${t.type}','${t.id}','${t.clientId}')">Edit</button>`
     : '';
   return `<div class="week-card ${rowClass}">
-    <div class="myday-check" onclick="${onClick}"></div>
+    <div class="myday-status-grp">
+      <div class="myday-check" onclick="${onClick}"></div>
+      ${chevron}
+      ${statusMenu}
+    </div>
     <div class="week-card-body">
       <div class="week-card-title">${t.title}</div>
       ${t.client ? `<div class="week-card-client">${t.client}</div>` : ''}
@@ -1915,8 +1942,30 @@ function renderTaskItem(task, today) {
   const completedAt = isDone && task.updated_at ? `<div class="task-completed-at">Completed ${fmtDateTime(task.updated_at)}</div>` : '';
   const warningHtml = isWarning ? `<div class="task-warning"><span class="task-warning-icon">⚠</span>This task is ${daysOverdue} days overdue. Consider adjusting the frequency to something more realistic.</div>` : '';
 
+  // Status menu — same as My Day / My Week. Tasks (parent or atomic) get the
+  // chevron. Hidden when the task is Done since there's nothing useful to do
+  // with status at that point.
+  // The menu DOM id is namespaced with "client-" to avoid clashing with
+  // My Day's "statusMenu-{id}" since both surfaces can be in the DOM tree
+  // simultaneously (just on different tab panels).
+  const menuId = `client-${task.id}`;
+  const statusMenu = !isDone ? `
+    <div class="status-menu" id="statusMenu-${menuId}">
+      <div class="status-menu-item ${task.status === 'Not Started' || !task.status ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Not Started')"><span class="status-menu-dot" style="background:#ccc"></span>Not Started</div>
+      <div class="status-menu-item ${task.status === 'Waiting on Client' ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Waiting on Client')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
+      <div class="status-menu-item ${task.status === 'Stuck' ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Stuck')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
+      <div class="status-menu-item" onclick="setTaskStatus(event,'${task.id}','Done')"><span class="status-menu-dot" style="background:var(--green)"></span>Mark Done</div>
+    </div>` : '';
+  const chevron = !isDone
+    ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${menuId}')" title="Set status">▾</div>`
+    : '';
+
   return `<div class="task-item ${rowClass}">
-    <div class="task-check ${checkClass}" onclick="toggleTask('${task.id}')">${isDone ? '✓' : ''}</div>
+    <div class="myday-status-grp">
+      <div class="task-check ${checkClass}" onclick="toggleTask('${task.id}')">${isDone ? '✓' : ''}</div>
+      ${chevron}
+      ${statusMenu}
+    </div>
     <div class="task-body">
       <div class="task-title ${isDone ? 'done' : ''}">${task.title}</div>
       <div class="task-meta-row">
