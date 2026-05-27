@@ -61,6 +61,14 @@
     .page{display:none;padding:2rem 2.5rem}
     .page.active{display:block}
     .page-header{margin-bottom:1.75rem;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    .view-as-wrap{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2)}
+    .view-as-lbl{font-weight:500;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+    .view-as-select{padding:5px 9px;border:1px solid var(--border);border-radius:6px;background:white;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);cursor:pointer;min-width:160px}
+    .view-as-select:hover{border-color:var(--accent)}
+    .view-as-select:focus{outline:none;border-color:var(--accent)}
+    .view-as-banner{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:8px 14px;border-radius:7px;margin-bottom:1rem;font-size:13px;display:flex;align-items:center;gap:12px}
+    .view-as-return{background:white;border:1px solid #fed7aa;color:#9a3412;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-left:auto}
+    .view-as-return:hover{background:#fed7aa}
     .page-title{font-family:'DM Serif Display',serif;font-size:28px;color:var(--text)}
     .page-sub{font-size:13px;color:var(--text3);margin-top:4px}
 
@@ -412,6 +420,17 @@
             <div class="page-title" id="mydayGreeting">Good morning</div>
             <div class="page-sub" id="mydayDate"></div>
           </div>
+          <!-- Admin "view as" dropdown — only visible when logged in as Ed. Lets him
+               see anyone else's My Day. Read-only when impersonating. -->
+          <div class="view-as-wrap" id="viewAsWrap" style="display:none">
+            <label class="view-as-lbl">View as:</label>
+            <select id="viewAsSelect" class="view-as-select" onchange="setViewingAs(this.value)"></select>
+          </div>
+        </div>
+        <!-- Banner appears when impersonating another user. Click "Return" to clear. -->
+        <div class="view-as-banner" id="viewAsBanner" style="display:none">
+          Viewing as <strong id="viewAsBannerName"></strong> — read-only
+          <button class="view-as-return" onclick="clearViewingAs()">Return to my view</button>
         </div>
         <div class="myday-sort">
           <span style="font-size:12px;color:var(--text3);margin-right:4px">Sort by:</span>
@@ -429,6 +448,14 @@
             <div class="page-title">My Week</div>
             <div class="page-sub" id="myweekDate"></div>
           </div>
+          <div class="view-as-wrap" id="viewAsWrapWeek" style="display:none">
+            <label class="view-as-lbl">View as:</label>
+            <select id="viewAsSelectWeek" class="view-as-select" onchange="setViewingAs(this.value)"></select>
+          </div>
+        </div>
+        <div class="view-as-banner" id="viewAsBannerWeek" style="display:none">
+          Viewing as <strong id="viewAsBannerNameWeek"></strong> — read-only
+          <button class="view-as-return" onclick="clearViewingAs()">Return to my view</button>
         </div>
         <div id="myweekContent"><div class="empty"><span class="spinner"></span></div></div>
       </div>
@@ -733,6 +760,10 @@ function freqLabel(freq, interval) {
 const CATS = ['General','Payroll','Tax','Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close','Payables','Additional Items'];
 
 let currentUser = null;
+// When Ed (admin) impersonates another team member from the "View as" dropdown,
+// this holds their display name (e.g. "Lydia Hattrup"). null means "view as self".
+// Read-only mode is in effect while this is non-null; reverted on logout/refresh.
+let viewingAsName = null;
 let allClients = [];
 let currentClientId = null;
 let clientTasks = [];
@@ -804,6 +835,8 @@ async function showApp() {
   const greeting = centralHour < 12 ? 'Good morning' : centralHour < 17 ? 'Good afternoon' : 'Good evening';
   document.getElementById('mydayGreeting').textContent = greeting + ', ' + name.split(' ')[0];
   document.getElementById('mydayDate').textContent = tzFormatDate(tzToday(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
+  setupViewAs();
   await loadClients();
   await loadMyDay();
   await loadMyWeek();
@@ -857,6 +890,79 @@ function filterClients() {
   }));
 }
 
+// ── VIEW AS (admin only) ─────────────────────────────────
+// Ed can impersonate any other team member from a dropdown in the My Day /
+// My Week page header. While impersonating, the page shows the target user's
+// tasks and all mutation paths are blocked (read-only). Doesn't persist across
+// refresh — viewingAsName resets to null on page load.
+
+// Returns the name used to filter My Day / My Week task queries. Either the
+// impersonation target or the actual logged-in user.
+function getViewingUserName() {
+  return viewingAsName || document.getElementById('sidebarName').textContent;
+}
+function isViewingAs() { return !!viewingAsName; }
+
+// Guard used at the top of every mutation handler. Returns true (and shows a
+// friendly alert) if the user is impersonating someone else. Callers should
+// `if (blockedByViewAs(...)) return;` and bail out.
+function blockedByViewAs(action) {
+  if (!isViewingAs()) return false;
+  alert(`Can't ${action} while viewing as ${viewingAsName}. Return to your own view to make changes.`);
+  return true;
+}
+
+// True only for the actual admin (Ed). Used to decide whether to show the
+// dropdown at all. A simple email check is fine for one admin; if a second
+// admin ever gets added, this graduates to a `profiles.is_admin` column.
+function isAdmin() { return currentUser?.email === 'ed@baldginger.com'; }
+
+// One-time setup, called from showApp() once the user is loaded. Populates the
+// dropdowns with everyone except the current user, and shows the wrap if Ed.
+function setupViewAs() {
+  if (!isAdmin()) return;
+  const selfName = document.getElementById('sidebarName').textContent;
+  const others = USERS.filter(u => u !== selfName);
+  const optionHtml = '<option value="">Myself</option>' + others.map(u => `<option value="${u}">${u}</option>`).join('');
+  ['viewAsSelect', 'viewAsSelectWeek'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel) sel.innerHTML = optionHtml;
+  });
+  document.getElementById('viewAsWrap').style.display = 'flex';
+  document.getElementById('viewAsWrapWeek').style.display = 'flex';
+}
+
+// User picked someone from the dropdown (or "Myself"). Updates state, syncs the
+// other surface's dropdown so they stay in sync, toggles the banner, and reloads.
+function setViewingAs(name) {
+  viewingAsName = name || null;
+  // Sync both dropdowns so My Day and My Week reflect the same choice.
+  const v = name || '';
+  const md = document.getElementById('viewAsSelect');
+  const mw = document.getElementById('viewAsSelectWeek');
+  if (md && md.value !== v) md.value = v;
+  if (mw && mw.value !== v) mw.value = v;
+  // Banner + greeting reflect the new state.
+  const showBanner = !!viewingAsName;
+  document.getElementById('viewAsBanner').style.display = showBanner ? 'flex' : 'none';
+  document.getElementById('viewAsBannerWeek').style.display = showBanner ? 'flex' : 'none';
+  if (showBanner) {
+    document.getElementById('viewAsBannerName').textContent = viewingAsName;
+    document.getElementById('viewAsBannerNameWeek').textContent = viewingAsName;
+    // Update greeting to make it obvious whose day this is.
+    const firstName = viewingAsName.split(' ')[0];
+    document.getElementById('mydayGreeting').textContent = `${firstName}'s Day`;
+  } else {
+    // Restore Ed's normal greeting.
+    const centralHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: BG_TZ, hour: 'numeric', hour12: false }).format(new Date()), 10);
+    const greeting = centralHour < 12 ? 'Good morning' : centralHour < 17 ? 'Good afternoon' : 'Good evening';
+    const selfFirst = document.getElementById('sidebarName').textContent.split(' ')[0];
+    document.getElementById('mydayGreeting').textContent = `${greeting}, ${selfFirst}`;
+  }
+  reloadActiveView();
+}
+function clearViewingAs() { setViewingAs(''); }
+
 // Only reload the view the user is currently looking at. Every reload is 3 queries
 // to Supabase, so reloading both My Day AND My Week on every click is wasteful when
 // only one is visible. This single function replaces every `loadMyDay(); loadMyWeek();` pair.
@@ -880,7 +986,9 @@ function reloadActiveView() {
 let myDayCache = { tasks: [], subs: [], today: null };
 
 async function loadMyDay() {
-  const name = document.getElementById('sidebarName').textContent;
+  // Either the user themselves OR (when Ed is impersonating) the chosen team
+  // member. Filters every query in this function.
+  const name = getViewingUserName();
   const today = tzToday();
 
   try {
@@ -943,7 +1051,8 @@ async function loadMyDay() {
 
 // ── MY WEEK ──────────────────────────────────────────────
 async function loadMyWeek() {
-  const name = document.getElementById('sidebarName').textContent;
+  // Either the user themselves OR (when Ed is impersonating) the chosen team member.
+  const name = getViewingUserName();
   const todayStr = tzToday();
   const weekEndStr = tzAddDays(todayStr, 6);
 
@@ -1121,18 +1230,18 @@ function myweekItem(t, colDateStr) {
   // appear on multiple cards (daily-recurring tasks span the whole week);
   // otherwise duplicate IDs would break toggleStatusMenu.
   const menuId = `week-${t.id}-${colDateStr || 'x'}`;
-  const statusMenu = t.type === 'task' ? `
+  const statusMenu = t.type === 'task' && !isViewingAs() ? `
     <div class="status-menu" id="statusMenu-${menuId}">
       <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
     </div>` : '';
-  const chevron = t.type === 'task'
+  const chevron = t.type === 'task' && !isViewingAs()
     ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${menuId}')" title="Set status">▾</div>`
     : '';
 
   // Edit button — opens the same task modal used in the Clients view. For
-  // subtasks, the modal opens against the parent task.
-  const editBtn = t.clientId
+  // subtasks, the modal opens against the parent task. Hidden when impersonating.
+  const editBtn = t.clientId && !isViewingAs()
     ? `<button class="btn btn-ghost btn-sm week-card-edit" onclick="event.stopPropagation();editFromMyView('${t.type}','${t.id}','${t.clientId}')">Edit</button>`
     : '';
   return `<div class="week-card ${rowClass}">
@@ -1263,19 +1372,20 @@ function mydayItem(t, today) {
 
   // Status menu — only on tasks (subtasks use the simpler three-step cycle and
   // shouldn't have Waiting/Stuck since they're part of a sequential workflow).
-  const statusMenu = t.type === 'task' ? `
+  // Hidden entirely while impersonating — view-as is read-only.
+  const statusMenu = t.type === 'task' && !isViewingAs() ? `
     <div class="status-menu" id="statusMenu-${t.id}">
       <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
     </div>` : '';
-  const chevron = t.type === 'task'
+  const chevron = t.type === 'task' && !isViewingAs()
     ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${t.id}')" title="Set status">▾</div>`
     : '';
 
   // Edit button — opens the same task modal used in the Clients view. For
   // subtasks, the modal opens against the parent task (subtask steps are
-  // edited as part of that task).
-  const editBtn = t.clientId
+  // edited as part of that task). Hidden when impersonating (read-only).
+  const editBtn = t.clientId && !isViewingAs()
     ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px;padding:2px 8px" onclick="editFromMyView('${t.type}','${t.id}','${t.clientId}')">Edit</button>`
     : '';
   const clientLabel = t.client
@@ -1304,6 +1414,8 @@ function mydayItem(t, today) {
 // reflects current DB state (someone else could have edited the task since
 // the My Day/Week view was rendered).
 async function editFromMyView(itemType, itemId, clientId) {
+  // Only called from My Day / My Week edit buttons; unconditional guard is fine.
+  if (blockedByViewAs('edit a task')) return;
   if (!clientId) {
     // Defensive — should never happen since both My Day and My Week wire clientId in.
     alert("Couldn't open editor — task is missing a client reference.");
@@ -1419,6 +1531,10 @@ document.addEventListener('click', e => {
 async function setTaskStatus(event, id, status, currentStatus) {
   event.stopPropagation();
   document.querySelectorAll('.status-menu.open').forEach(m => m.classList.remove('open'));
+  // Read-only guard: only on My Day / My Week. Client view should still let Ed
+  // (or anyone) change status from the chevron there, since view-as is a My-views feature.
+  const onMyView = !!document.querySelector('.nav-item.active')?.id?.startsWith('nav-my');
+  if (onMyView && blockedByViewAs('change a task status')) return;
   if (status === 'Done') { return quickDoneTask(id); }
   // Toggle off — clicking the already-set status reverts to Not Started.
   const target = currentStatus === status ? 'Not Started' : status;
@@ -1445,6 +1561,7 @@ async function setTaskStatus(event, id, status, currentStatus) {
 // extra click was friction. Subtask cards still cycle through In Progress
 // because they ARE the sequential workflow.
 async function cycleTaskStatus(id) {
+  if (blockedByViewAs('mark a task done')) return;
   if (inFlightTasks.has(id)) return;
   const cur = readDomStatus(id);
   if (cur === 'Done') return;
@@ -1458,6 +1575,7 @@ async function cycleTaskStatus(id) {
 }
 
 async function cycleSubStatus(id) {
+  if (blockedByViewAs('change a subtask')) return;
   if (inFlightSubs.has(id)) return;
   const cur = readDomStatus(id);
   if (cur === 'Done') return;
@@ -1486,6 +1604,11 @@ async function cycleSubStatus(id) {
 }
 
 async function quickDoneTask(id) {
+  // Block only when impersonating AND on a My X view. Client-view callers and
+  // recursive callers (e.g. from setTaskStatus) shouldn't be affected because
+  // those entry points have their own guards.
+  const onMyView = !!document.querySelector('.nav-item.active')?.id?.startsWith('nav-my');
+  if (onMyView && blockedByViewAs('mark a task done')) return;
   // Remove from local cache + re-render immediately (no DB read).
   // This is the optimistic-feedback path for My Day. My Week doesn't have a
   // matching cache, so we reload it explicitly after the DB write succeeds.
@@ -1531,6 +1654,8 @@ async function quickDoneTask(id) {
 }
 
 async function quickDoneSub(id) {
+  const onMyView = !!document.querySelector('.nav-item.active')?.id?.startsWith('nav-my');
+  if (onMyView && blockedByViewAs('mark a subtask done')) return;
   mutateCacheStatus(id, 'sub', 'Done');
   hideMydayItem(id);
   try {
