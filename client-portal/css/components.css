@@ -120,6 +120,37 @@
   text-transform: uppercase;
 }
 
+/* Resolved badge — shown next to author name when the team has marked
+   this message cleared/resolved over in Triple. Clients can't toggle this;
+   it's purely a visual cue that the matter has been addressed. */
+.badge-resolved {
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+/* Resolved message styling — applied to the whole .msg block when the
+   underlying message has cleared=true. The bubble fades and the body text
+   gets struck through. We use opacity rather than a different background
+   so it works for both left (is-them) and right (is-mine) bubbles, which
+   have different bg colors. */
+.msg.is-resolved { opacity: .55; }
+.msg.is-resolved .msg-bubble {
+  text-decoration: line-through;
+  text-decoration-color: rgba(0,0,0,.45);
+  text-decoration-thickness: 1px;
+}
+.msg.is-resolved.is-mine .msg-bubble {
+  text-decoration-color: rgba(255,255,255,.7);
+}
+
 /* ---------- COMPOSER ---------- */
 .composer {
   display: flex;
