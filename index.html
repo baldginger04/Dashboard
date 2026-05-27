@@ -1358,7 +1358,9 @@ async function cycleSubStatus(id) {
 }
 
 async function quickDoneTask(id) {
-  // Remove from local cache + re-render immediately (no DB read)
+  // Remove from local cache + re-render immediately (no DB read).
+  // This is the optimistic-feedback path for My Day. My Week doesn't have a
+  // matching cache, so we reload it explicitly after the DB write succeeds.
   mutateCacheStatus(id, 'task', 'Done');
   hideMydayItem(id); // belt + suspenders for any other view (e.g. My Week list)
 
@@ -1389,11 +1391,14 @@ async function quickDoneTask(id) {
         });
       }
     }
+    // Refresh whichever view we're on so My Week (and My Day for the rare
+    // case where optimistic missed) reflects the new state.
+    reloadActiveView();
   } catch (err) {
     console.error('quickDoneTask error:', err);
     alert('Could not mark task done: ' + (err.message || 'Please try again.'));
     // On failure, do a full reload to get back to truth
-    loadMyDay();
+    reloadActiveView();
   }
 }
 
@@ -1405,10 +1410,11 @@ async function quickDoneSub(id) {
       .update({ status: 'Done', updated_at: new Date().toISOString() })
       .eq('id', id);
     if (error) throw error;
+    reloadActiveView();
   } catch (err) {
     console.error('quickDoneSub error:', err);
     alert('Could not mark subtask done: ' + (err.message || 'Please try again.'));
-    loadMyDay();
+    reloadActiveView();
   }
 }
 
