@@ -129,17 +129,11 @@ function updateMessage(msg) {
 }
 
 function renderOne(msg) {
-  // "is-mine" means the bubble was sent by the currently logged-in user.
-  // We compare by author name since that's how Triple stores it. (Future
-  // improvement: store user_id on messages and compare on that.)
-  // Simpler heuristic for now: a portal user sees team messages on the
-  // left and their own messages (is_team=false) on the right.
-  const mine = inferMine(msg);
-  const side = mine ? 'is-mine' : 'is-them';
+  const author = msg.author || 'Unknown';
   const teamBadge = msg.is_team ? '<span class="badge-team">Team</span>' : '';
   // A "cleared" message is one the team has marked as resolved over in Triple.
   // The portal can't mark or unmark — clients only see the visual state. We
-  // fade the bubble and add a small "Resolved" badge so they know the team
+  // fade the card and add a small "Resolved" badge so they know the team
   // considers the matter handled.
   const resolvedClass = msg.cleared ? ' is-resolved' : '';
   const resolvedBadge = msg.cleared ? '<span class="badge-resolved">✓ Resolved</span>' : '';
@@ -147,25 +141,43 @@ function renderOne(msg) {
     ? `<img src="${escape(msg.image_url)}" alt="attachment" />`
     : '';
   return `
-    <div class="msg ${side}${resolvedClass}" data-msg-id="${escape(msg.id)}">
+    <div class="msg${resolvedClass}" data-msg-id="${escape(msg.id)}">
       <div class="msg-meta">
-        <span class="msg-author">${escape(msg.author || 'Unknown')}</span>
+        ${avHtml(author)}
+        <span class="msg-author">${escape(author)}</span>
         ${teamBadge}
         ${resolvedBadge}
         <span class="msg-time">${formatTime(msg.created_at)}</span>
       </div>
-      <div class="msg-bubble">${escape(msg.body || '')}${img}</div>
+      <div class="msg-body">${escape(msg.body || '')}${img}</div>
     </div>
   `;
 }
 
+/** Avatar color class for a given name. Mirrors Triple's avClass() exactly so
+ *  the same person shows up in the same color across both apps. */
+function avClass(name) {
+  if (!name) return 'av-default';
+  if (name.includes('Ed')) return 'av-ed';
+  if (name.includes('Jennifer')) return 'av-jennifer';
+  if (name.includes('Lydia')) return 'av-lydia';
+  if (name.includes('Jen')) return 'av-jen';
+  return 'av-default';
+}
+
+/** Render an avatar circle with up to 2-letter initials for the given name.
+ *  e.g. "Ed Hattrup" -> "EH" inside a colored circle. */
+function avHtml(name) {
+  if (!name) return '';
+  const initials = name.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+  return `<span class="msg-avatar ${avClass(name)}">${escape(initials)}</span>`;
+}
+
 function inferMine(msg) {
-  // For now: portal users see their own (non-team) messages on the right,
-  // team messages on the left. Team users (when they eventually view this
-  // page) would see team messages as theirs.
-  // Replace with a user_id comparison once messages.user_id exists.
-  const userIsTeam = window.__bg_user_is_team === true;
-  return userIsTeam ? !!msg.is_team : !msg.is_team;
+  // Kept as a no-op for now in case other code references it. Card-style
+  // messages don't differentiate by sender on the layout level; the "Team"
+  // badge is the visual cue for who's who. Safe to delete in a future pass.
+  return false;
 }
 
 function formatTime(iso) {
