@@ -234,6 +234,8 @@
     .week-card-meta{font-size:10px;color:var(--text3);margin-top:3px}
     .week-card-overdue{font-size:10px;color:var(--red);font-weight:600;margin-top:3px}
     .week-card .myday-check{width:16px;height:16px;font-size:10px}
+    .week-card-edit{flex-shrink:0;font-size:10px;padding:2px 6px;align-self:flex-start;opacity:0;transition:opacity .12s}
+    .week-card:hover .week-card-edit{opacity:1}
     .week-col-empty{font-size:11px;color:var(--text3);font-style:italic;padding:1rem .25rem;text-align:center}
 
     /* MY WEEK responsive — collapse to fewer columns on smaller screens */
@@ -971,7 +973,7 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
     })),
     ...subs.map(s => ({
       id: s.id, type: 'subtask', title: s.title,
-      client: s.clients?.name || '',
+      client: s.clients?.name || '', clientId: s.tasks?.client_id || '',
       due: s.tasks?.next_due,
       parentTask: s.tasks?.title || ''
     }))
@@ -1048,6 +1050,11 @@ function myweekItem(t) {
     ? `<div class="week-card-meta">${t.parentTask}</div>`
     : '';
   const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
+  // Edit button — opens the same task modal used in the Clients view. For
+  // subtasks, the modal opens against the parent task.
+  const editBtn = t.clientId
+    ? `<button class="btn btn-ghost btn-sm week-card-edit" onclick="event.stopPropagation();editFromMyView('${t.type}','${t.id}','${t.clientId}')">Edit</button>`
+    : '';
   return `<div class="week-card ${rowClass}">
     <div class="myday-check" onclick="${onClick}"></div>
     <div class="week-card-body">
@@ -1057,6 +1064,7 @@ function myweekItem(t) {
       ${overdueLabel}
       ${recurringLabel}
     </div>
+    ${editBtn}
   </div>`;
 }
 
@@ -1087,7 +1095,8 @@ function renderMyDay(tasks, subs, today) {
     })),
     ...subs.map(s => ({
       id: s.id, type: 'subtask', title: s.title,
-      client: s.clients?.name || '', due: s.tasks?.next_due,
+      client: s.clients?.name || '', clientId: s.tasks?.client_id || '',
+      due: s.tasks?.next_due,
       daysOverdue: s.tasks?.next_due ? daysBetween(today, s.tasks.next_due) : 0,
       parentTask: s.tasks?.title || '',
       status: s.status || 'Not Started'
@@ -1146,8 +1155,11 @@ function mydayItem(t, today) {
   let checkInner = '';
   if (t.status === 'In Progress') { checkClass += ' in-progress'; checkInner = '◐'; }
   else if (t.status === 'Done') { checkClass += ' done'; checkInner = '✓'; }
-  const editBtn = t.type === 'task'
-    ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px;padding:2px 8px" onclick="editFromMyDay('${t.id}','${t.clientId}')">Edit</button>`
+  // Edit button — opens the same task modal used in the Clients view. For
+  // subtasks, the modal opens against the parent task (subtask steps are
+  // edited as part of that task).
+  const editBtn = t.clientId
+    ? `<button class="btn btn-ghost btn-sm" style="flex-shrink:0;font-size:11px;padding:2px 8px" onclick="editFromMyView('${t.type}','${t.id}','${t.clientId}')">Edit</button>`
     : '';
   const clientLabel = t.client
     ? `<span class="myday-client-inline">${t.client}${t.parentTask ? ' · ' + t.parentTask : ''}</span>`
@@ -1162,18 +1174,45 @@ function mydayItem(t, today) {
   </div>`;
 }
 
-async function editFromMyDay(taskId, clientId) {
-  // Load client tasks if not already loaded for this client
-  if (clientId && clientId !== currentClientId) {
-    currentClientId = clientId;
-    const [t, s] = await Promise.all([
-      sb.from('tasks').select('*').eq('client_id', clientId).order('sort_order'),
-      sb.from('subtasks').select('*').eq('client_id', clientId).order('sort_order')
-    ]);
-    clientTasks = t.data || [];
-    clientSubtasks = s.data || [];
+// Open the task-edit modal for a task or subtask shown on My Day / My Week.
+// Subtasks are edited via their parent task (mirrors the Clients view, where
+// subtask "steps" live inside the parent task modal).
+//
+// Always re-fetches the client's tasks+subtasks before opening, so the modal
+// reflects current DB state (someone else could have edited the task since
+// the My Day/Week view was rendered).
+async function editFromMyView(itemType, itemId, clientId) {
+  if (!clientId) {
+    // Defensive — should never happen since both My Day and My Week wire clientId in.
+    alert("Couldn't open editor — task is missing a client reference.");
+    return;
   }
-  openTaskModal(clientId, '', taskId);
+  // Resolve the parent task ID. For tasks, that's the item itself. For subtasks,
+  // we need to look up the subtask to find its task_id.
+  let parentTaskId = itemId;
+  if (itemType === 'subtask') {
+    const { data: sub, error } = await sb.from('subtasks').select('task_id').eq('id', itemId).single();
+    if (error || !sub) {
+      alert("Couldn't load this subtask. " + (error?.message || ''));
+      return;
+    }
+    parentTaskId = sub.task_id;
+  }
+  // Always reload the client's data so the modal opens with the freshest state.
+  currentClientId = clientId;
+  const [t, s] = await Promise.all([
+    sb.from('tasks').select('*').eq('client_id', clientId).order('sort_order'),
+    sb.from('subtasks').select('*').eq('client_id', clientId).order('sort_order')
+  ]);
+  clientTasks = t.data || [];
+  clientSubtasks = s.data || [];
+  openTaskModal(clientId, '', parentTaskId);
+}
+
+// Back-compat shim: the My Day card markup currently calls editFromMyDay(taskId, clientId)
+// for task rows. Keep it working so we don't break the deployed HTML if it's cached.
+async function editFromMyDay(taskId, clientId) {
+  return editFromMyView('task', taskId, clientId);
 }
 
 // Click on the My Day circle ADVANCES the task one step in the workflow:
