@@ -1509,11 +1509,80 @@ async function quickDoneSub(id) {
       .update({ status: 'Done', updated_at: new Date().toISOString() })
       .eq('id', id);
     if (error) throw error;
+    // If this completes a workflow (all sibling subtasks are now Done),
+    // close out the parent task and spawn the next recurring instance.
+    await maybeCompleteParentTask(id);
     reloadActiveView();
   } catch (err) {
     console.error('quickDoneSub error:', err);
     alert('Could not mark subtask done: ' + (err.message || 'Please try again.'));
     reloadActiveView();
+  }
+}
+
+// When a subtask is marked Done, check whether ALL siblings under the same
+// parent task are now Done. If so, mark the parent Done too, and if the parent
+// is a recurring task, create its next instance — mirroring the same logic
+// that runs when a standalone task is marked Done via quickDoneTask.
+//
+// Used by both quickDoneSub (My Day click) and toggleSub (client task view).
+async function maybeCompleteParentTask(subtaskId) {
+  // Fetch the just-completed subtask so we know its task_id, then all siblings.
+  const { data: sub, error: subErr } = await sb.from('subtasks').select('task_id').eq('id', subtaskId).single();
+  if (subErr || !sub) return;
+  const { data: siblings, error: sibErr } = await sb.from('subtasks').select('id,status').eq('task_id', sub.task_id);
+  if (sibErr || !siblings || !siblings.length) return;
+  if (!siblings.every(s => s.status === 'Done')) return; // not all done yet
+
+  // All subtasks complete — close out the parent task.
+  const { data: task, error: taskErr } = await sb.from('tasks').select('*').eq('id', sub.task_id).single();
+  if (taskErr || !task) return;
+
+  const now = new Date().toISOString();
+  await sb.from('tasks').update({ status: 'Done', updated_at: now }).eq('id', sub.task_id);
+
+  // If recurring, schedule the next instance. The next instance starts fresh
+  // with all its subtasks reset to Not Started — handled by the subtask copy
+  // logic below.
+  if (task.frequency && task.frequency !== 'one_time') {
+    const nextDue = computeNextDue(
+      task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month,
+      task.next_due || tzToday(), task.frequency_interval || 1
+    );
+    if (nextDue) {
+      const { id: _id, created_at, ...rest } = task;
+      const { data: newTask } = await sb.from('tasks').insert({
+        ...rest, status: 'Not Started', next_due: nextDue,
+        period: nextDue.substring(0,7).replace('-',''),
+        created_at: now, updated_at: now
+      }).select().single();
+      // Re-create the subtask chain on the new parent so next week's workflow
+      // is ready to go. Without this, the new parent task has no subtasks and
+      // the workflow vanishes after one cycle.
+      if (newTask) {
+        const oldSubs = siblings; // we have id only — re-fetch full rows.
+        const { data: fullSubs } = await sb.from('subtasks').select('*').eq('task_id', sub.task_id).order('sort_order');
+        if (fullSubs && fullSubs.length) {
+          // Map old subtask ids → new ids so we can rewrite blocked_by chains.
+          const idMap = {};
+          for (const old of fullSubs) {
+            const { id: _sid, created_at: _c, ...subRest } = old;
+            const { data: newSub } = await sb.from('subtasks').insert({
+              ...subRest, task_id: newTask.id, status: 'Not Started',
+              blocked_by: null, // rewritten in a second pass below
+              created_at: now, updated_at: now
+            }).select().single();
+            if (newSub) idMap[old.id] = newSub.id;
+          }
+          // Second pass: rewrite blocked_by references onto the new ids.
+          for (const old of fullSubs) {
+            if (old.blocked_by && idMap[old.blocked_by] && idMap[old.id]) {
+              await sb.from('subtasks').update({ blocked_by: idMap[old.blocked_by] }).eq('id', idMap[old.id]);
+            }
+          }
+        }
+      }
+    }
   }
 }
 
@@ -1893,11 +1962,14 @@ async function toggleSub(id) {
   await sb.from('subtasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
   sub.status = newStatus;
   if (newStatus === 'Done') {
-    const siblings = clientSubtasks.filter(s => s.task_id === sub.task_id);
-    if (siblings.every(s => s.status === 'Done' || s.id === id)) {
-      const parent = clientTasks.find(t => t.id === sub.task_id);
-      if (parent) { await sb.from('tasks').update({ status: 'Done', updated_at: new Date().toISOString() }).eq('id', sub.task_id); parent.status = 'Done'; }
-    }
+    // Shared logic: if all siblings are Done, mark parent Done + spawn next
+    // recurring instance (with subtasks copied across).
+    await maybeCompleteParentTask(id);
+    // Refresh the in-memory snapshot so the UI reflects DB state. We had a
+    // bug where parent.status was updated locally but the new spawned task
+    // didn't appear until a full reload.
+    await loadTasks(currentClientId);
+    return;
   }
   renderTasks();
 }
