@@ -42,14 +42,18 @@
 
 .btn-sm { padding: 6px 10px; font-size: 12px; }
 
-/* ---------- MESSAGES ---------- */
+/* ---------- MESSAGES ----------
+   Card style, matching Triple. Each message is a bordered box with an avatar +
+   author + time in a meta row across the top, then the body below. Stacked
+   vertically, full-width — no left/right alignment. This is the same visual
+   language used in the team app so users see consistent messaging across both. */
 .msg-list {
   max-height: 60vh;
   overflow-y: auto;
   padding: .25rem;
   display: flex;
   flex-direction: column;
-  gap: .75rem;
+  gap: .55rem;
 }
 .msg-empty {
   color: var(--text3);
@@ -59,53 +63,70 @@
 }
 
 .msg {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 80%;
+  display: block;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .75rem .875rem;
 }
-.msg.is-mine { align-self: flex-end; align-items: flex-end; }
-.msg.is-them { align-self: flex-start; align-items: flex-start; }
 
 .msg-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-bottom: .35rem;
   font-size: 11px;
   color: var(--text3);
-  padding: 0 4px;
 }
 .msg-author {
-  font-weight: 500;
-  color: var(--text2);
-}
-.msg-time { color: var(--text3); }
-
-.msg-bubble {
-  padding: 9px 13px;
-  border-radius: 14px;
-  font-size: 14px;
-  line-height: 1.45;
-  word-wrap: break-word;
-  white-space: pre-wrap;
-}
-.msg.is-mine .msg-bubble {
-  background: var(--accent);
-  color: white;
-  border-bottom-right-radius: 4px;
-}
-.msg.is-them .msg-bubble {
-  background: var(--bg3);
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text);
-  border-bottom-left-radius: 4px;
 }
-.msg-bubble img {
+.msg-time {
+  font-size: 11px;
+  color: var(--text3);
+  margin-left: auto;  /* push time to the right edge of the meta row */
+}
+
+/* Body holds the message text. No background — the .msg card is the container.
+   white-space:pre-wrap preserves intentional line breaks from the composer. */
+.msg-body {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.msg-body img {
   display: block;
-  max-width: 280px;
-  max-height: 280px;
-  margin-top: 6px;
+  max-width: 100%;
+  max-height: 300px;
+  margin-top: 8px;
   border-radius: var(--r-sm);
+  border: 1px solid var(--border);
 }
+
+/* ---------- AVATARS (for messages) ----------
+   Mirrors Triple's avatar palette so the same person gets the same color in
+   both apps. Initials are derived from the name in JS (`avInitials`). */
+.msg-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+}
+.msg-avatar.av-ed       { background: #C8511A; }
+.msg-avatar.av-jennifer { background: #1a5fa8; }
+.msg-avatar.av-jen      { background: #1e7a45; }
+.msg-avatar.av-lydia    { background: #5b3fa8; }
+.msg-avatar.av-default  { background: #888; }
 
 /* Team badge — shown next to author name when message is from Bald Ginger team */
 .badge-team {
@@ -137,18 +158,16 @@
 }
 
 /* Resolved message styling — applied to the whole .msg block when the
-   underlying message has cleared=true. The bubble fades and the body text
-   gets struck through. We use opacity rather than a different background
-   so it works for both left (is-them) and right (is-mine) bubbles, which
-   have different bg colors. */
-.msg.is-resolved { opacity: .55; }
-.msg.is-resolved .msg-bubble {
-  text-decoration: line-through;
-  text-decoration-color: rgba(0,0,0,.45);
-  text-decoration-thickness: 1px;
+   underlying message has cleared=true. The card fades and the body text
+   gets struck through. Clients can't toggle this — purely a visual signal
+   that the team considers this thread/note addressed. */
+.msg.is-resolved {
+  opacity: .65;
+  background: #fafbfc;
 }
-.msg.is-resolved.is-mine .msg-bubble {
-  text-decoration-color: rgba(255,255,255,.7);
+.msg.is-resolved .msg-body {
+  text-decoration: line-through;
+  text-decoration-color: var(--text3);
 }
 
 /* ---------- COMPOSER ---------- */
