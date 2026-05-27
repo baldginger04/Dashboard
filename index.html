@@ -205,6 +205,25 @@
     .myday-check:hover{border-color:var(--accent);background:#fff5ee}
     .myday-check.in-progress{background:var(--accent);border-color:var(--accent);color:white}
     .myday-check.done{background:var(--green);border-color:var(--green);color:white}
+    /* Status chevron — small button next to the circle that opens the status menu. */
+    .status-chevron{width:14px;height:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:10px;flex-shrink:0;margin-left:-4px;border-radius:3px;transition:color .12s,background .12s}
+    .status-chevron:hover{color:var(--accent);background:#fff5ee}
+    /* Popover menu — anchored relative to the chevron's parent. */
+    .status-menu{position:absolute;top:100%;left:0;margin-top:4px;background:white;border:1px solid var(--border);border-radius:7px;box-shadow:0 4px 14px rgba(0,0,0,.08);min-width:170px;z-index:50;padding:4px;display:none}
+    .status-menu.open{display:block}
+    .status-menu-item{padding:6px 10px;border-radius:5px;cursor:pointer;font-size:12px;color:var(--text);display:flex;align-items:center;gap:8px;white-space:nowrap}
+    .status-menu-item:hover{background:#fafaf8}
+    .status-menu-item.active{background:#fff5ee;color:var(--accent);font-weight:500}
+    .status-menu-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    /* Status pill shown on the card body when a non-default status is set. */
+    .status-pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:12px;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
+    .status-pill.waiting{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+    .status-pill.stuck{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+    /* When a card itself is Waiting / Stuck, tint its border so it's visible at a glance. */
+    .myday-item.is-waiting{border-color:#fcd34d;background:#fffbeb}
+    .myday-item.is-stuck{border-color:var(--red-border);background:var(--red-bg)}
+    /* The check + chevron live in a positioned wrapper so the popover anchors right. */
+    .myday-status-grp{position:relative;display:flex;align-items:center;flex-shrink:0}
     .myday-title{flex:1;min-width:0;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
     .myday-client-inline{font-size:12px;color:#A86F00;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;flex-shrink:1}
     .myday-due{font-size:11px;white-space:nowrap;flex-shrink:0}
@@ -1000,13 +1019,13 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
     ...tasks.map(t => ({
       id: t.id, type: 'task', title: t.title,
       client: t.clients?.name || '', clientId: t.client_id || '',
-      due: t.next_due, freq: t.frequency
+      due: t.next_due, freq: t.frequency, status: t.status || 'Not Started'
     })),
     ...subs.map(s => ({
       id: s.id, type: 'subtask', title: s.title,
       client: s.clients?.name || '', clientId: s.tasks?.client_id || '',
       due: s.tasks?.next_due,
-      parentTask: s.tasks?.title || ''
+      parentTask: s.tasks?.title || '', status: s.status || 'Not Started'
     }))
   ];
 
@@ -1070,8 +1089,14 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
 }
 
 function myweekItem(t) {
-  const rowClass = t.isOverdue ? 'overdue-item' : '';
-  const overdueLabel = t.isOverdue
+  const isWaiting = t.status === 'Waiting on Client';
+  const isStuck   = t.status === 'Stuck';
+  // Status takes precedence over generic overdue tint for the same reason as My Day.
+  let rowClass = '';
+  if (isStuck) rowClass = 'is-stuck';
+  else if (isWaiting) rowClass = 'is-waiting';
+  else if (t.isOverdue) rowClass = 'overdue-item';
+  const overdueLabel = t.isOverdue && !isWaiting && !isStuck
     ? `<div class="week-card-overdue">${t.daysOverdue}d overdue</div>`
     : '';
   const recurringLabel = t.freq && ['daily','weekdays','every_other_weekday'].includes(t.freq) && !t.due
@@ -1080,6 +1105,9 @@ function myweekItem(t) {
   const parentLabel = t.parentTask
     ? `<div class="week-card-meta">${t.parentTask}</div>`
     : '';
+  let statusPill = '';
+  if (isWaiting) statusPill = '<div class="status-pill waiting" style="margin-top:3px">Waiting on Client</div>';
+  else if (isStuck) statusPill = '<div class="status-pill stuck" style="margin-top:3px">Stuck</div>';
   const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
   // Edit button — opens the same task modal used in the Clients view. For
   // subtasks, the modal opens against the parent task.
@@ -1092,6 +1120,7 @@ function myweekItem(t) {
       <div class="week-card-title">${t.title}</div>
       ${t.client ? `<div class="week-card-client">${t.client}</div>` : ''}
       ${parentLabel}
+      ${statusPill}
       ${overdueLabel}
       ${recurringLabel}
     </div>
@@ -1147,8 +1176,12 @@ function renderMyDay(tasks, subs, today) {
 
   // Group into 2 Kanban columns by status. Done tasks disappear immediately
   // (recurring tasks repopulate on next due date; one-time tasks are gone for good).
-  const open = all.filter(t => t.status === 'Not Started');
+  // Waiting on Client / Stuck tasks live in the Open column — they aren't being
+  // actively worked on (so they don't belong In Progress), but they are still
+  // outstanding (so they shouldn't be hidden). The colored pill on each card
+  // makes the special status obvious.
   const inProgress = all.filter(t => t.status === 'In Progress');
+  const open = all.filter(t => t.status !== 'In Progress' && t.status !== 'Done');
 
   let html = '';
   if (!all.length) {
@@ -1175,17 +1208,47 @@ function renderMyDay(tasks, subs, today) {
 function mydayItem(t, today) {
   const isOverdue = t.daysOverdue > 0;
   const isWarning = t.daysOverdue >= 3;
-  const rowClass = isWarning ? 'warning-item' : isOverdue ? 'overdue-item' : '';
+  const isWaiting = t.status === 'Waiting on Client';
+  const isStuck   = t.status === 'Stuck';
+  // Status-derived row tint takes precedence over overdue/warning — if a task
+  // is explicitly Waiting/Stuck, the user already knows it's not progressing,
+  // so the more informative class wins.
+  let rowClass = '';
+  if (isStuck) rowClass = 'is-stuck';
+  else if (isWaiting) rowClass = 'is-waiting';
+  else if (isWarning) rowClass = 'warning-item';
+  else if (isOverdue) rowClass = 'overdue-item';
+
   const dueLabel = !t.due ? '<span style="color:var(--text3);font-size:11px">Daily</span>' :
     isOverdue ? `<span style="color:var(--red);font-size:11px;font-weight:500">${t.daysOverdue}d</span>` :
     `<span style="color:var(--text3);font-size:11px">Today</span>`;
-  // Click the circle to ADVANCE status: Open → In Progress → Done
+  // Click the circle → mark Done. (Subtasks still cycle through In Progress.)
   const onClick = t.type === 'task' ? `cycleTaskStatus('${t.id}')` : `cycleSubStatus('${t.id}')`;
   // Visual hint of current status on the circle
   let checkClass = 'myday-check';
   let checkInner = '';
   if (t.status === 'In Progress') { checkClass += ' in-progress'; checkInner = '◐'; }
   else if (t.status === 'Done') { checkClass += ' done'; checkInner = '✓'; }
+
+  // Status pill — shown on the card body when the task is in a non-default state
+  // worth surfacing. Done/Not Started don't get a pill (the circle conveys those).
+  let statusPill = '';
+  if (isWaiting) statusPill = '<span class="status-pill waiting">Waiting on Client</span>';
+  else if (isStuck) statusPill = '<span class="status-pill stuck">Stuck</span>';
+
+  // Status menu — only on tasks (subtasks use the simpler three-step cycle and
+  // shouldn't have Waiting/Stuck since they're part of a sequential workflow).
+  const statusMenu = t.type === 'task' ? `
+    <div class="status-menu" id="statusMenu-${t.id}">
+      <div class="status-menu-item ${t.status === 'Not Started' || !t.status ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Not Started')"><span class="status-menu-dot" style="background:#ccc"></span>Not Started</div>
+      <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
+      <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
+      <div class="status-menu-item" onclick="setTaskStatus(event,'${t.id}','Done')"><span class="status-menu-dot" style="background:var(--green)"></span>Mark Done</div>
+    </div>` : '';
+  const chevron = t.type === 'task'
+    ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${t.id}')" title="Set status">▾</div>`
+    : '';
+
   // Edit button — opens the same task modal used in the Clients view. For
   // subtasks, the modal opens against the parent task (subtask steps are
   // edited as part of that task).
@@ -1197,8 +1260,13 @@ function mydayItem(t, today) {
     : '';
   const dataAttr = t.type === 'task' ? `data-task-id="${t.id}"` : `data-sub-id="${t.id}"`;
   return `<div class="myday-item ${rowClass}" ${dataAttr}>
-    <div class="${checkClass}" onclick="${onClick}">${checkInner}</div>
+    <div class="myday-status-grp">
+      <div class="${checkClass}" onclick="${onClick}">${checkInner}</div>
+      ${chevron}
+      ${statusMenu}
+    </div>
     <div class="myday-title">${t.title}</div>
+    ${statusPill}
     ${clientLabel}
     ${dueLabel}
     ${editBtn}
@@ -1296,6 +1364,50 @@ function mutateCacheStatus(id, type, newStatus) {
   const badge = document.getElementById('mydayBadge');
   if (total > 0) { badge.textContent = total; badge.style.display = 'inline'; }
   else badge.style.display = 'none';
+}
+
+// ── STATUS MENU ──────────────────────────────────────────
+// Opens the per-card status popover. Closes any other open menu first so only
+// one is ever visible. Stops propagation so the document-level click handler
+// (which closes any open menu) doesn't fire on this same click.
+function toggleStatusMenu(event, id) {
+  event.stopPropagation();
+  const target = document.getElementById('statusMenu-' + id);
+  if (!target) return;
+  const wasOpen = target.classList.contains('open');
+  document.querySelectorAll('.status-menu.open').forEach(m => m.classList.remove('open'));
+  if (!wasOpen) target.classList.add('open');
+}
+
+// Document-level handler — clicking anywhere outside an open status menu closes it.
+document.addEventListener('click', e => {
+  if (!e.target.closest('.status-menu, .status-chevron')) {
+    document.querySelectorAll('.status-menu.open').forEach(m => m.classList.remove('open'));
+  }
+});
+
+// Set a task to any status from the menu. For "Done", we delegate to quickDoneTask
+// so recurring-task logic + cache mutation + reloadActiveView all run consistently.
+// For other statuses, we update the DB then reload the active view.
+async function setTaskStatus(event, id, status) {
+  event.stopPropagation();
+  document.querySelectorAll('.status-menu.open').forEach(m => m.classList.remove('open'));
+  if (status === 'Done') { return quickDoneTask(id); }
+  if (inFlightTasks.has(id)) return;
+  inFlightTasks.add(id);
+  try {
+    const { error } = await sb.from('tasks')
+      .update({ status, updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+    reloadActiveView();
+  } catch (err) {
+    console.error('setTaskStatus error:', err);
+    alert("Couldn't update task status. " + (err.message || ''));
+    reloadActiveView();
+  } finally {
+    inFlightTasks.delete(id);
+  }
 }
 
 // One-click Done for task cards on My Day. These are always atomic (the My Day
@@ -1740,6 +1852,8 @@ function renderTaskItem(task, today) {
       <div class="task-title ${isDone ? 'done' : ''}">${task.title}</div>
       <div class="task-meta-row">
         ${task.assigned_to ? `<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3)">${avHtml(task.assigned_to)} ${task.assigned_to}</span>` : ''}
+        ${task.status === 'Waiting on Client' ? '<span class="status-pill waiting">Waiting on Client</span>' : ''}
+        ${task.status === 'Stuck' ? '<span class="status-pill stuck">Stuck</span>' : ''}
         ${task.frequency ? `<span class="task-freq-badge">${freqLabel(task.frequency, task.frequency_interval)}</span>` : ''}
         ${task.next_due && !isDone ? `<span class="task-due ${isOverdue ? 'overdue' : ''}">${isOverdue ? daysOverdue + 'd overdue' : 'Due ' + task.next_due}</span>` : ''}
       </div>
