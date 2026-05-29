@@ -746,6 +746,9 @@
       </div>
     </div>
     <div class="modal-footer">
+      <!-- Delete button only shown when editing an existing task (tmTaskId
+           is non-empty). openTaskModal/closeModal toggle visibility. -->
+      <button class="btn btn-ghost btn-sm" id="taskDeleteBtn" style="color:var(--red);margin-right:auto;display:none" onclick="deleteTaskFromModal()">Delete Task</button>
       <button class="btn btn-secondary" onclick="closeModal('taskModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveTask()">Save Task</button>
     </div>
@@ -2334,6 +2337,20 @@ async function deleteTask(id) {
   renderTasks();
 }
 
+// Called from the Delete button inside the task-edit modal. Reads the task ID
+// from the hidden tmTaskId input, confirms, then closes the modal and runs the
+// standard deleteTask flow so the list stays in sync.
+async function deleteTaskFromModal() {
+  const id = document.getElementById('tmTaskId').value;
+  if (!id) return;
+  if (!confirm('Delete this task and all its subtasks? This cannot be undone.')) return;
+  await sb.from('tasks').delete().eq('id', id);
+  clientTasks = clientTasks.filter(t => t.id !== id);
+  clientSubtasks = clientSubtasks.filter(s => s.task_id !== id);
+  closeModal('taskModal');
+  renderTasks();
+}
+
 // ── TASK MODAL ───────────────────────────────────────────
 function openTaskModal(clientId, category, taskId) {
   subRows = [];
@@ -2346,6 +2363,11 @@ function openTaskModal(clientId, category, taskId) {
   document.getElementById('tmClientId').value = clientId || currentClientId || '';
   document.getElementById('tmTaskId').value = taskId || '';
   if (category) document.getElementById('tmCategory').value = category;
+
+  // Delete button only appears in edit mode (taskId present). Reset to hidden
+  // each open so creating a new task doesn't show a stale Delete button.
+  const delBtn = document.getElementById('taskDeleteBtn');
+  if (delBtn) delBtn.style.display = taskId ? 'inline-flex' : 'none';
 
   // Default the new freq panel state: Weekly, every 1, Monday.
   document.getElementById('freqType').value = 'weekly';
