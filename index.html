@@ -6,8 +6,11 @@
   <title>Bald Ginger — Team</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <!-- Supabase client. Loaded synchronously because the inline scripts below
+       reference `supabase` immediately (const sb = supabase.createClient...). -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <!-- Chart.js removed 5/31: the KPI Dashboard tab that used it has been
+       removed from Triple. Charts now live in the client portal. -->
   <style>
     :root {
       --bg:#f5f6f8;--bg2:#ffffff;--bg3:#eef0f3;--border:#e2e5ea;--border2:#d0d4da;
@@ -923,9 +926,9 @@ async function showApp() {
   document.getElementById('mydayDate').textContent = tzFormatDate(tzToday(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
-  await loadClients();
-  await loadMyDay();
-  await loadMyWeek();
+  // Three independent loads in parallel — none depend on each other.
+  // Previously serial, which cost ~300ms per login.
+  await Promise.all([loadClients(), loadMyDay(), loadMyWeek()]);
   // Open realtime subscriptions for My Day / My Week. Initially scoped to the
   // logged-in user; setViewingAs() re-targets when Ed uses the view-as dropdown.
   subscribeMyRealtime(name);
