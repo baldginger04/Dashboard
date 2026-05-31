@@ -499,6 +499,11 @@
       <div class="page" id="page-clients">
         <div class="page-header">
           <div><div class="page-title">All Clients</div><div class="page-sub" id="clientsCount"></div></div>
+          <!-- Bulk action: reset every client back to "Not Started" to kick off
+               a new month's close cycle. Hard-confirm before running. -->
+          <button class="btn btn-primary" id="startCloseAllBtn" onclick="startCloseForAllClients()">
+            🔄 Start Close for All Clients
+          </button>
         </div>
         <div class="card">
           <div class="filter-row">
@@ -543,8 +548,6 @@
         </div>
         <div class="tabs">
           <div class="tab active" onclick="showTab('tasks')">Current Tasks</div>
-          <div class="tab" onclick="showTab('accounts')">Accounts</div>
-          <div class="tab" onclick="showTab('kpi')">KPI Dashboard</div>
           <div class="tab" onclick="showTab('messages')">Internal Client Specific Communication</div>
         </div>
         <div class="tab-panel active" id="tab-tasks">
@@ -553,12 +556,6 @@
             <div class="sub-tab" id="subtab-upcoming" onclick="showTaskView('upcoming')">Upcoming Tasks</div>
           </div>
           <div id="taskContent"><div class="empty"><span class="spinner"></span></div></div>
-        </div>
-        <div class="tab-panel" id="tab-accounts"><div id="accountContent"><div class="empty"><span class="spinner"></span></div></div></div>
-        <div class="tab-panel" id="tab-kpi">
-          <div class="kpi-grid" id="kpiCards"></div>
-          <div class="chart-card"><div class="chart-title">Monthly Revenue</div><div class="chart-wrap"><canvas id="revenueChart"></canvas></div></div>
-          <div class="chart-card"><div class="chart-title">Cost % Breakdown</div><div class="chart-wrap"><canvas id="costChart"></canvas></div></div>
         </div>
         <div class="tab-panel" id="tab-messages">
           <div class="card" style="padding:1.25rem">
@@ -940,6 +937,44 @@ async function loadClients() {
   allClients = data || [];
   document.getElementById('clientsCount').textContent = allClients.length + ' clients';
   renderClientsTable(allClients);
+}
+
+// Bulk reset close_status to "Not Started" for every client. Used at the
+// start of a new month's close cycle. Hard-confirm because this is a sweeping
+// change — there's no undo button. Updates are server-side, so the local
+// allClients cache is refreshed from the DB after the write succeeds.
+async function startCloseForAllClients() {
+  const count = allClients.length;
+  if (count === 0) return;
+  const ok = confirm(
+    `Reset all ${count} clients to "Not Started"?\n\n` +
+    `This kicks off a new close cycle for everyone. Any clients currently ` +
+    `marked Done or In Progress will go back to Not Started. Can't be undone ` +
+    `from this button — you'd have to manually flip statuses back.`
+  );
+  if (!ok) return;
+
+  const btn = document.getElementById('startCloseAllBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Resetting…'; }
+
+  // Supabase requires UPDATE to have a WHERE clause; .not('id','is',null)
+  // matches every row (id is the PK and never null).
+  const { error } = await sb
+    .from('clients')
+    .update({ close_status: 'Not Started' })
+    .not('id', 'is', null);
+
+  if (error) {
+    alert("Couldn't reset clients: " + error.message);
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Start Close for All Clients'; }
+    return;
+  }
+
+  // Reload from DB so the UI reflects truth (and any clients added since the
+  // page loaded show up).
+  await loadClients();
+  filterClients();
+  if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Start Close for All Clients'; }
 }
 function renderClientsTable(clients) {
   const sorted = [...clients].sort((a,b) => {
@@ -2011,7 +2046,7 @@ async function openClient(id) {
   const upEl = document.getElementById('subtab-upcoming');
   if (closeEl) closeEl.classList.add('active');
   if (upEl) upEl.classList.remove('active');
-  await Promise.all([loadTasks(id), loadAccounts(id), loadKPI(id), loadMessages(id)]);
+  await Promise.all([loadTasks(id), loadMessages(id)]);
 }
 
 // Populates the header dropdown with every client. The currently-open client
