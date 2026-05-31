@@ -2035,8 +2035,6 @@ async function openClient(id) {
   populateClientSwitcher(id);
   // Reset content panels so we don't show stale data from previous client while loading
   document.getElementById('taskContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
-  document.getElementById('accountContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
-  document.getElementById('kpiCards').innerHTML = '';
   document.getElementById('msgList').innerHTML = '';
   showPage('client-detail');
   showTab('tasks');
