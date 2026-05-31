@@ -6,6 +6,19 @@
   <title>Bald Ginger — Team</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <!-- Supabase cold-start warmup. Free/Pro projects sleep after idle and the
+       first query then takes 30-60s. Firing a tiny no-op query early in head
+       takes the cold-start hit during page parse, before user-facing queries.
+       URL + anon key match the constants used below. Fire-and-forget. -->
+  <script>
+    (function() {
+      const url = 'https://evfemokwtofbarjeezhu.supabase.co';
+      const key = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2ZmVtb2t3dG9mYmFyamVlemh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NDUxMjQsImV4cCI6MjA5NTEyMTEyNH0.B9OSeB9CEP0TX80dJWpBPAIP6IEhYIzYlYKe4WL-6B0';
+      fetch(`${url}/rest/v1/clients?select=id&limit=1`, {
+        headers: { apikey: key, Authorization: `Bearer ${key}` },
+      }).catch(() => {});
+    })();
+  </script>
   <!-- Supabase client. Loaded synchronously because the inline scripts below
        reference `supabase` immediately (const sb = supabase.createClient...). -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -795,6 +808,19 @@ const sb = supabase.createClient(SB_URL, SB_KEY, {
 });
 
 const USERS = ['Ed Hattrup','Jennifer Mills','Jen Crane','Lydia Hattrup'];
+
+// Race a promise against a timeout. Rejects with { code: 'TIMEOUT' } if the
+// promise doesn't settle in time. Used to recover from Supabase cold-starts
+// where a hung query would otherwise leave a spinner forever.
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject({ code: 'TIMEOUT', message: 'Timed out' }), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
 const FREQ_LABELS = {daily:'Every day',weekdays:'Every weekday',every_other_weekday:'Every other weekday',weekly:'Weekly',monthly:'Monthly',quarterly:'Quarterly',annually:'Annually'};
 // Builds a human label like "Every 2 weeks" given a frequency + interval.
 // Used by task badges where the legacy single-word label ("Weekly") would be
@@ -2068,11 +2094,30 @@ function switchClient(id) {
 
 // ── TASKS ────────────────────────────────────────────────
 async function loadTasks(clientId) {
+  // Run the two queries in parallel. Wrapped in withTimeout + one retry to
+  // recover from Supabase cold-starts (rare 30+s hangs on the first query
+  // of a session). Without this, the spinner stays forever and the user has
+  // to refresh the page.
+  const fetchBoth = () => Promise.all([
+    sb.from('tasks').select('*').eq('client_id', clientId).order('sort_order').order('created_at'),
+    sb.from('subtasks').select('*').eq('client_id', clientId).order('sort_order')
+  ]);
   try {
-    const [t, s] = await Promise.all([
-      sb.from('tasks').select('*').eq('client_id', clientId).order('sort_order').order('created_at'),
-      sb.from('subtasks').select('*').eq('client_id', clientId).order('sort_order')
-    ]);
+    let result;
+    try {
+      result = await withTimeout(fetchBoth(), 20_000);
+    } catch (firstErr) {
+      if (firstErr && firstErr.code === 'TIMEOUT') {
+        console.warn('loadTasks: first attempt timed out, retrying');
+        // Show user we're still trying — better than silent re-spinner
+        const el = document.getElementById('taskContent');
+        if (el) el.innerHTML = '<div class="empty"><span class="spinner"></span> Still loading…</div>';
+        result = await withTimeout(fetchBoth(), 20_000);
+      } else {
+        throw firstErr;
+      }
+    }
+    const [t, s] = result;
     if (t.error) throw t.error;
     if (s.error) throw s.error;
     clientTasks = t.data || [];
@@ -2081,9 +2126,10 @@ async function loadTasks(clientId) {
     else renderTasks();
   } catch (err) {
     console.error('loadTasks error:', err);
+    const msg = err?.code === 'TIMEOUT' ? 'Connection is slow. Please refresh and try again.' : (err.message || 'Please try again.');
     document.getElementById('taskContent').innerHTML =
       `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2rem;color:var(--red)">
-        Couldn't load tasks. ${err.message || 'Please try again.'}
+        Couldn't load tasks. ${msg}
       </div>`;
   }
 }
@@ -2777,10 +2823,25 @@ async function loadMessages(clientId) {
   // Toggle defaults to off → hide cleared messages. When on, show everything
   // (cleared messages render with strikethrough + Resolved badge via renderMsgItem).
   const showResolved = document.getElementById('showResolvedToggle')?.checked || false;
+  // Wrapped in withTimeout + one retry to recover from Supabase cold-starts.
+  const fetchMessages = () => {
+    let q = sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
+    if (!showResolved) q = q.eq('cleared', false);
+    return q;
+  };
   try {
-    let query = sb.from('messages').select('*').eq('client_id', clientId).order('created_at');
-    if (!showResolved) query = query.eq('cleared', false);
-    const { data, error } = await query;
+    let result;
+    try {
+      result = await withTimeout(fetchMessages(), 20_000);
+    } catch (firstErr) {
+      if (firstErr && firstErr.code === 'TIMEOUT') {
+        console.warn('loadMessages: first attempt timed out, retrying');
+        result = await withTimeout(fetchMessages(), 20_000);
+      } else {
+        throw firstErr;
+      }
+    }
+    const { data, error } = result;
     if (error) throw error;
     if (!data || !data.length) {
       const emptyMsg = showResolved ? 'No messages yet' : 'No active messages. Toggle "Show resolved" to see cleared ones.';
@@ -2791,7 +2852,8 @@ async function loadMessages(clientId) {
     list.scrollTop = list.scrollHeight;
   } catch (err) {
     console.error('loadMessages error:', err);
-    list.innerHTML = `<div style="color:var(--red);font-size:13px;text-align:center;padding:1rem">Couldn't load messages. ${err.message || ''}</div>`;
+    const msg = err?.code === 'TIMEOUT' ? 'Connection is slow. Please refresh.' : (err.message || '');
+    list.innerHTML = `<div style="color:var(--red);font-size:13px;text-align:center;padding:1rem">Couldn't load messages. ${msg}</div>`;
   }
 }
 
