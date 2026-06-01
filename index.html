@@ -1971,17 +1971,50 @@ async function quickDoneSub(id) {
 async function maybeCompleteParentTask(subtaskId) {
   // Fetch the just-completed subtask so we know its task_id, then all siblings.
   const { data: sub, error: subErr } = await sb.from('subtasks').select('task_id').eq('id', subtaskId).single();
-  if (subErr || !sub) return;
+  if (subErr || !sub) {
+    console.warn('maybeCompleteParentTask: subtask lookup failed', subErr);
+    return;
+  }
   const { data: siblings, error: sibErr } = await sb.from('subtasks').select('id,status').eq('task_id', sub.task_id);
-  if (sibErr || !siblings || !siblings.length) return;
-  if (!siblings.every(s => s.status === 'Done')) return; // not all done yet
+  if (sibErr || !siblings || !siblings.length) {
+    console.warn('maybeCompleteParentTask: sibling lookup failed', sibErr);
+    return;
+  }
+  const remaining = siblings.filter(s => s.status !== 'Done');
+  if (remaining.length > 0) {
+    // Not all done yet — this is the common case; no log needed.
+    return;
+  }
 
   // All subtasks complete — close out the parent task.
   const { data: task, error: taskErr } = await sb.from('tasks').select('*').eq('id', sub.task_id).single();
-  if (taskErr || !task) return;
+  if (taskErr || !task) {
+    console.warn('maybeCompleteParentTask: parent task lookup failed', taskErr);
+    return;
+  }
+  if (task.status === 'Done') return;  // already done — nothing to do
 
   const now = new Date().toISOString();
-  await sb.from('tasks').update({ status: 'Done', updated_at: now }).eq('id', sub.task_id);
+  // .select() returns the updated row(s) — if RLS blocks the update,
+  // data is an empty array and we know to surface an error rather than
+  // silently leaving the parent in Not Done state.
+  const { data: updated, error: updErr } = await sb.from('tasks')
+    .update({ status: 'Done', updated_at: now })
+    .eq('id', sub.task_id)
+    .select();
+  if (updErr) {
+    console.error('maybeCompleteParentTask: parent update failed', updErr);
+    alert(`Auto-complete of parent task "${task.title}" failed: ${updErr.message || 'unknown error'}. Please mark it Done manually.`);
+    return;
+  }
+  if (!updated || updated.length === 0) {
+    // No row updated — almost certainly an RLS issue. The current user can
+    // update the subtask (their assignment) but not the parent task (someone
+    // else's assignment). Surface it loudly so we can fix the policy.
+    console.warn('maybeCompleteParentTask: parent task update returned 0 rows. RLS likely blocking.');
+    alert(`All subtasks of "${task.title}" are done, but the task itself couldn't be auto-completed (most likely a permissions issue). Please mark it Done manually for now and let Ed know.`);
+    return;
+  }
 
   // If recurring, schedule the next instance. The next instance starts fresh
   // with all its subtasks reset to Not Started — handled by the subtask copy
