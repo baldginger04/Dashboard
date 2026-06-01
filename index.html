@@ -2173,7 +2173,18 @@ function switchClient(id) {
 }
 
 // ── TASKS ────────────────────────────────────────────────
+// Monotonic counter for each loadTasks call. When the user clicks rapidly
+// through clients (or uses the Jump-to dropdown), each click fires queries
+// that don't auto-cancel. The token pattern lets us ignore results from
+// any call that's no longer the most recent — without that, stale results
+// would render over fresh ones and the 20s timeouts would fire while many
+// queries waited in the browser's per-origin connection queue.
+let loadTasksToken = 0;
 async function loadTasks(clientId) {
+  // Capture our token at call time. If another loadTasks is invoked before
+  // we finish, our token will no longer match the latest — that means the
+  // user has moved on to a different client and we should abandon.
+  const myToken = ++loadTasksToken;
   // Run the two queries in parallel. Wrapped in withTimeout + one retry to
   // recover from Supabase cold-starts (rare 30+s hangs on the first query
   // of a session). Without this, the spinner stays forever and the user has
@@ -2187,6 +2198,9 @@ async function loadTasks(clientId) {
     try {
       result = await withTimeout(fetchBoth(), 20_000);
     } catch (firstErr) {
+      // If a newer loadTasks call has already fired, just bail — no point
+      // retrying for a client the user has navigated away from.
+      if (myToken !== loadTasksToken) return;
       if (firstErr && firstErr.code === 'TIMEOUT') {
         console.warn('loadTasks: first attempt timed out, retrying');
         // Show user we're still trying — better than silent re-spinner
@@ -2197,6 +2211,9 @@ async function loadTasks(clientId) {
         throw firstErr;
       }
     }
+    // Final stale-check before we render. If another loadTasks ran while
+    // we were awaiting, our result is for the wrong client — drop it.
+    if (myToken !== loadTasksToken) return;
     const [t, s] = result;
     if (t.error) throw t.error;
     if (s.error) throw s.error;
@@ -2205,6 +2222,9 @@ async function loadTasks(clientId) {
     if (taskView === 'upcoming') renderUpcomingTasks();
     else renderTasks();
   } catch (err) {
+    // Same stale-check on the error path — don't paint an error message for
+    // a client we already left.
+    if (myToken !== loadTasksToken) return;
     console.error('loadTasks error:', err);
     const msg = err?.code === 'TIMEOUT' ? 'Connection is slow. Please refresh and try again.' : (err.message || 'Please try again.');
     document.getElementById('taskContent').innerHTML =
@@ -2905,7 +2925,10 @@ async function toggleMsgCleared(id, currentlyCleared) {
   await loadMessages(currentClientId);
 }
 
+// Same load-token pattern as loadTasks — see comments there.
+let loadMessagesToken = 0;
 async function loadMessages(clientId) {
+  const myToken = ++loadMessagesToken;
   const list = document.getElementById('msgList');
   // Toggle defaults to off → hide cleared messages. When on, show everything
   // (cleared messages render with strikethrough + Resolved badge via renderMsgItem).
@@ -2921,6 +2944,7 @@ async function loadMessages(clientId) {
     try {
       result = await withTimeout(fetchMessages(), 20_000);
     } catch (firstErr) {
+      if (myToken !== loadMessagesToken) return;  // user moved on
       if (firstErr && firstErr.code === 'TIMEOUT') {
         console.warn('loadMessages: first attempt timed out, retrying');
         result = await withTimeout(fetchMessages(), 20_000);
@@ -2928,6 +2952,7 @@ async function loadMessages(clientId) {
         throw firstErr;
       }
     }
+    if (myToken !== loadMessagesToken) return;  // stale before render
     const { data, error } = result;
     if (error) throw error;
     if (!data || !data.length) {
@@ -2938,6 +2963,7 @@ async function loadMessages(clientId) {
     list.innerHTML = data.map(renderMsgItem).join('');
     list.scrollTop = list.scrollHeight;
   } catch (err) {
+    if (myToken !== loadMessagesToken) return;  // don't paint error for stale call
     console.error('loadMessages error:', err);
     const msg = err?.code === 'TIMEOUT' ? 'Connection is slow. Please refresh.' : (err.message || '');
     list.innerHTML = `<div style="color:var(--red);font-size:13px;text-align:center;padding:1rem">Couldn't load messages. ${msg}</div>`;
