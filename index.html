@@ -1066,6 +1066,37 @@ function getViewingUserName() {
 }
 function isViewingAs() { return !!viewingAsName; }
 
+// ── READY FOR REVIEW workflow ─────────────────────────────
+// Specific tasks ("Profit and Loss", "Balance Sheet", "Statement of Cash
+// Flows") should not appear in any task list until Jen or Jennifer marks
+// "Ready for Review" as Done for that client. The mechanism: if a client
+// has an incomplete "Ready for Review" task, the three review tasks are
+// hidden everywhere (My Day, My Week, client detail, upcoming).
+const REVIEW_GATED_TASKS = new Set([
+  'Profit and Loss',
+  'Balance Sheet',
+  'Statement of Cash Flows',
+]);
+const READY_FOR_REVIEW_TITLE = 'Ready for Review';
+
+// Returns true if this task is a "review" task that should be hidden because
+// its client's "Ready for Review" gate hasn't been completed yet.
+//   task: the task to evaluate
+//   peerTasks: list of all tasks in the same client scope (used to find the
+//     gating "Ready for Review" task). For My Day, this is fetched separately.
+//     For client detail, clientTasks is the full set.
+function isTaskBlockedByReview(task, peerTasks) {
+  if (!task || !task.title) return false;
+  if (!REVIEW_GATED_TASKS.has(task.title.trim())) return false;
+  // Find the "Ready for Review" task in the same client
+  const gate = peerTasks.find((t) =>
+    t.client_id === task.client_id &&
+    (t.title || '').trim() === READY_FOR_REVIEW_TITLE);
+  // No gate task → no gating. Gate exists but not Done → blocked.
+  if (!gate) return false;
+  return gate.status !== 'Done';
+}
+
 // Guard used at the top of every mutation handler. Returns true (and shows a
 // friendly alert) if the user is impersonating someone else. Callers should
 // `if (blockedByViewAs(...)) return;` and bail out.
@@ -1217,8 +1248,12 @@ async function loadMyDay() {
   const today = tzToday();
 
   try {
-    // Fire all three queries in parallel — was serial, ~3x slower.
-    const [tasksRes, subsRes, allSubsRes] = await Promise.all([
+    // Fire all queries in parallel — was serial, ~3x slower.
+    // The fourth query fetches every "Ready for Review" task across all
+    // clients. We need it to gate the three review tasks (P&L, Balance Sheet,
+    // Statement of Cash Flows) — those should be hidden until "Ready for
+    // Review" is Done for the same client.
+    const [tasksRes, subsRes, allSubsRes, reviewGateRes] = await Promise.all([
       sb.from('tasks')
         .select('*, clients(name)')
         .eq('assigned_to', name)
@@ -1228,13 +1263,19 @@ async function loadMyDay() {
         .select('*, tasks(title,next_due,client_id), clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done'),
-      sb.from('subtasks').select('id,task_id,status,blocked_by')
+      sb.from('subtasks').select('id,task_id,status,blocked_by'),
+      sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
     ]);
     if (tasksRes.error) throw tasksRes.error;
     if (subsRes.error)  throw subsRes.error;
-    const tasks = tasksRes.data;
+    let tasks = tasksRes.data;
     const subtasks = subsRes.data;
     const allSubs = allSubsRes.data || [];
+    const reviewGates = reviewGateRes.data || [];
+
+    // Apply the Ready-for-Review gate: drop tasks whose title is one of the
+    // three review documents AND whose client has an incomplete gate.
+    tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
     // Tasks that have ANY subtasks are "parent" tasks — hide them from My Day.
     // Only their subtasks should surface (gated by the blocked_by chain below).
@@ -1285,8 +1326,8 @@ async function loadMyWeek() {
     'Today through ' + tzFormatDate(weekEndStr, { weekday: 'long', month: 'long', day: 'numeric' });
 
   try {
-    // Fire all three queries in parallel
-    const [tasksRes, subsRes, allSubsRes] = await Promise.all([
+    // Fire all queries in parallel
+    const [tasksRes, subsRes, allSubsRes, reviewGateRes] = await Promise.all([
       sb.from('tasks')
         .select('*, clients(name)')
         .eq('assigned_to', name)
@@ -1296,13 +1337,19 @@ async function loadMyWeek() {
         .select('*, tasks(title,next_due,client_id), clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done'),
-      sb.from('subtasks').select('id,task_id,status,blocked_by')
+      sb.from('subtasks').select('id,task_id,status,blocked_by'),
+      // "Ready for Review" gate — see loadMyDay for the explanation.
+      sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
     ]);
     if (tasksRes.error) throw tasksRes.error;
     if (subsRes.error)  throw subsRes.error;
-    const tasks = tasksRes.data;
+    let tasks = tasksRes.data;
     const subtasks = subsRes.data;
     const allSubs = allSubsRes.data || [];
+    const reviewGates = reviewGateRes.data || [];
+
+    // Apply the Ready-for-Review gate
+    tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
     // Tasks that have ANY subtasks are "parent" tasks — hide them from My Week.
     // Only their subtasks should surface (gated by the blocked_by chain below).
@@ -2154,10 +2201,13 @@ function renderUpcomingTasks() {
   // Upcoming = future-dated tasks. Hide parent tasks whose subtasks already
   // cover the workflow (subtasks are edited inside the parent task modal);
   // hide Done tasks; only show tasks with next_due > today.
+  // Also hide the three review tasks (P&L, Balance Sheet, Cash Flows) when
+  // "Ready for Review" hasn't been completed yet for this client.
   const parentIds = new Set(clientSubtasks.map(s => s.task_id));
   const isUpcoming = t => {
     if (t.status === 'Done') return false;
     if (parentIds.has(t.id)) return false;
+    if (isTaskBlockedByReview(t, clientTasks)) return false;
     return t.next_due && t.next_due > today;
   };
 
@@ -2212,6 +2262,10 @@ function renderTasks() {
 
   function isTaskDueToday(t) {
     if (t.status === 'Done') return false; // handled by show completed toggle
+    // Hide the three review tasks when "Ready for Review" hasn't been completed
+    // for this client yet. clientTasks is the full per-client task list, so
+    // the gate task is visible in the same array.
+    if (isTaskBlockedByReview(t, clientTasks)) return false;
     const startsOn = t.starts_on || t.next_due;
     const freq = t.frequency || 'monthly';
 
