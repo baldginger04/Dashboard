@@ -821,6 +821,22 @@ function withTimeout(promise, ms) {
     );
   });
 }
+// Run a Supabase write (update/insert/delete) and confirm it actually changed
+// something. This is the guard against the silent-failure pattern: a write
+// blocked by row-level security comes back as SUCCESS with zero rows and NO
+// error, so code that only checks `error` thinks it worked. We force the write
+// to return the affected rows via .select() and treat "no rows" as a failure.
+// Throws a readable Error on either a real error or a zero-row no-op.
+async function writeOrThrow(query, label) {
+  const { data, error } = await query.select();
+  const tag = label ? label + ': ' : '';
+  if (error) throw new Error(tag + (error.message || 'write failed'));
+  if (!data || data.length === 0) {
+    throw new Error(tag + 'nothing was saved — a permissions rule blocked it, so your change was NOT stored.');
+  }
+  return data;
+}
+
 const FREQ_LABELS = {daily:'Every day',weekdays:'Every weekday',every_other_weekday:'Every other weekday',weekly:'Weekly',monthly:'Monthly',quarterly:'Quarterly',annually:'Annually'};
 // Builds a human label like "Every 2 weeks" given a frequency + interval.
 // Used by task badges where the legacy single-word label ("Weekly") would be
@@ -1829,10 +1845,10 @@ async function setTaskStatus(event, id, status, currentStatus) {
   if (inFlightTasks.has(id)) return;
   inFlightTasks.add(id);
   try {
-    const { error } = await sb.from('tasks')
-      .update({ status: target, updated_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) throw error;
+    await writeOrThrow(
+      sb.from('tasks').update({ status: target, updated_at: new Date().toISOString() }).eq('id', id),
+      'Update status'
+    );
     reloadActiveView();
   } catch (err) {
     console.error('setTaskStatus error:', err);
@@ -1910,10 +1926,10 @@ async function quickDoneTask(id) {
     if (fetchErr) throw fetchErr;
 
     const now = new Date().toISOString();
-    const { error: updateErr } = await sb.from('tasks')
-      .update({ status: 'Done', updated_at: now })
-      .eq('id', id);
-    if (updateErr) throw updateErr;
+    await writeOrThrow(
+      sb.from('tasks').update({ status: 'Done', updated_at: now }).eq('id', id),
+      'Mark task done'
+    );
 
     // If this is a recurring task, create the next instance
     if (task && task.frequency && task.frequency !== 'one_time') {
@@ -1923,11 +1939,15 @@ async function quickDoneTask(id) {
       );
       if (nextDue) {
         const { id: _id, created_at, ...rest } = task;
-        await sb.from('tasks').insert({
-          ...rest, status: 'Not Started', next_due: nextDue,
-          period: nextDue.substring(0,7).replace('-',''),
-          created_at: now, updated_at: now
-        });
+        try {
+          await writeOrThrow(sb.from('tasks').insert({
+            ...rest, status: 'Not Started', next_due: nextDue,
+            period: nextDue.substring(0,7).replace('-',''),
+            created_at: now, updated_at: now
+          }), 'Create next recurring task');
+        } catch (insErr) {
+          alert('Task was marked done, but the next recurring copy could not be created: ' + insErr.message);
+        }
       }
     }
     // Refresh whichever view we're on so My Week (and My Day for the rare
@@ -1947,10 +1967,10 @@ async function quickDoneSub(id) {
   mutateCacheStatus(id, 'sub', 'Done');
   hideMydayItem(id);
   try {
-    const { error } = await sb.from('subtasks')
-      .update({ status: 'Done', updated_at: new Date().toISOString() })
-      .eq('id', id);
-    if (error) throw error;
+    await writeOrThrow(
+      sb.from('subtasks').update({ status: 'Done', updated_at: new Date().toISOString() }).eq('id', id),
+      'Mark subtask done'
+    );
     // If this completes a workflow (all sibling subtasks are now Done),
     // close out the parent task and spawn the next recurring instance.
     await maybeCompleteParentTask(id);
@@ -2484,43 +2504,85 @@ function renderTaskItem(task, today) {
 async function toggleTask(id) {
   const task = clientTasks.find(t => t.id === id);
   if (!task) return;
+  if (inFlightTasks.has(id)) return;          // ignore extra clicks while saving
+  inFlightTasks.add(id);
   const newStatus = task.status === 'Done' ? 'Not Started' : 'Done';
   const now = new Date().toISOString();
-  await sb.from('tasks').update({ status: newStatus, updated_at: now }).eq('id', id);
-  task.status = newStatus;
-  task.updated_at = now;
+  try {
+    // Confirm the write actually landed BEFORE changing the screen. A blocked
+    // RLS update returns success with zero rows and no error; a write abandoned
+    // by a mid-save refresh never gets here. Either way we never show a
+    // checkmark for something that wasn't stored.
+    await writeOrThrow(
+      sb.from('tasks').update({ status: newStatus, updated_at: now }).eq('id', id),
+      'Save task'
+    );
+    task.status = newStatus;
+    task.updated_at = now;
 
-  // Auto-create next instance on completion
-  if (newStatus === 'Done' && task.frequency && task.frequency !== 'daily' && task.frequency !== 'weekdays' && task.frequency !== 'every_other_weekday') {
-    const nextDue = computeNextDue(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || now.split('T')[0], task.frequency_interval || 1);
-    const { id: _id, created_at, ...rest } = task;
-    await sb.from('tasks').insert({ ...rest, status: 'Not Started', next_due: nextDue, period: nextDue.substring(0,7), created_at: now, updated_at: now });
+    // Auto-create next instance on completion
+    if (newStatus === 'Done' && task.frequency && task.frequency !== 'daily' && task.frequency !== 'weekdays' && task.frequency !== 'every_other_weekday') {
+      const nextDue = computeNextDue(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || now.split('T')[0], task.frequency_interval || 1);
+      const { id: _id, created_at, ...rest } = task;
+      try {
+        await writeOrThrow(
+          sb.from('tasks').insert({ ...rest, status: 'Not Started', next_due: nextDue, period: nextDue.substring(0,7), created_at: now, updated_at: now }),
+          'Create next recurring task'
+        );
+      } catch (insErr) {
+        alert('Task was saved, but the next recurring copy could not be created: ' + insErr.message);
+      }
+    }
+    renderTasks();
+  } catch (err) {
+    console.error('toggleTask error:', err);
+    alert("Couldn't save this task — " + (err.message || 'please try again.') + "\n\nNothing was changed. If this keeps happening, let Ed know.");
+    renderTasks();   // re-render from unchanged state so the box reflects reality
+  } finally {
+    inFlightTasks.delete(id);
   }
-  renderTasks();
 }
 
 async function toggleSub(id) {
   const sub = clientSubtasks.find(s => s.id === id);
   if (!sub) return;
+  if (inFlightSubs.has(id)) return;
+  inFlightSubs.add(id);
   const newStatus = sub.status === 'Done' ? 'Not Started' : 'Done';
-  await sb.from('subtasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id);
-  sub.status = newStatus;
-  if (newStatus === 'Done') {
-    // Shared logic: if all siblings are Done, mark parent Done + spawn next
-    // recurring instance (with subtasks copied across).
-    await maybeCompleteParentTask(id);
-    // Refresh the in-memory snapshot so the UI reflects DB state. We had a
-    // bug where parent.status was updated locally but the new spawned task
-    // didn't appear until a full reload.
-    await loadTasks(currentClientId);
-    return;
+  try {
+    await writeOrThrow(
+      sb.from('subtasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id),
+      'Save subtask'
+    );
+    sub.status = newStatus;
+    if (newStatus === 'Done') {
+      // Shared logic: if all siblings are Done, mark parent Done + spawn next
+      // recurring instance (with subtasks copied across).
+      await maybeCompleteParentTask(id);
+      // Refresh the in-memory snapshot so the UI reflects DB state. We had a
+      // bug where parent.status was updated locally but the new spawned task
+      // didn't appear until a full reload.
+      await loadTasks(currentClientId);
+      return;
+    }
+    renderTasks();
+  } catch (err) {
+    console.error('toggleSub error:', err);
+    alert("Couldn't save this subtask — " + (err.message || 'please try again.') + "\n\nNothing was changed.");
+    renderTasks();
+  } finally {
+    inFlightSubs.delete(id);
   }
-  renderTasks();
 }
 
 async function deleteTask(id) {
   if (!confirm('Delete this task and all its subtasks?')) return;
-  await sb.from('tasks').delete().eq('id', id);
+  try {
+    await writeOrThrow(sb.from('tasks').delete().eq('id', id), 'Delete task');
+  } catch (err) {
+    alert("Couldn't delete this task — " + (err.message || 'please try again.'));
+    return;
+  }
   clientTasks = clientTasks.filter(t => t.id !== id);
   clientSubtasks = clientSubtasks.filter(s => s.task_id !== id);
   renderTasks();
@@ -2533,7 +2595,12 @@ async function deleteTaskFromModal() {
   const id = document.getElementById('tmTaskId').value;
   if (!id) return;
   if (!confirm('Delete this task and all its subtasks? This cannot be undone.')) return;
-  await sb.from('tasks').delete().eq('id', id);
+  try {
+    await writeOrThrow(sb.from('tasks').delete().eq('id', id), 'Delete task');
+  } catch (err) {
+    alert("Couldn't delete this task — " + (err.message || 'please try again.'));
+    return;
+  }
   clientTasks = clientTasks.filter(t => t.id !== id);
   clientSubtasks = clientSubtasks.filter(s => s.task_id !== id);
   closeModal('taskModal');
@@ -2690,7 +2757,12 @@ async function saveTask() {
 
   let savedId = taskId;
   if (taskId) {
-    await sb.from('tasks').update(taskData).eq('id', taskId);
+    try {
+      await writeOrThrow(sb.from('tasks').update(taskData).eq('id', taskId), 'Save task changes');
+    } catch (err) {
+      alert("Couldn't save task changes — " + (err.message || 'please try again.') + "\n\nNothing was changed.");
+      return;
+    }
     await sb.from('subtasks').delete().eq('task_id', taskId);
   } else {
     taskData.status = 'Not Started';
@@ -2981,7 +3053,12 @@ async function sendMessage() {
   let imageUrl = null;
   if (currentImgFile) imageUrl = await uploadMsgImage(currentImgFile, `client-${currentClientId}`);
 
-  await sb.from('messages').insert({ client_id: currentClientId, author, body: body || '📷 Image', image_url: imageUrl, is_team: true });
+  try {
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || '📷 Image', image_url: imageUrl, is_team: true }), 'Send message');
+  } catch (err) {
+    alert("Couldn't send your message — " + (err.message || 'please try again.') + "\n\nIt was not posted, so your text is still here to retry.");
+    return;
+  }
   document.getElementById('msgInput').value = '';
   clearImg();
 
@@ -3039,7 +3116,12 @@ async function loadTeamMessages() {
 }
 
 async function clearTeamNote(id) {
-  await sb.from('team_messages').update({ cleared: true }).eq('id', id);
+  try {
+    await writeOrThrow(sb.from('team_messages').update({ cleared: true }).eq('id', id), 'Clear note');
+  } catch (err) {
+    alert("Couldn't clear this note — " + (err.message || 'please try again.'));
+    return;
+  }
   document.getElementById('tmsg_' + id)?.remove();
   const list = document.getElementById('teamMsgList');
   if (!list.querySelector('.msg-item')) {
