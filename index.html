@@ -906,8 +906,49 @@ function withTimeout(promise, ms) {
 // to return the affected rows via .select() and treat "no rows" as a failure.
 // Throws a readable Error on either a real error or a zero-row no-op.
 async function writeOrThrow(query, label) {
-  const { data, error } = await query.select();
   const tag = label ? label + ': ' : '';
+  // withTimeout guards against a Supabase call that hangs forever. The first
+  // write of a cold session can otherwise stall with no error AND no success,
+  // leaving the screen optimistically updated while nothing is saved — exactly
+  // the "it disappears but a refresh brings it back" bug. We don't auto-retry
+  // here because this path also runs INSERTs, where a blind retry could create
+  // a duplicate; idempotent status writes use writeWithRetry below instead.
+  let res;
+  try {
+    res = await withTimeout(query.select(), 12_000);
+  } catch (e) {
+    if (e && e.code === 'TIMEOUT') {
+      throw new Error(tag + 'the server did not respond, so your change was NOT saved. Please try again.');
+    }
+    throw (e instanceof Error ? e : new Error(tag + ((e && e.message) || 'write failed')));
+  }
+  const { data, error } = res;
+  if (error) throw new Error(tag + (error.message || 'write failed'));
+  if (!data || data.length === 0) {
+    throw new Error(tag + 'nothing was saved — a permissions rule blocked it, so your change was NOT stored.');
+  }
+  return data;
+}
+
+// Idempotent status writes (Done / Not Started / In Progress) go through this:
+// it times out a hung first attempt and RETRIES once on the now-warm connection,
+// so a cold click still saves on the first try instead of silently vanishing.
+// Retrying is safe because re-applying the same status is a no-op. Each attempt
+// builds a FRESH query via the factory — a Supabase query builder can't be
+// awaited twice.
+async function writeWithRetry(buildQuery, label, timeoutMs = 8_000) {
+  const tag = label ? label + ': ' : '';
+  let res;
+  try {
+    res = await withTimeout(buildQuery().select(), timeoutMs);
+  } catch (e) {
+    if (e && e.code === 'TIMEOUT') {
+      res = await withTimeout(buildQuery().select(), timeoutMs); // warm retry
+    } else {
+      throw (e instanceof Error ? e : new Error(tag + ((e && e.message) || 'write failed')));
+    }
+  }
+  const { data, error } = res;
   if (error) throw new Error(tag + (error.message || 'write failed'));
   if (!data || data.length === 0) {
     throw new Error(tag + 'nothing was saved — a permissions rule blocked it, so your change was NOT stored.');
@@ -1923,8 +1964,8 @@ async function setTaskStatus(event, id, status, currentStatus) {
   if (inFlightTasks.has(id)) return;
   inFlightTasks.add(id);
   try {
-    await writeOrThrow(
-      sb.from('tasks').update({ status: target, updated_at: new Date().toISOString() }).eq('id', id),
+    await writeWithRetry(
+      () => sb.from('tasks').update({ status: target, updated_at: new Date().toISOString() }).eq('id', id),
       'Update status'
     );
     reloadActiveView();
@@ -1966,12 +2007,10 @@ async function cycleSubStatus(id) {
     inFlightSubs.add(id);
     mutateCacheStatus(id, 'sub', 'In Progress');
     try {
-      const { data, error } = await sb.from('subtasks')
-        .update({ status: 'In Progress', updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
+      const data = await writeWithRetry(
+        () => sb.from('subtasks').update({ status: 'In Progress', updated_at: new Date().toISOString() }).eq('id', id),
+        'Update subtask status'
+      );
       if (!data) throw new Error('Update returned no row — likely an RLS policy is blocking it.');
     } catch (err) {
       console.error('cycleSubStatus error:', err);
@@ -1999,13 +2038,23 @@ async function quickDoneTask(id) {
 
   try {
     // Fetch the full task so we have all frequency info, even if we're on My Day
-    // and clientTasks doesn't contain this task.
-    const { data: task, error: fetchErr } = await sb.from('tasks').select('*').eq('id', id).single();
+    // and clientTasks doesn't contain this task. Timeout + one retry so a cold
+    // first read can't hang here and strand the optimistic UI.
+    let task, fetchErr;
+    try {
+      ({ data: task, error: fetchErr } = await withTimeout(
+        sb.from('tasks').select('*').eq('id', id).single(), 8_000));
+    } catch (e) {
+      if (e && e.code === 'TIMEOUT') {
+        ({ data: task, error: fetchErr } = await withTimeout(
+          sb.from('tasks').select('*').eq('id', id).single(), 8_000));
+      } else { throw e; }
+    }
     if (fetchErr) throw fetchErr;
 
     const now = new Date().toISOString();
-    await writeOrThrow(
-      sb.from('tasks').update({ status: 'Done', updated_at: now }).eq('id', id),
+    await writeWithRetry(
+      () => sb.from('tasks').update({ status: 'Done', updated_at: now }).eq('id', id),
       'Mark task done'
     );
 
@@ -2045,8 +2094,8 @@ async function quickDoneSub(id) {
   mutateCacheStatus(id, 'sub', 'Done');
   hideMydayItem(id);
   try {
-    await writeOrThrow(
-      sb.from('subtasks').update({ status: 'Done', updated_at: new Date().toISOString() }).eq('id', id),
+    await writeWithRetry(
+      () => sb.from('subtasks').update({ status: 'Done', updated_at: new Date().toISOString() }).eq('id', id),
       'Mark subtask done'
     );
     // If this completes a workflow (all sibling subtasks are now Done),
@@ -2591,8 +2640,8 @@ async function toggleTask(id) {
     // RLS update returns success with zero rows and no error; a write abandoned
     // by a mid-save refresh never gets here. Either way we never show a
     // checkmark for something that wasn't stored.
-    await writeOrThrow(
-      sb.from('tasks').update({ status: newStatus, updated_at: now }).eq('id', id),
+    await writeWithRetry(
+      () => sb.from('tasks').update({ status: newStatus, updated_at: now }).eq('id', id),
       'Save task'
     );
     task.status = newStatus;
@@ -2628,8 +2677,8 @@ async function toggleSub(id) {
   inFlightSubs.add(id);
   const newStatus = sub.status === 'Done' ? 'Not Started' : 'Done';
   try {
-    await writeOrThrow(
-      sb.from('subtasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id),
+    await writeWithRetry(
+      () => sb.from('subtasks').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', id),
       'Save subtask'
     );
     sub.status = newStatus;
