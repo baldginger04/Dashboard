@@ -2060,11 +2060,12 @@ async function quickDoneTask(id) {
 
     // If this is a recurring task, create the next instance
     if (task && task.frequency && task.frequency !== 'one_time') {
-      const nextDue = computeNextDue(
+      const nextDue = computeNextDueFuture(
         task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month,
         task.next_due || tzToday(), task.frequency_interval || 1
       );
-      if (nextDue) {
+      // Skip if an open copy already exists — prevents breeding duplicates.
+      if (nextDue && !(await openInstanceExists(task.client_id, task.title))) {
         const { id: _id, created_at, ...rest } = task;
         try {
           await writeOrThrow(sb.from('tasks').insert({
@@ -2167,11 +2168,12 @@ async function maybeCompleteParentTask(subtaskId) {
   // with all its subtasks reset to Not Started — handled by the subtask copy
   // logic below.
   if (task.frequency && task.frequency !== 'one_time') {
-    const nextDue = computeNextDue(
+    const nextDue = computeNextDueFuture(
       task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month,
       task.next_due || tzToday(), task.frequency_interval || 1
     );
-    if (nextDue) {
+    const dupeExists = await openInstanceExists(task.client_id, task.title);
+    if (nextDue && !dupeExists) {
       const { id: _id, created_at, ...rest } = task;
       const { data: newTask } = await sb.from('tasks').insert({
         ...rest, status: 'Not Started', next_due: nextDue,
@@ -2272,7 +2274,33 @@ function computeNextDue(freq, fDay, fDow, fMonth, fromDate, interval) {
   return toYmd();
 }
 
-// ── CLIENT DETAIL ────────────────────────────────────────
+// Like computeNextDue, but guarantees the result is strictly AFTER today. When a
+// recurring task is overdue, a single interval step can still land on or before
+// today — and that spawns a "due now" copy that reappears the instant you
+// complete the task, breeding duplicates. We step forward until we reach the
+// next occurrence that hasn't happened yet. The guard caps the loop so a bad
+// frequency value can never spin forever.
+function computeNextDueFuture(freq, fDay, fDow, fMonth, fromDate, interval) {
+  const today = tzToday();
+  let due = computeNextDue(freq, fDay, fDow, fMonth, fromDate, interval);
+  let guard = 0;
+  while (due && due <= today && guard++ < 600) {
+    due = computeNextDue(freq, fDay, fDow, fMonth, due, interval);
+  }
+  return due;
+}
+
+// Belt-and-suspenders against duplicate recurring copies: returns true if the
+// client already has an open (non-Done) task with this exact title, so the
+// respawn logic can skip creating another one.
+async function openInstanceExists(clientId, title) {
+  try {
+    const { data } = await sb.from('tasks')
+      .select('id').eq('client_id', clientId).eq('title', title)
+      .neq('status', 'Done').limit(1);
+    return !!(data && data.length);
+  } catch { return false; }
+}
 async function openClient(id) {
   currentClientId = id;
   const c = allClients.find(x => x.id === id);
@@ -2649,15 +2677,17 @@ async function toggleTask(id) {
 
     // Auto-create next instance on completion
     if (newStatus === 'Done' && task.frequency && task.frequency !== 'daily' && task.frequency !== 'weekdays' && task.frequency !== 'every_other_weekday') {
-      const nextDue = computeNextDue(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || now.split('T')[0], task.frequency_interval || 1);
-      const { id: _id, created_at, ...rest } = task;
-      try {
-        await writeOrThrow(
-          sb.from('tasks').insert({ ...rest, status: 'Not Started', next_due: nextDue, period: nextDue.substring(0,7), created_at: now, updated_at: now }),
-          'Create next recurring task'
-        );
-      } catch (insErr) {
-        alert('Task was saved, but the next recurring copy could not be created: ' + insErr.message);
+      const nextDue = computeNextDueFuture(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || now.split('T')[0], task.frequency_interval || 1);
+      if (nextDue && !(await openInstanceExists(task.client_id, task.title))) {
+        const { id: _id, created_at, ...rest } = task;
+        try {
+          await writeOrThrow(
+            sb.from('tasks').insert({ ...rest, status: 'Not Started', next_due: nextDue, period: nextDue.substring(0,7), created_at: now, updated_at: now }),
+            'Create next recurring task'
+          );
+        } catch (insErr) {
+          alert('Task was saved, but the next recurring copy could not be created: ' + insErr.message);
+        }
       }
     }
     renderTasks();
