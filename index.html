@@ -2696,6 +2696,13 @@ function openTaskModal(clientId, category, taskId) {
   document.getElementById('tmNextDue').value = tzToday();
   document.getElementById('tmClientId').value = clientId || currentClientId || '';
   document.getElementById('tmTaskId').value = taskId || '';
+  // Default the Sequential toggle ON for new tasks. In edit mode this is
+  // overridden below to reflect the task's REAL chain. Previously it was never
+  // set here, so the checkbox kept its state from the prior modal open —
+  // editing any task while the toggle was (stale) unchecked silently rebuilt
+  // its subtasks with blocked_by=null, destroying the chain and dumping every
+  // step into My Day at once.
+  document.getElementById('tmSeq').checked = true;
   if (category) document.getElementById('tmCategory').value = category;
 
   // Delete button only appears in edit mode (taskId present). Reset to hidden
@@ -2730,6 +2737,11 @@ function openTaskModal(clientId, category, taskId) {
         if (task.frequency_month) document.getElementById('freqMonth').value = task.frequency_month;
       }
       clientSubtasks.filter(s => s.task_id === taskId).sort((a,b) => a.sort_order - b.sort_order).forEach(s => addSubRow(s.title, s.assigned_to));
+      // Reflect the task's REAL chain state: it's sequential iff at least one
+      // of its subtasks is blocked by another. This stops a save from silently
+      // flipping a sequential chain to parallel (or vice-versa).
+      const theseSubs = clientSubtasks.filter(s => s.task_id === taskId);
+      document.getElementById('tmSeq').checked = theseSubs.some(s => s.blocked_by);
     }
   } else {
     document.getElementById('taskModalTitle').textContent = 'Add Task';
