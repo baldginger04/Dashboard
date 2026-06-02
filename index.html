@@ -227,8 +227,10 @@
     .myday-sort{display:flex;align-items:center;gap:8px;margin-bottom:1rem;flex-wrap:wrap}
     .sort-btn{padding:5px 14px;border-radius:20px;font-size:12px;border:1px solid var(--border);background:white;color:var(--text2);cursor:pointer;transition:all .15s;font-family:'DM Sans',sans-serif}
     .sort-btn.active{background:var(--accent);color:white;border-color:var(--accent)}
-    /* MY DAY — 2-column Kanban (Open | In Progress) */
-    .myday-kanban{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;align-items:start}
+    /* MY DAY — Kanban (Open | In Progress | Waiting on Client | Stuck).
+       auto-fit + minmax keeps each column a comfortable width and wraps to
+       fewer columns per row on narrow screens instead of crushing all four. */
+    .myday-kanban{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;align-items:start}
     .myday-col{background:#fafaf8;border:1px solid var(--border);border-radius:10px;padding:10px;min-height:120px}
     .myday-col-hdr{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:.5rem;display:flex;align-items:center;gap:8px;padding:0 4px}
     .myday-col-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -1639,6 +1641,7 @@ function myweekItem(t, colDateStr) {
   const menuId = `week-${t.id}-${colDateStr || 'x'}`;
   const statusMenu = t.type === 'task' && !isViewingAs() ? `
     <div class="status-menu" id="statusMenu-${menuId}">
+      <div class="status-menu-item ${t.status === 'In Progress' ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','In Progress','${t.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
       <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
     </div>` : '';
@@ -1715,14 +1718,14 @@ function renderMyDay(tasks, subs, today) {
     return 0;
   });
 
-  // Group into 2 Kanban columns by status. Done tasks disappear immediately
+  // Group into 4 Kanban columns by status. Done tasks disappear immediately
   // (recurring tasks repopulate on next due date; one-time tasks are gone for good).
-  // Waiting on Client / Stuck tasks live in the Open column — they aren't being
-  // actively worked on (so they don't belong In Progress), but they are still
-  // outstanding (so they shouldn't be hidden). The colored pill on each card
-  // makes the special status obvious.
+  // Waiting on Client and Stuck now get their own columns so they don't hide
+  // among the Open items. Open holds Not Started / no-status tasks.
   const inProgress = all.filter(t => t.status === 'In Progress');
-  const open = all.filter(t => t.status !== 'In Progress' && t.status !== 'Done');
+  const waiting    = all.filter(t => t.status === 'Waiting on Client');
+  const stuck      = all.filter(t => t.status === 'Stuck');
+  const open       = all.filter(t => !['In Progress','Waiting on Client','Stuck','Done'].includes(t.status));
 
   let html = '';
   if (!all.length) {
@@ -1736,20 +1739,22 @@ function renderMyDay(tasks, subs, today) {
       <div class="all-caught-up-rotator">${msgsHtml}</div>
     </div>`;
   } else {
-    html = `<div class="myday-kanban">
+    const mydayCol = (label, dot, items) => `
       <div class="myday-col">
-        <div class="myday-col-hdr"><span class="myday-col-dot" style="background:#999"></span>Open <span class="myday-col-count">${open.length}</span></div>
+        <div class="myday-col-hdr"><span class="myday-col-dot" style="background:${dot}"></span>${label} <span class="myday-col-count">${items.length}</span></div>
         <div class="myday-col-body">
-          ${open.length ? open.map(t => mydayItem(t, today)).join('') : '<div class="myday-col-empty">No open tasks</div>'}
+          ${items.map(t => mydayItem(t, today)).join('')}
         </div>
-      </div>
-      <div class="myday-col">
-        <div class="myday-col-hdr"><span class="myday-col-dot" style="background:var(--accent)"></span>In Progress <span class="myday-col-count">${inProgress.length}</span></div>
-        <div class="myday-col-body">
-          ${inProgress.length ? inProgress.map(t => mydayItem(t, today)).join('') : '<div class="myday-col-empty">Nothing in progress</div>'}
-        </div>
-      </div>
-    </div>`;
+      </div>`;
+    // Only show a column if it has something in it — keeps the board uncluttered.
+    // (The all-empty case is handled above by the "All caught up" state.)
+    const cols = [
+      open.length       ? mydayCol('Open', '#999', open) : '',
+      inProgress.length ? mydayCol('In Progress', 'var(--accent)', inProgress) : '',
+      waiting.length    ? mydayCol('Waiting on Client', '#f59e0b', waiting) : '',
+      stuck.length      ? mydayCol('Stuck', 'var(--red)', stuck) : '',
+    ].filter(Boolean).join('');
+    html = `<div class="myday-kanban">${cols}</div>`;
   }
   document.getElementById('mydayContent').innerHTML = html;
   // Kick off the rotator if we just rendered the empty state. If we rendered
@@ -1798,6 +1803,7 @@ function mydayItem(t, today) {
   // Hidden entirely while impersonating — view-as is read-only.
   const statusMenu = t.type === 'task' && !isViewingAs() ? `
     <div class="status-menu" id="statusMenu-${t.id}">
+      <div class="status-menu-item ${t.status === 'In Progress' ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','In Progress','${t.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
       <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
     </div>` : '';
