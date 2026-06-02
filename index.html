@@ -795,6 +795,84 @@
 </div>
 
 <script>
+// ── PERF DIAGNOSTIC ──────────────────────────────────────────────────────────
+// Always loaded, shows nothing unless turned on. TURN ON: add #debug to the
+// Triple URL and reload, or press Alt+Shift+D. It times every Supabase request,
+// tracks how many are in flight at once (browsers cap a site at ~6 simultaneous
+// connections — hitting that is the prime suspect for slow saves), and lists the
+// most recent calls with durations. Patches fetch BEFORE the client is created.
+(function () {
+  let panel = null;
+  const DBG = {
+    inFlight: 0, peak: 0, slow: 0, errors: 0, calls: [],
+    enabled: /debug/.test(location.hash) || /debug/.test(location.search) || localStorage.getItem('triple-debug') === '1'
+  };
+  if (DBG.enabled) localStorage.setItem('triple-debug', '1');
+  window.__perf = DBG;
+  window.__perfOff = function () { DBG.enabled = false; localStorage.setItem('triple-debug', '0'); if (panel) { panel.remove(); panel = null; } };
+
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function (...args) {
+    const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+    if (!url.includes('supabase.co')) return origFetch(...args);
+    const init = args[1] || (typeof args[0] === 'object' ? args[0] : null);
+    const method = ((init && init.method) || 'GET').toUpperCase();
+    const t0 = performance.now();
+    DBG.inFlight++; if (DBG.inFlight > DBG.peak) DBG.peak = DBG.inFlight;
+    render();
+    const done = function (status) {
+      const ms = Math.round(performance.now() - t0);
+      if (ms > 1000) DBG.slow++;
+      DBG.calls.unshift({ label: shortLabel(url, method), ms: ms, status: status });
+      if (DBG.calls.length > 12) DBG.calls.pop();
+      DBG.inFlight--; render();
+    };
+    return origFetch(...args).then(
+      function (res) { done(res.status); return res; },
+      function (err) { DBG.errors++; done('ERR'); throw err; }
+    );
+  };
+
+  function shortLabel(url, method) {
+    const m = url.match(/\/rest\/v1\/([^?]+)/);
+    if (m) return method + ' ' + m[1];
+    if (url.includes('/auth/')) return 'AUTH';
+    if (url.includes('/storage/')) return 'STORAGE';
+    if (url.includes('/functions/')) return 'FUNCTION';
+    if (url.includes('/realtime/')) return 'REALTIME';
+    return method;
+  }
+
+  function render() {
+    if (!DBG.enabled || !document.body) return;
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:99999;width:300px;max-height:46vh;overflow:auto;background:rgba(17,17,20,.95);color:#e6e6e6;font:11px/1.45 ui-monospace,Menlo,monospace;border:1px solid #333;border-radius:8px;padding:8px 10px;box-shadow:0 6px 18px rgba(0,0,0,.45)';
+      document.body.appendChild(panel);
+    }
+    const limit = DBG.inFlight >= 6 ? ' <span style="color:#ff6b6b">\u26a0 AT LIMIT</span>' : '';
+    panel.innerHTML =
+      '<div style="font-weight:700;margin-bottom:4px">\u2699 Triple perf'
+        + '<span onclick="window.__perfOff()" style="float:right;cursor:pointer;opacity:.7">\u2715</span></div>'
+      + '<div>in-flight: <b>' + DBG.inFlight + '</b>' + limit + '\u3000peak: ' + DBG.peak + '</div>'
+      + '<div>slow &gt;1s: <b>' + DBG.slow + '</b>\u3000errors: ' + DBG.errors + '</div>'
+      + '<hr style="border:0;border-top:1px solid #333;margin:5px 0">'
+      + DBG.calls.map(function (c) {
+          const col = c.status === 'ERR' ? '#ff6b6b' : c.ms > 1500 ? '#ffb347' : c.ms > 600 ? '#ffe066' : '#7dd97d';
+          return '<div style="display:flex;justify-content:space-between;gap:8px"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.85">' + c.label + '</span><span style="color:' + col + ';font-weight:600">' + c.ms + 'ms</span></div>';
+        }).join('');
+  }
+
+  window.addEventListener('keydown', function (e) {
+    if (e.altKey && e.shiftKey && (e.key === 'D' || e.key === 'd')) {
+      e.preventDefault();
+      DBG.enabled = !DBG.enabled;
+      localStorage.setItem('triple-debug', DBG.enabled ? '1' : '0');
+      if (!DBG.enabled && panel) { panel.remove(); panel = null; } else render();
+    }
+  });
+})();
+
 const SB_URL = 'https://evfemokwtofbarjeezhu.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2ZmVtb2t3dG9mYmFyamVlemh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NDUxMjQsImV4cCI6MjA5NTEyMTEyNH0.B9OSeB9CEP0TX80dJWpBPAIP6IEhYIzYlYKe4WL-6B0';
 const sb = supabase.createClient(SB_URL, SB_KEY, {
