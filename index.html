@@ -2834,6 +2834,22 @@ async function saveTask() {
 
   if (!title) { alert('Please enter a task title'); return; }
 
+  // Guard: saving 2+ steps with Sequential OFF makes every step appear at once
+  // (blocked_by null on all). That's almost never intended, and on an EDIT it
+  // would wipe an existing chain. Confirm before proceeding — this runs before
+  // any write, so Cancel leaves the task and its subtasks completely untouched.
+  const validSubCount = subRows.filter(r => r && r.title.trim()).length;
+  if (!seq && validSubCount >= 2) {
+    const proceedParallel = confirm(
+      `"Sequential" is turned OFF, so all ${validSubCount} steps will show at once ` +
+      `instead of unlocking one after another.\n\n` +
+      `Most multi-step tasks should be sequential.\n\n` +
+      `• Cancel — go back and turn Sequential on\n` +
+      `• OK — save them as parallel anyway`
+    );
+    if (!proceedParallel) return;
+  }
+
   const taskData = {
     client_id: clientId, category, title,
     assigned_to: assigned || null, notes: notes || null,
