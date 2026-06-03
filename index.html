@@ -970,6 +970,15 @@ function freqLabel(freq, interval) {
 }
 const CATS = ['General','Payroll','Tax','Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close','Payables','Additional Items'];
 
+// Month-end close categories. These tasks are driven by the close LIFECYCLE,
+// not a calendar cadence: they appear only while a client's close is "In
+// Progress", they never auto-respawn when completed, and they're reset to
+// "Not Started" when a close starts. When ALL of a client's close tasks are
+// Done, the close auto-completes (close_status -> Done). Everything in any
+// OTHER category keeps recurring on its normal cadence, untouched.
+const CLOSE_CATS = ['Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close'];
+const isCloseCat = (cat) => CLOSE_CATS.includes(cat);
+
 // Messages that rotate under the "All caught up!" headline on My Day when there's
 // nothing pending. Add/edit freely — the rotator auto-cycles all of them.
 const ALL_CAUGHT_UP_MESSAGES = [
@@ -1113,25 +1122,40 @@ async function startCloseForAllClients() {
   const count = allClients.length;
   if (count === 0) return;
   const ok = confirm(
-    `Reset all ${count} clients to "Not Started"?\n\n` +
-    `This kicks off a new close cycle for everyone. Any clients currently ` +
-    `marked Done or In Progress will go back to Not Started. Can't be undone ` +
-    `from this button — you'd have to manually flip statuses back.`
+    `Start the month-end close for all ${count} clients?\n\n` +
+    `This sets everyone to "In Progress" and resets the close checklist ` +
+    `(Account Reconciliation, Transaction Review, Payee/Entity Review, ` +
+    `Final Review, Pre-Close) back to Not Started so it's fresh for the new ` +
+    `cycle. Recurring non-close tasks are NOT affected. Can't be undone from ` +
+    `this button.`
   );
   if (!ok) return;
 
   const btn = document.getElementById('startCloseAllBtn');
-  if (btn) { btn.disabled = true; btn.textContent = '⏳ Resetting…'; }
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Starting…'; }
 
-  // Supabase requires UPDATE to have a WHERE clause; .not('id','is',null)
-  // matches every row (id is the PK and never null).
-  const { error } = await sb
-    .from('clients')
-    .update({ close_status: 'Not Started' })
-    .not('id', 'is', null);
-
-  if (error) {
-    alert("Couldn't reset clients: " + error.message);
+  try {
+    const stamp = new Date().toISOString();
+    // 1) Everyone -> In Progress, which is the state in which close tasks appear.
+    //    .not('id','is',null) matches every row (id is the PK, never null).
+    const { error: cErr } = await sb.from('clients')
+      .update({ close_status: 'In Progress' }).not('id', 'is', null);
+    if (cErr) throw cErr;
+    // 2) Reset every close-category task to Not Started for a fresh checklist.
+    const { error: tErr } = await sb.from('tasks')
+      .update({ status: 'Not Started', updated_at: stamp }).in('category', CLOSE_CATS);
+    if (tErr) throw tErr;
+    // 3) Reset the subtasks of those close tasks too. Chunk the id list so a
+    //    long .in() can't blow past URL length limits.
+    const { data: closeTaskRows } = await sb.from('tasks').select('id').in('category', CLOSE_CATS);
+    const closeIds = (closeTaskRows || []).map(r => r.id);
+    for (let i = 0; i < closeIds.length; i += 100) {
+      await sb.from('subtasks')
+        .update({ status: 'Not Started', updated_at: stamp })
+        .in('task_id', closeIds.slice(i, i + 100));
+    }
+  } catch (error) {
+    alert("Couldn't start the close: " + (error.message || 'please try again.'));
     if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Start Close for All Clients'; }
     return;
   }
@@ -1390,18 +1414,19 @@ async function loadMyDay() {
     // clients. We need it to gate the three review tasks (P&L, Balance Sheet,
     // Statement of Cash Flows) — those should be hidden until "Ready for
     // Review" is Done for the same client.
-    const [tasksRes, subsRes, allSubsRes, reviewGateRes] = await Promise.all([
+    const [tasksRes, subsRes, allSubsRes, reviewGateRes, closeRes] = await Promise.all([
       sb.from('tasks')
         .select('*, clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done')
         .order('next_due'),
       sb.from('subtasks')
-        .select('*, tasks(title,next_due,client_id), clients(name)')
+        .select('*, tasks(title,next_due,client_id,category), clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done'),
       sb.from('subtasks').select('id,task_id,status,blocked_by'),
       sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
+      sb.from('clients').select('id,close_status'),
     ]);
     if (tasksRes.error) throw tasksRes.error;
     if (subsRes.error)  throw subsRes.error;
@@ -1409,6 +1434,9 @@ async function loadMyDay() {
     const subtasks = subsRes.data;
     const allSubs = allSubsRes.data || [];
     const reviewGates = reviewGateRes.data || [];
+    // client_id -> close_status, so close tasks can be gated on the close lifecycle.
+    const closeStatus = Object.fromEntries((closeRes.data || []).map(c => [c.id, c.close_status]));
+    const closeActive = (clientId) => closeStatus[clientId] === 'In Progress';
 
     // Apply the Ready-for-Review gate: drop tasks whose title is one of the
     // three review documents AND whose client has an incomplete gate.
@@ -1420,6 +1448,8 @@ async function loadMyDay() {
 
     const myTasks = (tasks || []).filter(t => {
       if (parentTaskIds.has(t.id)) return false;
+      // Close tasks ignore cadence — they appear only during an active close.
+      if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
       return t.next_due <= today;
     });
@@ -1429,6 +1459,8 @@ async function loadMyDay() {
       const blocker = allSubs.find(x => x.id === s.blocked_by);
       return !blocker || blocker.status === 'Done';
     }).filter(s => {
+      // Subtasks of a close task follow the close lifecycle, not the due date.
+      if (isCloseCat(s.tasks?.category)) return closeActive(s.tasks?.client_id);
       const taskDue = s.tasks?.next_due;
       if (!taskDue) return true;
       return taskDue <= today;
@@ -1464,19 +1496,20 @@ async function loadMyWeek() {
 
   try {
     // Fire all queries in parallel
-    const [tasksRes, subsRes, allSubsRes, reviewGateRes] = await Promise.all([
+    const [tasksRes, subsRes, allSubsRes, reviewGateRes, closeRes] = await Promise.all([
       sb.from('tasks')
         .select('*, clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done')
         .order('next_due'),
       sb.from('subtasks')
-        .select('*, tasks(title,next_due,client_id), clients(name)')
+        .select('*, tasks(title,next_due,client_id,category), clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done'),
       sb.from('subtasks').select('id,task_id,status,blocked_by'),
       // "Ready for Review" gate — see loadMyDay for the explanation.
       sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
+      sb.from('clients').select('id,close_status'),
     ]);
     if (tasksRes.error) throw tasksRes.error;
     if (subsRes.error)  throw subsRes.error;
@@ -1484,6 +1517,8 @@ async function loadMyWeek() {
     const subtasks = subsRes.data;
     const allSubs = allSubsRes.data || [];
     const reviewGates = reviewGateRes.data || [];
+    const closeStatus = Object.fromEntries((closeRes.data || []).map(c => [c.id, c.close_status]));
+    const closeActive = (clientId) => closeStatus[clientId] === 'In Progress';
 
     // Apply the Ready-for-Review gate
     tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
@@ -1497,6 +1532,8 @@ async function loadMyWeek() {
 
     const weekTasks = (tasks || []).filter(t => {
       if (parentTaskIds.has(t.id)) return false;
+      // Close tasks ignore cadence — they appear only during an active close.
+      if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (dailyFreqs.includes(t.frequency)) return true;
       // include overdue rolled-up to today, plus tasks due during the window
       return t.next_due && t.next_due <= weekEndStr;
@@ -1507,6 +1544,8 @@ async function loadMyWeek() {
       const blocker = allSubs.find(x => x.id === s.blocked_by);
       return !blocker || blocker.status === 'Done';
     }).filter(s => {
+      // Subtasks of a close task follow the close lifecycle, not the due date.
+      if (isCloseCat(s.tasks?.category)) return closeActive(s.tasks?.client_id);
       const taskDue = s.tasks?.next_due;
       return taskDue && taskDue <= weekEndStr;
     });
@@ -2064,8 +2103,9 @@ async function quickDoneTask(id) {
       'Mark task done'
     );
 
-    // If this is a recurring task, create the next instance
-    if (task && task.frequency && task.frequency !== 'one_time') {
+    // If this is a recurring task, create the next instance — but NOT for close
+    // tasks, which are driven by the close lifecycle rather than a cadence.
+    if (task && task.frequency && task.frequency !== 'one_time' && !isCloseCat(task.category)) {
       const nextDue = computeNextDueFuture(
         task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month,
         task.next_due || tzToday(), task.frequency_interval || 1
@@ -2084,6 +2124,8 @@ async function quickDoneTask(id) {
         }
       }
     }
+    // If this was a close task, the close may now be fully done.
+    if (task && isCloseCat(task.category)) await maybeCompleteClose(task.client_id);
     // Refresh whichever view we're on so My Week (and My Day for the rare
     // case where optimistic missed) reflects the new state.
     reloadActiveView();
@@ -2170,10 +2212,11 @@ async function maybeCompleteParentTask(subtaskId) {
     return;
   }
 
-  // If recurring, schedule the next instance. The next instance starts fresh
-  // with all its subtasks reset to Not Started — handled by the subtask copy
-  // logic below.
-  if (task.frequency && task.frequency !== 'one_time') {
+  // If recurring, schedule the next instance — but NOT for close tasks, which
+  // are driven by the close lifecycle rather than a cadence. The next instance
+  // starts fresh with all its subtasks reset to Not Started — handled by the
+  // subtask copy logic below.
+  if (task.frequency && task.frequency !== 'one_time' && !isCloseCat(task.category)) {
     const nextDue = computeNextDueFuture(
       task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month,
       task.next_due || tzToday(), task.frequency_interval || 1
@@ -2214,6 +2257,8 @@ async function maybeCompleteParentTask(subtaskId) {
       }
     }
   }
+  // If this parent was a close task, completing it may finish the whole close.
+  if (isCloseCat(task.category)) await maybeCompleteClose(task.client_id);
 }
 
 // Find the My Day/Week item containing this task or subtask check and remove it from the DOM
@@ -2441,6 +2486,9 @@ function renderUpcomingTasks() {
   const isUpcoming = t => {
     if (t.status === 'Done') return false;
     if (parentIds.has(t.id)) return false;
+    // Close tasks aren't cadence-driven, so they never show as "upcoming" —
+    // they surface in Current Tasks only while the close is In Progress.
+    if (isCloseCat(t.category)) return false;
     if (isTaskBlockedByReview(t, clientTasks)) return false;
     return t.next_due && t.next_due > today;
   };
@@ -2493,6 +2541,8 @@ function renderTasks() {
   // Only show tasks due today or overdue, or recurring tasks that are active today
   const todayDay = tzDayOfWeek(today); // 0=Sun, 6=Sat
   const isWeekday = todayDay >= 1 && todayDay <= 5;
+  // Current client's close state — close tasks show here only while In Progress.
+  const closeActive = (allClients.find(c => c.id === currentClientId) || {}).close_status === 'In Progress';
 
   function isTaskDueToday(t) {
     if (t.status === 'Done') return false; // handled by show completed toggle
@@ -2500,6 +2550,9 @@ function renderTasks() {
     // for this client yet. clientTasks is the full per-client task list, so
     // the gate task is visible in the same array.
     if (isTaskBlockedByReview(t, clientTasks)) return false;
+    // Close tasks follow the close lifecycle, not a cadence: visible only while
+    // this client's close is In Progress.
+    if (isCloseCat(t.category)) return closeActive;
     const startsOn = t.starts_on || t.next_due;
     const freq = t.frequency || 'monthly';
 
@@ -2681,8 +2734,9 @@ async function toggleTask(id) {
     task.status = newStatus;
     task.updated_at = now;
 
-    // Auto-create next instance on completion
-    if (newStatus === 'Done' && task.frequency && task.frequency !== 'daily' && task.frequency !== 'weekdays' && task.frequency !== 'every_other_weekday') {
+    // Auto-create next instance on completion — but NOT for close tasks, which
+    // follow the close lifecycle rather than a cadence.
+    if (newStatus === 'Done' && !isCloseCat(task.category) && task.frequency && task.frequency !== 'daily' && task.frequency !== 'weekdays' && task.frequency !== 'every_other_weekday') {
       const nextDue = computeNextDueFuture(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || now.split('T')[0], task.frequency_interval || 1);
       if (nextDue && !(await openInstanceExists(task.client_id, task.title))) {
         const { id: _id, created_at, ...rest } = task;
@@ -2696,6 +2750,8 @@ async function toggleTask(id) {
         }
       }
     }
+    // If this was a close task just completed, the close may now be finished.
+    if (newStatus === 'Done' && isCloseCat(task.category)) await maybeCompleteClose(task.client_id);
     renderTasks();
   } catch (err) {
     console.error('toggleTask error:', err);
@@ -3461,6 +3517,28 @@ function statusBadge(s, clickable) {
   return `<span class="badge badge-pending${extra}"${title}><span class="dot"></span>Not Started</span>`;
 }
 
+// After a close task (or its parent) is marked Done, check whether ALL of this
+// client's close-category tasks are Done. If so — and the close is currently
+// In Progress — flip the client's close to Done automatically. Non-fatal on
+// error: a missed auto-complete can always be fixed by clicking the badge.
+async function maybeCompleteClose(clientId) {
+  if (!clientId) return;
+  try {
+    const c = allClients.find(x => x.id === clientId);
+    if (c && c.close_status !== 'In Progress') return; // only auto-complete an active close
+    const { data, error } = await sb.from('tasks')
+      .select('status').eq('client_id', clientId).in('category', CLOSE_CATS);
+    if (error || !data || !data.length) return;        // no close tasks -> nothing to complete
+    if (!data.every(t => t.status === 'Done')) return; // still open close work
+    const { error: upErr } = await sb.from('clients').update({ close_status: 'Done' }).eq('id', clientId);
+    if (upErr) return;
+    if (c) c.close_status = 'Done';
+    const badge = document.getElementById('detailBadge');
+    if (badge && currentClientId === clientId) badge.innerHTML = statusBadge('Done', true);
+    filterClients();
+  } catch (e) { /* non-fatal */ }
+}
+
 // Cycle the client's close status: Not Started -> In Progress -> Done -> Not Started.
 // When moving to Done, if any tasks (or subtasks) for this client aren't done yet,
 // surface a confirm dialog so the user can decide whether to override. After a
@@ -3493,6 +3571,20 @@ async function cycleCloseStatus(clientId) {
   // Write. On error, leave UI unchanged so user can retry.
   const { error } = await sb.from('clients').update({ close_status: next }).eq('id', clientId);
   if (error) { alert("Couldn't update status: " + error.message); return; }
+
+  // Starting a close (-> In Progress) gives this client a fresh close checklist:
+  // reset its close-category tasks (and their subtasks) to Not Started so the
+  // team works a clean list this cycle.
+  if (next === 'In Progress') {
+    const stamp = new Date().toISOString();
+    await sb.from('tasks').update({ status: 'Not Started', updated_at: stamp })
+      .eq('client_id', clientId).in('category', CLOSE_CATS);
+    const { data: ctRows } = await sb.from('tasks').select('id').eq('client_id', clientId).in('category', CLOSE_CATS);
+    const ids = (ctRows || []).map(r => r.id);
+    if (ids.length) await sb.from('subtasks').update({ status: 'Not Started', updated_at: stamp }).in('task_id', ids);
+    // If we're viewing this client, reload so the checklist appears right away.
+    if (currentClientId === clientId) await loadTasks(clientId);
+  }
   // Patch local cache so we don't need a full reload, then re-render both views.
   c.close_status = next;
   document.getElementById('detailBadge').innerHTML = statusBadge(next, true);
