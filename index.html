@@ -1106,15 +1106,20 @@ async function init() {
     isRecovering = true;
     showResetForm();
   }
-  sb.auth.onAuthStateChange(async (event, s) => {
+  // IMPORTANT: do not call Supabase (showApp runs a DB query for the team check)
+  // directly inside this callback. supabase-js holds an internal lock while the
+  // callback runs, and a DB/auth call from inside it deadlocks — which makes
+  // signInWithPassword hang forever (the "nothing happens on click" symptom).
+  // setTimeout(…,0) lets the callback return and the lock release first, then we
+  // do the work. The INITIAL_SESSION event this fires on load also restores an
+  // existing session, so we no longer need a separate getSession() call.
+  sb.auth.onAuthStateChange((event, s) => {
     if (event === 'PASSWORD_RECOVERY') { isRecovering = true; showResetForm(); return; }
     if (isRecovering) return;            // sit on the reset form; don't enter the app
-    if (s) { currentUser = s.user; await showApp(); } else showLogin();
+    setTimeout(() => {
+      if (s) { currentUser = s.user; showApp(); } else showLogin();
+    }, 0);
   });
-  if (!isRecovering) {
-    const { data: { session } } = await sb.auth.getSession();
-    if (session) { currentUser = session.user; await showApp(); }
-  }
 }
 
 // ── Forgot / reset password ─────────────────────────────
