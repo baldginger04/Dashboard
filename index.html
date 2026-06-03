@@ -1686,7 +1686,10 @@ async function loadMyWeek() {
       // Subtasks of a close task follow the close lifecycle, not the due date.
       if (isCloseCat(s.tasks?.category)) return closeActive(s.tasks?.client_id);
       const taskDue = s.tasks?.next_due;
-      return taskDue && taskDue <= weekEndStr;
+      // Match My Day: a subtask whose parent has no due date (perpetual daily/
+      // weekday workflows) still surfaces. My Week previously dropped these.
+      if (!taskDue) return true;
+      return taskDue <= weekEndStr;
     });
 
     const totalPending = weekTasks.length + weekSubs.length;
@@ -2962,7 +2965,7 @@ async function toggleTask(id) {
         const { id: _id, created_at, ...rest } = task;
         try {
           await writeOrThrow(
-            sb.from('tasks').insert({ ...rest, status: 'Not Started', next_due: nextDue, period: nextDue.substring(0,7), created_at: now, updated_at: now }),
+            sb.from('tasks').insert({ ...rest, status: 'Not Started', next_due: nextDue, period: nextDue.substring(0,7).replace('-',''), created_at: now, updated_at: now }),
             'Create next recurring task'
           );
         } catch (insErr) {
