@@ -67,6 +67,7 @@
     .nav-item{display:flex;align-items:center;gap:10px;padding:.6rem 1.25rem;font-size:13px;color:rgba(255,255,255,.6);cursor:pointer;transition:all .15s;border-left:2px solid transparent}
     .nav-item:hover{color:white;background:rgba(255,255,255,.05)}
     .nav-item.active{color:white;border-left-color:var(--accent2);background:rgba(255,255,255,.07)}
+    .search-result:hover{border-color:var(--accent2)!important;box-shadow:0 1px 5px rgba(0,0,0,.07)}
     .nav-badge{background:var(--red);color:white;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;margin-left:auto}
     .sidebar-bottom{padding:1rem 1.25rem;border-top:1px solid rgba(255,255,255,.08)}
     .logout-btn{font-size:12px;color:rgba(255,255,255,.4);cursor:pointer;background:none;border:none;font-family:'DM Sans',sans-serif;padding:0;transition:color .15s}
@@ -454,6 +455,7 @@
           <span>📅</span> My Week <span class="nav-badge" id="myweekBadge" style="display:none">0</span>
         </div>
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients</div>
+        <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
         <div class="nav-section">Team</div>
         <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat</div>
         <div class="nav-section">Tools</div>
@@ -546,6 +548,19 @@
             <tbody id="clientsTbody"><tr><td colspan="5"><div class="empty"><span class="spinner"></span></div></td></tr></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- SEARCH TASKS (global, across all clients) -->
+      <div class="page" id="page-search">
+        <div class="page-header">
+          <div><div class="page-title">Search Tasks</div><div class="page-sub">Find any task across all clients by name</div></div>
+        </div>
+        <div style="position:relative;max-width:520px;margin-bottom:1rem">
+          <input id="globalTaskSearch" type="text" placeholder="Search task names across all clients…" autocomplete="off" oninput="onGlobalSearch(this.value)"
+            style="width:100%;padding:11px 36px 11px 14px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:white;color:var(--text)" />
+          <button id="globalSearchClear" onclick="clearGlobalSearch()" title="Clear" style="display:none;position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text3);font-size:15px;padding:2px 6px">✕</button>
+        </div>
+        <div id="globalSearchResults"><div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2.5rem;color:var(--text3)">Start typing to search tasks across every client.</div></div>
       </div>
 
       <!-- CLIENT DETAIL -->
@@ -3536,6 +3551,7 @@ function showPage(name) {
   document.getElementById('nav-' + name)?.classList.add('active');
   if (name === 'automation') { const s = localStorage.getItem('autoUrl'); if (s) document.getElementById('autoScriptUrl').value = s; }
   if (name === 'team') loadTeamMessages();
+  if (name === 'search') { const el = document.getElementById('globalTaskSearch'); if (el) setTimeout(() => el.focus(), 50); }
   if (name === 'myday') loadMyDay();
   if (name === 'myweek') loadMyWeek();
 }
@@ -3544,6 +3560,92 @@ function showTab(name) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name)?.classList.add('active');
   document.querySelectorAll('.tab').forEach(t => { if (t.getAttribute('onclick') === `showTab('${name}')`) t.classList.add('active'); });
+}
+
+// ── GLOBAL TASK SEARCH (across all clients) ──────────────
+// Searches task names across every client the user can see (RLS-scoped), so you
+// can find a task without opening its client first. Debounced; a click on a
+// result jumps to that client and pre-fills its per-client search on the task.
+let globalSearchTimer = null;
+function onGlobalSearch(v) {
+  const term = (v || '').trim();
+  const clearBtn = document.getElementById('globalSearchClear');
+  if (clearBtn) clearBtn.style.display = term ? 'block' : 'none';
+  clearTimeout(globalSearchTimer);
+  const results = document.getElementById('globalSearchResults');
+  if (term.length < 2) {
+    results.innerHTML = `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2.5rem;color:var(--text3)">${
+      term.length === 0 ? 'Start typing to search tasks across every client.' : 'Keep typing…'
+    }</div>`;
+    return;
+  }
+  globalSearchTimer = setTimeout(() => runGlobalSearch(term), 250);
+}
+
+function clearGlobalSearch() {
+  const box = document.getElementById('globalTaskSearch');
+  if (box) box.value = '';
+  onGlobalSearch('');
+}
+
+async function runGlobalSearch(term) {
+  const results = document.getElementById('globalSearchResults');
+  results.innerHTML = '<div class="empty" style="padding:2rem"><span class="spinner"></span> Searching…</div>';
+  try {
+    const { data, error } = await withTimeout(
+      sb.from('tasks')
+        .select('id,title,category,status,next_due,client_id, clients(name)')
+        .ilike('title', '%' + term + '%')
+        .order('next_due'),
+      12_000
+    );
+    if (error) throw error;
+    const rows = data || [];
+    if (!rows.length) {
+      results.innerHTML = `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2.5rem">
+        <div style="font-size:32px;margin-bottom:.75rem">🔍</div>
+        <div style="font-weight:500;color:var(--text);margin-bottom:.4rem">No tasks match “${term}”</div>
+        <div style="font-size:13px;color:var(--text3)">This searches task names across every client you can see.</div>
+      </div>`;
+      return;
+    }
+    const today = tzToday();
+    let html = `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">${rows.length} matching task${rows.length === 1 ? '' : 's'}</div>`;
+    rows.forEach(t => {
+      const done = t.status === 'Done';
+      const overdue = t.next_due && t.next_due < today && !done;
+      const dueTxt = t.next_due ? 'Due ' + fmtDue(t.next_due) : '';
+      const statusTxt = done ? 'Done' : (t.status || 'Not Started');
+      html += `<div class="search-result" onclick="openTaskFromSearch('${t.client_id}','${t.id}')"
+        style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:white;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;cursor:pointer;transition:all .12s">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:500;color:var(--text);font-size:14px">${t.title}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${t.clients?.name || 'Unknown client'} · ${t.category || 'Uncategorized'}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:12px;color:${overdue ? 'var(--red)' : 'var(--text3)'};${overdue ? 'font-weight:500' : ''}">${dueTxt}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px">${statusTxt}</div>
+        </div>
+      </div>`;
+    });
+    results.innerHTML = html;
+  } catch (err) {
+    console.error('global search error:', err);
+    results.innerHTML = `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:2rem;color:var(--red)">Search failed: ${err.message || 'please try again.'}</div>`;
+  }
+}
+
+// Open the client for a search result and pre-fill its per-client task search
+// on the task title, so the task is front-and-center when the page loads.
+async function openTaskFromSearch(clientId, taskId) {
+  await openClient(clientId);
+  const t = clientTasks.find(x => x.id === taskId);
+  const title = t ? t.title : '';
+  const box = document.getElementById('taskSearch');
+  if (box) box.value = title;
+  taskSearchTerm = (title || '').trim().toLowerCase();
+  syncTaskSearchClear();
+  renderActiveTaskView();
 }
 
 // ── HELPERS ──────────────────────────────────────────────
