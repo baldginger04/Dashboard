@@ -573,6 +573,14 @@
             <div class="sub-tab active" id="subtab-close" onclick="showTaskView('close')">Current Tasks</div>
             <div class="sub-tab" id="subtab-upcoming" onclick="showTaskView('upcoming')">Upcoming Tasks</div>
           </div>
+          <div style="margin:0 0 12px">
+            <div style="position:relative;max-width:360px">
+              <input id="taskSearch" type="text" placeholder="Search task names…" oninput="onTaskSearch(this.value)"
+                style="width:100%;padding:8px 30px 8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:white;color:var(--text)" />
+              <button id="taskSearchClear" onclick="clearTaskSearch()" title="Clear search"
+                style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;cursor:pointer;color:var(--text3);font-size:14px;padding:2px 6px">✕</button>
+            </div>
+          </div>
           <div id="taskContent"><div class="empty"><span class="spinner"></span></div></div>
         </div>
         <div class="tab-panel" id="tab-messages">
@@ -978,6 +986,15 @@ const CATS = ['General','Payroll','Tax','Account Reconciliation','Transaction Re
 // OTHER category keeps recurring on its normal cadence, untouched.
 const CLOSE_CATS = ['Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close'];
 const isCloseCat = (cat) => CLOSE_CATS.includes(cat);
+
+// Friendly due-date label, e.g. "Jun 15" (adds the year only when it isn't the
+// current year). Input is a YYYY-MM-DD string.
+function fmtDue(ymd) {
+  if (!ymd) return '';
+  const opts = { month: 'short', day: 'numeric' };
+  if (ymd.slice(0, 4) !== tzToday().slice(0, 4)) opts.year = 'numeric';
+  return tzFormatDate(ymd, opts);
+}
 
 // Messages that rotate under the "All caught up!" headline on My Day when there's
 // nothing pending. Add/edit freely — the rotator auto-cycles all of them.
@@ -1659,7 +1676,7 @@ function myweekItem(t, colDateStr) {
   else if (isWaiting) rowClass = 'is-waiting';
   else if (t.isOverdue) rowClass = 'overdue-item';
   const overdueLabel = t.isOverdue && !isWaiting && !isStuck
-    ? `<div class="week-card-overdue">${t.daysOverdue}d overdue</div>`
+    ? `<div class="week-card-overdue">Due ${fmtDue(t.due)} · ${t.daysOverdue}d overdue</div>`
     : '';
   const recurringLabel = t.freq && ['daily','weekdays','every_other_weekday'].includes(t.freq) && !t.due
     ? '<div class="week-card-meta">Recurring</div>'
@@ -1820,9 +1837,10 @@ function mydayItem(t, today) {
   else if (isWarning) rowClass = 'warning-item';
   else if (isOverdue) rowClass = 'overdue-item';
 
+  const dueDateStr = t.due ? fmtDue(t.due) : '';
   const dueLabel = !t.due ? '<span style="color:var(--text3);font-size:11px">Daily</span>' :
-    isOverdue ? `<span style="color:var(--red);font-size:11px;font-weight:500">${t.daysOverdue}d</span>` :
-    `<span style="color:var(--text3);font-size:11px">Today</span>`;
+    isOverdue ? `<span style="color:var(--red);font-size:11px;font-weight:500">Due ${dueDateStr} · ${t.daysOverdue}d</span>` :
+    `<span style="color:var(--text3);font-size:11px">Due ${dueDateStr}</span>`;
   // Click the circle → mark Done. (Subtasks still cycle through In Progress.)
   const onClick = t.type === 'task' ? `cycleTaskStatus('${t.id}')` : `cycleSubStatus('${t.id}')`;
   // Visual hint of current status on the circle
@@ -2379,6 +2397,11 @@ async function openClient(id) {
   const upEl = document.getElementById('subtab-upcoming');
   if (closeEl) closeEl.classList.add('active');
   if (upEl) upEl.classList.remove('active');
+  // Fresh client → clear any prior search.
+  taskSearchTerm = '';
+  const _ts = document.getElementById('taskSearch');
+  if (_ts) _ts.value = '';
+  syncTaskSearchClear();
   await Promise.all([loadTasks(id), loadMessages(id)]);
 }
 
@@ -2445,8 +2468,7 @@ async function loadTasks(clientId) {
     if (s.error) throw s.error;
     clientTasks = t.data || [];
     clientSubtasks = s.data || [];
-    if (taskView === 'upcoming') renderUpcomingTasks();
-    else renderTasks();
+    renderActiveTaskView();
   } catch (err) {
     // Same stale-check on the error path — don't paint an error message for
     // a client we already left.
@@ -2464,13 +2486,85 @@ async function loadTasks(clientId) {
 // 'close' (default) = current-due/overdue tasks grouped by section
 // 'upcoming' = all future tasks for this client, sorted by next_due ascending
 let taskView = 'close';
+let taskSearchTerm = '';
 
 function showTaskView(view) {
   taskView = view;
+  // Switching sub-tabs clears an active search so the tab shows its normal list.
+  taskSearchTerm = '';
+  const box = document.getElementById('taskSearch');
+  if (box) box.value = '';
+  syncTaskSearchClear();
   document.getElementById('subtab-close').classList.toggle('active', view === 'close');
   document.getElementById('subtab-upcoming').classList.toggle('active', view === 'upcoming');
-  if (view === 'upcoming') renderUpcomingTasks();
-  else renderTasks();
+  renderActiveTaskView();
+}
+
+// Single dispatcher for the task list. A non-empty search overrides the sub-tab
+// and finds matching tasks across the whole client (any status, ignoring the
+// due/upcoming/close gating) so you can locate any task by name. Empty search
+// → the active sub-tab's normal list.
+function renderActiveTaskView() {
+  if (taskSearchTerm) return renderTaskSearch();
+  if (taskView === 'upcoming') return renderUpcomingTasks();
+  return renderTasks();
+}
+
+function onTaskSearch(v) {
+  taskSearchTerm = (v || '').trim().toLowerCase();
+  syncTaskSearchClear();
+  renderActiveTaskView();
+}
+
+function clearTaskSearch() {
+  taskSearchTerm = '';
+  const box = document.getElementById('taskSearch');
+  if (box) box.value = '';
+  syncTaskSearchClear();
+  renderActiveTaskView();
+}
+
+function syncTaskSearchClear() {
+  const btn = document.getElementById('taskSearchClear');
+  if (btn) btn.style.display = taskSearchTerm ? 'block' : 'none';
+}
+
+// Render every task for this client whose title (or one of its subtask titles)
+// matches the search term, grouped by category. Deliberately ignores the
+// due/upcoming/close gating and includes completed tasks, so search reliably
+// finds ANY task by name — including close tasks when a close isn't active.
+function renderTaskSearch() {
+  const container = document.getElementById('taskContent');
+  const today = tzToday();
+  const term = taskSearchTerm;
+  const matches = clientTasks.filter(t => {
+    if ((t.title || '').toLowerCase().includes(term)) return true;
+    return clientSubtasks.some(s => s.task_id === t.id && (s.title || '').toLowerCase().includes(term));
+  });
+
+  if (!matches.length) {
+    container.innerHTML = `<div class="empty" style="background:white;border:1px solid var(--border);border-radius:10px;padding:3rem">
+      <div style="font-size:32px;margin-bottom:.75rem">🔍</div>
+      <div style="font-weight:500;color:var(--text);margin-bottom:.5rem">No tasks match “${term}”</div>
+      <div style="font-size:13px;color:var(--text3)">Search looks at task names (and their steps) for this client.</div>
+    </div>`;
+    return;
+  }
+
+  const byCat = {};
+  CATS.forEach(c => { if (matches.some(t => t.category === c)) byCat[c] = []; });
+  matches.forEach(t => { (byCat[t.category] = byCat[t.category] || []).push(t); });
+
+  let html = `<div style="font-size:12px;color:var(--text3);margin-bottom:10px">${matches.length} matching task${matches.length === 1 ? '' : 's'}</div>`;
+  Object.entries(byCat).forEach(([cat, tasks]) => {
+    tasks.sort((a, b) => (a.next_due || '').localeCompare(b.next_due || ''));
+    html += `<div class="task-cat">
+      <div class="task-cat-hdr"><div class="task-cat-title">${cat}</div></div>
+      <div>`;
+    tasks.forEach(t => { html += renderTaskItem(t, today); });
+    html += `</div></div>`;
+  });
+  container.innerHTML = html;
 }
 
 function renderUpcomingTasks() {
@@ -2682,6 +2776,7 @@ function renderTaskItem(task, today) {
   const menuId = `client-${task.id}`;
   const statusMenu = !isDone ? `
     <div class="status-menu" id="statusMenu-${menuId}">
+      <div class="status-menu-item ${task.status === 'In Progress' ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','In Progress','${task.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
       <div class="status-menu-item ${task.status === 'Waiting on Client' ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Waiting on Client','${task.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
       <div class="status-menu-item ${task.status === 'Stuck' ? 'active' : ''}" onclick="setTaskStatus(event,'${task.id}','Stuck','${task.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
     </div>` : '';
@@ -2702,7 +2797,7 @@ function renderTaskItem(task, today) {
         ${task.status === 'Waiting on Client' ? '<span class="status-pill waiting">Waiting on Client</span>' : ''}
         ${task.status === 'Stuck' ? '<span class="status-pill stuck">Stuck</span>' : ''}
         ${task.frequency ? `<span class="task-freq-badge">${freqLabel(task.frequency, task.frequency_interval)}</span>` : ''}
-        ${task.next_due && !isDone ? `<span class="task-due ${isOverdue ? 'overdue' : ''}">${isOverdue ? daysOverdue + 'd overdue' : 'Due ' + task.next_due}</span>` : ''}
+        ${task.next_due && !isDone ? `<span class="task-due ${isOverdue ? 'overdue' : ''}">Due ${fmtDue(task.next_due)}${isOverdue ? ` · ${daysOverdue}d overdue` : ''}</span>` : ''}
       </div>
       ${completedAt}
       ${warningHtml}
