@@ -1966,8 +1966,9 @@ function mydayItem(t, today) {
   const dueLabel = !t.due ? '<span style="color:var(--text3);font-size:11px">Daily</span>' :
     isOverdue ? `<span style="color:var(--red);font-size:11px;font-weight:500">Due ${dueDateStr} · ${t.daysOverdue}d</span>` :
     `<span style="color:var(--text3);font-size:11px">Due ${dueDateStr}</span>`;
-  // Click the circle → mark Done. (Subtasks still cycle through In Progress.)
-  const onClick = t.type === 'task' ? `cycleTaskStatus('${t.id}')` : `cycleSubStatus('${t.id}')`;
+  // Click the circle → mark Done. One click for both tasks and subtasks, the
+  // same as My Week and the client view (quickDoneSub goes straight to Done).
+  const onClick = t.type === 'task' ? `cycleTaskStatus('${t.id}')` : `quickDoneSub('${t.id}')`;
   // Visual hint of current status on the circle
   let checkClass = 'myday-check';
   let checkInner = '';
