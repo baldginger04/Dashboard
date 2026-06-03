@@ -2952,8 +2952,11 @@ async function toggleTask(id) {
     task.updated_at = now;
 
     // Auto-create next instance on completion — but NOT for close tasks, which
-    // follow the close lifecycle rather than a cadence.
-    if (newStatus === 'Done' && !isCloseCat(task.category) && task.frequency && task.frequency !== 'daily' && task.frequency !== 'weekdays' && task.frequency !== 'every_other_weekday') {
+    // follow the close lifecycle rather than a cadence. Every cadence (including
+    // daily / weekdays / every_other_weekday) respawns here, matching the My Day
+    // and subtask-chain paths. computeNextDueFuture + openInstanceExists below
+    // keep the next copy in the future and prevent duplicates.
+    if (newStatus === 'Done' && !isCloseCat(task.category) && task.frequency && task.frequency !== 'one_time') {
       const nextDue = computeNextDueFuture(task.frequency, task.frequency_day, task.frequency_dow, task.frequency_month, task.next_due || now.split('T')[0], task.frequency_interval || 1);
       if (nextDue && !(await openInstanceExists(task.client_id, task.title))) {
         const { id: _id, created_at, ...rest } = task;
