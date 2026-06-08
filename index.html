@@ -265,6 +265,7 @@
     .status-pill{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:12px;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
     .status-pill.waiting{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
     .status-pill.stuck{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
+    .status-pill.inprogress{background:#fff1e8;color:var(--accent);border:1px solid #f0c5a3}
     /* When a card itself is Waiting / Stuck, tint its border so it's visible at a glance. */
     .myday-item.is-waiting{border-color:#fcd34d;background:#fffbeb}
     .myday-item.is-stuck{border-color:var(--red-border);background:var(--red-bg)}
@@ -1812,6 +1813,7 @@ function myweekItem(t, colDateStr) {
   let statusPill = '';
   if (isWaiting) statusPill = '<div class="status-pill waiting" style="margin-top:3px">Waiting on Client</div>';
   else if (isStuck) statusPill = '<div class="status-pill stuck" style="margin-top:3px">Stuck</div>';
+  else if (t.status === 'In Progress') statusPill = '<div class="status-pill inprogress" style="margin-top:3px">In Progress</div>';
   const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
 
   // Status menu — tasks only, same as My Day. Subtasks don't get Waiting/Stuck
@@ -2927,6 +2929,7 @@ function renderTaskItem(task, today) {
       <div class="task-title ${isDone ? 'done' : ''}">${task.title}</div>
       <div class="task-meta-row">
         ${task.assigned_to ? `<span style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text3)">${avHtml(task.assigned_to)} ${task.assigned_to}</span>` : ''}
+        ${task.status === 'In Progress' ? '<span class="status-pill inprogress">In Progress</span>' : ''}
         ${task.status === 'Waiting on Client' ? '<span class="status-pill waiting">Waiting on Client</span>' : ''}
         ${task.status === 'Stuck' ? '<span class="status-pill stuck">Stuck</span>' : ''}
         ${task.frequency ? `<span class="task-freq-badge">${freqLabel(task.frequency, task.frequency_interval)}</span>` : ''}
