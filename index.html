@@ -429,7 +429,7 @@
     .bulk-hint{font-size:12px;color:var(--text3)}
     .task-sel{width:20px;height:20px;border:2px solid #cbd2da;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1;color:#fff;flex-shrink:0;margin-right:10px;align-self:center;transition:background .12s,border-color .12s}
     .task-sel.checked{background:var(--accent);border-color:var(--accent)}
-    .task-item.selected{background:#fff7f2;box-shadow:inset 3px 0 0 var(--accent)}
+    .task-item.selected,.myday-item.selected{background:#fff7f2;box-shadow:inset 3px 0 0 var(--accent)}
     .bulk-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:80;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:#1a1c1e;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.32)}
     .bulk-count{font-size:13px;font-weight:600;white-space:nowrap}
     .bulk-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
@@ -1949,6 +1949,9 @@ function setSort(s) {
 }
 
 function renderMyDay(tasks, subs, today) {
+  // Drop any selection that isn't a My Day selection (e.g. left over from a
+  // client list), and never allow select mode while impersonating.
+  if (selectionScope !== 'myday' || isViewingAs()) { selectedTaskIds.clear(); selectionMode = false; }
   // daysBetween: count of calendar days from `today` (YYYY-MM-DD) back to a due date.
   // UTC noon anchors avoid any DST drift; the math is purely on date components.
   const daysBetween = (a, b) => {
@@ -2025,6 +2028,23 @@ function renderMyDay(tasks, subs, today) {
     ].filter(Boolean).join('');
     html = `<div class="myday-kanban">${cols}</div>`;
   }
+  // Select-tasks toolbar + floating bulk bar (tasks present, not impersonating).
+  if (all.length && !isViewingAs()) {
+    const toolbar = `<div class="bulk-toolbar"><button class="btn btn-ghost btn-sm" onclick="toggleSelectionMode('myday')">${selectionMode ? '✕ Cancel selection' : '☑ Select tasks'}</button>${selectionMode ? '<span class="bulk-hint">Tap the boxes to select, then choose a status below.</span>' : ''}</div>`;
+    html = toolbar + html;
+    if (selectionMode) {
+      html += `<div class="bulk-bar" id="bulkBar" style="display:${selectedTaskIds.size ? 'flex' : 'none'}">
+        <span class="bulk-count" id="bulkCount">${selectedTaskIds.size} selected</span>
+        <div class="bulk-actions">
+          <button class="s-prog" onclick="bulkSetStatus('In Progress')">In Progress</button>
+          <button class="s-wait" onclick="bulkSetStatus('Waiting on Client')">Waiting on Client</button>
+          <button class="s-stuck" onclick="bulkSetStatus('Stuck')">Stuck</button>
+          <button class="s-done" onclick="bulkSetStatus('Done')">Done</button>
+        </div>
+        <button class="bulk-clear" onclick="clearSelection()">Clear</button>
+      </div>`;
+    }
+  }
   document.getElementById('mydayContent').innerHTML = html;
   // Kick off the rotator if we just rendered the empty state. If we rendered
   // the Kanban, ensure any previous timer is killed so it doesn't leak.
@@ -2092,7 +2112,14 @@ function mydayItem(t, today) {
     ? `<span class="myday-client-inline">${t.client}${t.parentTask ? ' · ' + t.parentTask : ''}</span>`
     : '';
   const dataAttr = t.type === 'task' ? `data-task-id="${t.id}"` : `data-sub-id="${t.id}"`;
-  return `<div class="myday-item ${rowClass}" ${dataAttr}>
+  // Selection checkbox — only on task cards (not subtasks) and not while impersonating.
+  const selectable = selectionMode && t.type === 'task' && !isViewingAs();
+  const isSel = selectable && selectedTaskIds.has(t.id);
+  const selBox = selectable
+    ? `<div class="task-sel ${isSel ? 'checked' : ''}" onclick="toggleTaskSelection(event,'${t.id}')">${isSel ? '✓' : ''}</div>`
+    : '';
+  return `<div class="myday-item ${rowClass} ${isSel ? 'selected' : ''}" ${dataAttr} ${selectable ? `data-tid="${t.id}"` : ''}>
+    ${selBox}
     <div class="myday-status-grp">
       <div class="${checkClass}" onclick="${onClick}">${checkInner}</div>
       ${chevron}
@@ -2858,20 +2885,29 @@ function renderUpcomingTasks() {
 // ---------------------------------------------------------------------
 let selectionMode = false;
 const selectedTaskIds = new Set();
-let selectionClientId = null;
+let selectionScope = null; // 'client:<id>' or 'myday' — which view owns the selection
 
-function toggleSelectionMode() {
+// Re-render the active view from memory (no DB round-trip) to show/hide the
+// selection checkboxes. Client view -> renderTasks; My Day -> renderMyDay.
+function rerenderSelectionView() {
+  const id = document.querySelector('.nav-item.active')?.id || '';
+  if (id === 'nav-myday') renderMyDay(myDayCache.tasks, myDayCache.subs, myDayCache.today);
+  else renderTasks();
+}
+
+function toggleSelectionMode(scope) {
   selectionMode = !selectionMode;
-  if (selectionMode) selectionClientId = currentClientId;
+  if (selectionMode) selectionScope = scope || ('client:' + currentClientId);
   else selectedTaskIds.clear();
-  renderTasks();
+  rerenderSelectionView();
 }
 
 function toggleTaskSelection(event, id) {
   event.stopPropagation();
   if (selectedTaskIds.has(id)) selectedTaskIds.delete(id);
   else selectedTaskIds.add(id);
-  const row = document.querySelector(`.task-item[data-tid="${id}"]`);
+  // Works for both the client list (.task-item) and My Day (.myday-item).
+  const row = document.querySelector(`[data-tid="${id}"]`);
   if (row) {
     const on = selectedTaskIds.has(id);
     row.classList.toggle('selected', on);
@@ -2883,7 +2919,7 @@ function toggleTaskSelection(event, id) {
 
 function clearSelection() {
   selectedTaskIds.clear();
-  renderTasks();
+  rerenderSelectionView();
 }
 
 function updateBulkBar() {
@@ -2898,6 +2934,9 @@ function updateBulkBar() {
 async function bulkSetStatus(status) {
   const ids = Array.from(selectedTaskIds);
   if (!ids.length) return;
+  // On My Day / My Week, block while impersonating (view-as is read-only).
+  const onMyView = !!document.querySelector('.nav-item.active')?.id?.startsWith('nav-my');
+  if (onMyView && blockedByViewAs('change task statuses')) return;
   const bar = document.getElementById('bulkBar');
   if (bar) bar.style.pointerEvents = 'none'; // guard against double-taps mid-write
   try {
@@ -2923,7 +2962,7 @@ async function bulkSetStatus(status) {
 function renderTasks() {
   const container = document.getElementById('taskContent');
   // Selection is per-client: if we're now showing a different client, drop it.
-  if (selectionClientId !== currentClientId) { selectedTaskIds.clear(); selectionMode = false; }
+  if (selectionScope !== 'client:' + currentClientId) { selectedTaskIds.clear(); selectionMode = false; }
   const today = tzToday();
 
   // Only show tasks due today or overdue, or recurring tasks that are active today
@@ -2993,7 +3032,7 @@ function renderTasks() {
   const psYmd = tzToday().substring(0, 7) + '-01';
 
   let html = '';
-  html += `<div class="bulk-toolbar"><button class="btn btn-ghost btn-sm" onclick="toggleSelectionMode()">${selectionMode ? '✕ Cancel selection' : '☑ Select tasks'}</button>${selectionMode ? '<span class="bulk-hint">Tap the boxes to select, then choose a status below.</span>' : ''}</div>`;
+  html += `<div class="bulk-toolbar"><button class="btn btn-ghost btn-sm" onclick="toggleSelectionMode('client:${currentClientId}')">${selectionMode ? '✕ Cancel selection' : '☑ Select tasks'}</button>${selectionMode ? '<span class="bulk-hint">Tap the boxes to select, then choose a status below.</span>' : ''}</div>`;
   Object.entries(byCat).forEach(([cat, tasks]) => {
     const active = tasks.filter(t => t.status !== 'Done');
     const done   = tasks.filter(t => t.status === 'Done' && (!t.updated_at || t.updated_at >= psYmd));
