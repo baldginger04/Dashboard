@@ -81,12 +81,6 @@
     .sidebar-bottom{padding:1rem 1.25rem;border-top:1px solid rgba(255,255,255,.08)}
     .logout-btn{font-size:12px;color:rgba(255,255,255,.4);cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;padding:0;transition:color .15s}
     .logout-btn:hover{color:rgba(255,255,255,.8)}
-    /* Client Portal launcher — opens the client-facing portal in a new tab.
-       The badge shows the number of open client questions awaiting a team reply. */
-    .portal-link{display:flex;align-items:center;gap:8px;text-decoration:none;color:rgba(255,255,255,.72);font-size:13px;font-weight:500;padding:9px 11px;margin-bottom:11px;border-radius:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);transition:background .15s,color .15s}
-    .portal-link:hover{background:rgba(255,255,255,.12);color:#fff}
-    .portal-link .portal-link-ext{margin-left:2px;font-size:11px;opacity:.6}
-    .portal-link .nav-badge{margin-left:auto}
 
     /* MAIN */
     .main{background:var(--bg);overflow-y:auto}
@@ -580,13 +574,13 @@
         <div class="nav-section">Team</div>
         <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat</div>
         <div class="nav-section">Tools</div>
-        <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation</div>
+        <a class="nav-item" id="nav-portal" href="https://client.baldginger.com/" target="_blank" rel="noopener">
+          <span>🌐</span> Client Portal <span class="nav-badge" id="portalBadge" style="display:none">0</span>
+        </a>
+        <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
+        <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
       </nav>
       <div class="sidebar-bottom">
-        <a class="portal-link" href="https://client.baldginger.com/" target="_blank" rel="noopener">
-          <span>🌐</span> Client Portal <span class="portal-link-ext">↗</span>
-          <span class="nav-badge" id="portalBadge" style="display:none">0</span>
-        </a>
         <button class="logout-btn" onclick="doLogout()">Sign out</button>
       </div>
     </div>
@@ -801,6 +795,16 @@
             <div class="metric-card"><div class="metric-label">Stale</div><div class="metric-value mv-orange" id="am-stale">—</div></div>
           </div>
           <div id="autoTable"></div>
+        </div>
+      </div>
+
+      <!-- STATEMENT RECONCILER (placeholder — building next) -->
+      <div class="page" id="page-reconciler">
+        <div class="page-header"><div><div class="page-title">Statement Reconciler</div><div class="page-sub">Match statements against the books</div></div></div>
+        <div class="card" style="padding:2.5rem;text-align:center">
+          <div style="font-size:34px;margin-bottom:.5rem">🧾</div>
+          <div style="font-size:16px;font-weight:600;color:var(--text);margin-bottom:.4rem">Coming soon</div>
+          <div style="font-size:13px;color:var(--text2);max-width:440px;margin:0 auto;line-height:1.55">We're building this next — the Statement Reconciler will live here.</div>
         </div>
       </div>
 
