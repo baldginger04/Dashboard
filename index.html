@@ -149,6 +149,25 @@
     .badge.is-clickable:active { transform: scale(.97); }
     .badge-overdue{background:var(--red-bg);color:var(--red);border:1px solid var(--red-border)}
     .dot{width:5px;height:5px;border-radius:50%;background:currentColor}
+    /* Automation heartbeat board */
+    .auto-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-weight:600;margin:1.5rem 0 .65rem}
+    .auto-section-title:first-child{margin-top:0}
+    .auto-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:10px}
+    .auto-card{background:white;border:1px solid var(--border);border-left:3px solid var(--border2);border-radius:10px;padding:.85rem 1rem}
+    .auto-card.s-ok{border-left-color:var(--green)}
+    .auto-card.s-warn{border-left-color:var(--accent2)}
+    .auto-card.s-down{border-left-color:var(--red)}
+    .auto-card-top{display:flex;align-items:center;gap:8px}
+    .auto-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);flex:none}
+    .s-ok .auto-dot{background:var(--green)}
+    .s-warn .auto-dot{background:var(--accent2)}
+    .s-down .auto-dot{background:var(--red)}
+    .auto-name{font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .auto-age{font-size:12px;color:var(--text3);flex:none}
+    .auto-age.is-stale{color:var(--red);font-weight:600}
+    .auto-detail{font-size:12px;color:var(--text2);margin-top:.5rem;line-height:1.4}
+    .auto-meta{font-size:11px;color:var(--text3);margin-top:.55rem;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    .auto-pill{background:var(--bg3);border:1px solid var(--border);border-radius:20px;padding:1px 8px;font-size:10px;text-transform:uppercase;letter-spacing:.04em}
 
     /* AVATAR */
     .avatar{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:white;flex-shrink:0}
@@ -781,21 +800,22 @@
 
       <!-- AUTOMATION -->
       <div class="page" id="page-automation">
-        <div class="page-header"><div><div class="page-title">Automation Status</div><div class="page-sub">Live Skyvern workflow monitoring</div></div></div>
-        <div class="card" style="padding:1.25rem">
-          <div style="font-size:13px;color:var(--text2);margin-bottom:.75rem">Apps Script URL</div>
-          <div style="display:flex;gap:8px;margin-bottom:1.5rem">
-            <input type="text" id="autoScriptUrl" class="filter-input" style="flex:1" placeholder="https://script.google.com/macros/s/.../exec" />
-            <button class="btn btn-primary" onclick="loadAutomation()">Load</button>
+        <div class="page-header">
+          <div>
+            <div class="page-title">Automation Status</div>
+            <div class="page-sub">Live heartbeat monitor — each pipeline reports in when it runs</div>
           </div>
-          <div id="autoMetrics" style="display:none;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.5rem">
-            <div class="metric-card"><div class="metric-label">Total</div><div class="metric-value" id="am-total">—</div></div>
-            <div class="metric-card"><div class="metric-label">Completed</div><div class="metric-value mv-green" id="am-ok">—</div></div>
-            <div class="metric-card"><div class="metric-label">Failed</div><div class="metric-value mv-red" id="am-fail">—</div></div>
-            <div class="metric-card"><div class="metric-label">Stale</div><div class="metric-value mv-orange" id="am-stale">—</div></div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="autoLive" class="badge badge-pending"><span class="dot"></span>Connecting…</span>
+            <button class="btn btn-ghost" onclick="loadAutomation()">Refresh</button>
           </div>
-          <div id="autoTable"></div>
         </div>
+        <div id="autoMetrics" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem">
+          <div class="metric-card"><div class="metric-label">Healthy</div><div class="metric-value mv-green" id="am-ok">—</div></div>
+          <div class="metric-card"><div class="metric-label">Needs attention</div><div class="metric-value mv-orange" id="am-warn">—</div></div>
+          <div class="metric-card"><div class="metric-label">Down / overdue</div><div class="metric-value mv-red" id="am-down">—</div></div>
+        </div>
+        <div id="autoBoard"><div class="empty"><span class="spinner"></span></div></div>
       </div>
 
       <!-- STATEMENT RECONCILER (placeholder — building next) -->
@@ -3958,24 +3978,123 @@ async function sendTeamMessage() {
 
 // ── AUTOMATION ───────────────────────────────────────────
 async function loadAutomation() {
-  const url = document.getElementById('autoScriptUrl').value.trim();
-  if (!url) return;
-  localStorage.setItem('autoUrl', url);
-  document.getElementById('autoTable').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+  const board = document.getElementById('autoBoard');
+  if (!board) return;
   try {
-    const json = await (await fetch(url)).json();
-    const wfs = json.workflows || [];
-    let ok=0,fail=0,stale=0;
-    wfs.forEach(w => { const s=(w.status||'').toLowerCase(); if(s==='completed')ok++; else if(s==='failed'||s==='terminated')fail++; else stale++; });
-    document.getElementById('am-total').textContent = wfs.length;
+    const { data, error } = await sb
+      .from('automation_runs')
+      .select('pipeline,stage,status,detail,invoice_count,ran_at')
+      .order('ran_at', { ascending: false })
+      .limit(500);
+    if (error) throw error;
+
+    // Keep only the most recent row per pipeline.
+    const latest = {};
+    (data || []).forEach(r => { if (!latest[r.pipeline]) latest[r.pipeline] = r; });
+
+    let ok = 0, warn = 0, down = 0;
+    const sections = { 'Delivery': [], 'Vendor ingestion': [], 'Pending': [] };
+
+    AUTO_PIPELINES.forEach(p => {
+      const row = latest[p.key];
+      let cls = 's-idle', ageTxt = '', stale = false;
+      if (!p.pending && row) {
+        const ageH = (Date.now() - new Date(row.ran_at)) / 3600000;
+        stale = ageH > p.staleH;
+        ageTxt = relTime(row.ran_at);
+        if (row.status === 'error') cls = 's-down';
+        else if (row.status === 'partial' || stale) cls = 's-warn';
+        else cls = 's-ok';
+        if (cls === 's-ok') ok++; else if (cls === 's-warn') warn++; else down++;
+      }
+      (sections[p.section] || (sections[p.section] = [])).push(autoCardHtml(p, row, cls, ageTxt, stale));
+    });
+
     document.getElementById('am-ok').textContent = ok;
-    document.getElementById('am-fail').textContent = fail;
-    document.getElementById('am-stale').textContent = stale;
-    document.getElementById('autoMetrics').style.display = 'grid';
-    const ord = {failed:0,api_error:1,terminated:2,running:3,stale:4,never_run:5,completed:6};
-    wfs.sort((a,b) => (ord[(a.status||'').toLowerCase()]??9) - (ord[(b.status||'').toLowerCase()]??9));
-    document.getElementById('autoTable').innerHTML = `<table><thead><tr><th>Workflow</th><th>Vendor</th><th>Client</th><th>Status</th><th>Last Run</th><th>Age</th></tr></thead><tbody>${wfs.map(w=>{const s=(w.status||'').toLowerCase();const b=s==='completed'?'<span class="badge badge-done"><span class="dot"></span>Done</span>':s==='failed'||s==='terminated'?`<span class="badge badge-overdue"><span class="dot"></span>${s}</span>`:`<span class="badge badge-pending"><span class="dot"></span>${s||'—'}</span>`;const h=w.hoursSince;return`<tr><td style="font-size:12px;font-weight:500">${w.name}</td><td style="font-size:12px;color:var(--text3)">${w.vendor}</td><td style="font-size:12px;color:var(--text2)">${w.client}</td><td>${b}</td><td style="font-size:12px;color:var(--text3)">${relTime(w.finishedAt)}</td><td style="font-size:12px;color:var(--text3)">${h?(h<1?'<1h':Math.round(h)+'h'):'—'}</td></tr>`;}).join('')}</tbody></table>`;
-  } catch(e) { document.getElementById('autoTable').innerHTML = `<div class="empty" style="color:var(--red)">Error: ${e.message}</div>`; }
+    document.getElementById('am-warn').textContent = warn;
+    document.getElementById('am-down').textContent = down;
+
+    let out = '';
+    ['Delivery', 'Vendor ingestion', 'Pending'].forEach(sec => {
+      if (!sections[sec] || !sections[sec].length) return;
+      out += `<div class="auto-section-title">${sec}</div><div class="auto-grid">${sections[sec].join('')}</div>`;
+    });
+    board.innerHTML = out || '<div class="empty">No automation data yet — pipelines appear here as they run.</div>';
+  } catch (e) {
+    board.innerHTML = `<div class="empty" style="color:var(--red)">Couldn't load automation status: ${autoEsc(e.message)}</div>`;
+  }
+}
+
+// The full set of pipelines we expect to hear from. Listing them here (rather
+// than only rendering whatever rows exist) means a pipeline that has gone
+// SILENT still shows up — which is exactly the failure we want to catch.
+// key must match the label each script passes to logRun/logRun2 exactly.
+// staleH = hours of silence past which we flag it overdue (cadence + buffer).
+const AUTO_PIPELINES = [
+  { key: 'XtraChef Delivery', section: 'Delivery', cadence: 'hourly',  staleH: 3 },
+  { key: 'Audubon → QBO',     section: 'Delivery', cadence: '~15 min', staleH: 1 },
+
+  { key: 'Mr. Greens',     section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
+  { key: 'Segovia',        section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
+  { key: 'UNFI',           section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
+  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120 },
+  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'ALSCO',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+
+  { key: 'Gmail Watcher',  section: 'Pending', cadence: 'every 5 min', staleH: 1, pending: true },
+];
+
+function autoEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function autoCardHtml(p, row, cls, ageTxt, stale) {
+  const name = autoEsc(p.key);
+  if (p.pending) {
+    return `<div class="auto-card s-idle"><div class="auto-card-top"><span class="auto-dot"></span><span class="auto-name">${name}</span><span class="auto-age">not wired yet</span></div><div class="auto-detail" style="color:var(--text3)">Railway Gmail watcher — heartbeat coming once its code is added.</div><div class="auto-meta"><span class="auto-pill">${autoEsc(p.cadence)}</span></div></div>`;
+  }
+  if (!row) {
+    return `<div class="auto-card s-idle"><div class="auto-card-top"><span class="auto-dot"></span><span class="auto-name">${name}</span><span class="auto-age">no runs yet</span></div><div class="auto-detail" style="color:var(--text3)">Waiting for first heartbeat.</div><div class="auto-meta"><span class="auto-pill">${autoEsc(p.cadence)}</span></div></div>`;
+  }
+  const ageCls = stale ? 'auto-age is-stale' : 'auto-age';
+  const n = row.invoice_count || 0;
+  const inv = n ? `<span>${n} file${n === 1 ? '' : 's'}</span>` : '';
+  const meta = stale
+    ? `<span style="color:var(--red);font-weight:600">overdue · expected ${autoEsc(p.cadence)}</span>`
+    : `<span class="auto-pill">${autoEsc(p.cadence)}</span>`;
+  return `<div class="auto-card ${cls}"><div class="auto-card-top"><span class="auto-dot"></span><span class="auto-name">${name}</span><span class="${ageCls}">${autoEsc(ageTxt)}</span></div><div class="auto-detail">${autoEsc(row.detail || '—')}</div><div class="auto-meta">${meta}${inv}</div></div>`;
+}
+
+// Realtime: any new heartbeat row re-renders the board (debounced). Subscribed
+// when the Automation tab is open, torn down when you leave it.
+let autoRealtimeChannel = null;
+let autoRealtimeDebounce = null;
+
+function subscribeAutomationRealtime() {
+  unsubscribeAutomationRealtime();
+  autoRealtimeChannel = sb
+    .channel('automation-runs')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'automation_runs' }, () => {
+      if (autoRealtimeDebounce) clearTimeout(autoRealtimeDebounce);
+      autoRealtimeDebounce = setTimeout(loadAutomation, 250);
+    })
+    .subscribe(status => {
+      const live = document.getElementById('autoLive');
+      if (!live) return;
+      if (status === 'SUBSCRIBED') { live.className = 'badge badge-done'; live.innerHTML = '<span class="dot"></span>Live'; }
+      else { live.className = 'badge badge-pending'; live.innerHTML = '<span class="dot"></span>Connecting…'; }
+    });
+}
+
+function unsubscribeAutomationRealtime() {
+  if (autoRealtimeChannel) { sb.removeChannel(autoRealtimeChannel); autoRealtimeChannel = null; }
+  if (autoRealtimeDebounce) { clearTimeout(autoRealtimeDebounce); autoRealtimeDebounce = null; }
 }
 
 // ── NAV ──────────────────────────────────────────────────
@@ -3984,7 +4103,7 @@ function showPage(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + name)?.classList.add('active');
   document.getElementById('nav-' + name)?.classList.add('active');
-  if (name === 'automation') { const s = localStorage.getItem('autoUrl'); if (s) document.getElementById('autoScriptUrl').value = s; }
+  if (name === 'automation') { loadAutomation(); subscribeAutomationRealtime(); } else { unsubscribeAutomationRealtime(); }
   if (name === 'team') loadTeamMessages();
   if (name === 'search') { const el = document.getElementById('globalTaskSearch'); if (el) setTimeout(() => el.focus(), 50); }
   if (name === 'myday') loadMyDay();
