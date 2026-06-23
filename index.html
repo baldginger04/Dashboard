@@ -78,6 +78,7 @@
     .nav-item.active{color:white;border-left-color:var(--accent2);background:rgba(255,255,255,.07)}
     .search-result:hover{border-color:var(--accent2)!important;box-shadow:0 1px 5px rgba(0,0,0,.07)}
     .nav-badge{background:var(--red);color:white;font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;margin-left:auto}
+    .client-q-bubble{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:var(--red);color:#fff;font-size:10px;font-weight:600;border-radius:9px;vertical-align:middle;margin-left:6px}
     .sidebar-bottom{padding:1rem 1.25rem;border-top:1px solid rgba(255,255,255,.08)}
     .logout-btn{font-size:12px;color:rgba(255,255,255,.4);cursor:pointer;background:none;border:none;font-family:'Inter',sans-serif;padding:0;transition:color .15s}
     .logout-btn:hover{color:rgba(255,255,255,.8)}
@@ -1380,10 +1381,57 @@ async function showApp() {
 }
 
 // ── CLIENTS ──────────────────────────────────────────────
+// Per-client count of open Client Questions: portal message threads (cleared=
+// false) whose latest reply is from the client — the same definition as the
+// sidebar Client Portal badge, grouped per client. Powers the bubbles on the
+// Clients list so you can see at a glance which clients are waiting on us.
+let clientCommentCounts = {};
+
+async function loadClientCommentCounts() {
+  try {
+    const { data, error } = await sb
+      .from('messages')
+      .select('id, parent_message_id, is_team, created_at, cleared, client_id')
+      .eq('cleared', false);
+    if (error) throw error;
+    const latest = new Map();  // thread root -> latest message meta
+    for (const m of (data || [])) {
+      const key = m.parent_message_id || m.id;
+      const cur = latest.get(key);
+      if (!cur || new Date(m.created_at) > new Date(cur.created_at)) {
+        latest.set(key, { created_at: m.created_at, is_team: m.is_team, client_id: m.client_id });
+      }
+    }
+    const counts = {};
+    latest.forEach((v) => { if (v.is_team !== true && v.client_id) counts[v.client_id] = (counts[v.client_id] || 0) + 1; });
+    clientCommentCounts = counts;
+  } catch (err) {
+    console.error('loadClientCommentCounts error:', err);
+    clientCommentCounts = {};
+  }
+}
+
+function clientQBubble(clientId) {
+  const n = clientCommentCounts[clientId] || 0;
+  if (!n) return '';
+  const label = n === 1 ? '1 open client question' : `${n} open client questions`;
+  return ` <span class="client-q-bubble" title="${label}">${n > 99 ? '99+' : n}</span>`;
+}
+
+// Refresh the Clients-list bubbles in place when a portal message changes, but
+// only while the Clients page is actually on screen (avoids needless work).
+async function refreshClientBubblesIfVisible() {
+  const page = document.getElementById('page-clients');
+  if (!page || !page.classList.contains('active')) return;
+  await loadClientCommentCounts();
+  renderClientsTable(allClients);
+}
+
 async function loadClients() {
   const { data } = await sb.from('clients').select('*').order('name');
   allClients = data || [];
   document.getElementById('clientsCount').textContent = allClients.length + ' clients';
+  await loadClientCommentCounts();
   renderClientsTable(allClients);
 }
 
@@ -1455,7 +1503,7 @@ function renderClientsTable(clients) {
                    : '';
     return `
     <tr class="${rowClass}" onclick="openClient('${c.id}')">
-      <td style="font-weight:500">${c.name}</td>
+      <td style="font-weight:500">${c.name}${clientQBubble(c.id)}</td>
       <td>${avHtml(c.preparer)} <span style="font-size:13px;color:var(--text2);margin-left:6px">${c.preparer||'—'}</span></td>
       <td>${c.reviewer?avHtml(c.reviewer)+'<span style="font-size:13px;color:var(--text2);margin-left:6px">'+c.reviewer+'</span>':'<span style="color:var(--text3)">—</span>'}</td>
       <td style="font-size:12px;color:var(--text3)">${c.close_due_date||'—'}</td>
@@ -1713,7 +1761,7 @@ function subscribePortalBadge() {
     .channel('portal-badge')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => {
       if (portalBadgeDebounce) clearTimeout(portalBadgeDebounce);
-      portalBadgeDebounce = setTimeout(() => { portalBadgeDebounce = null; loadPortalBadge(); }, 300);
+      portalBadgeDebounce = setTimeout(() => { portalBadgeDebounce = null; loadPortalBadge(); refreshClientBubblesIfVisible(); }, 300);
     })
     .subscribe();
 }
