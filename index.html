@@ -2066,19 +2066,21 @@ function myweekItem(t, colDateStr) {
   else if (t.status === 'In Progress') statusPill = '<div class="status-pill inprogress" style="margin-top:3px">In Progress</div>';
   const onClick = t.type === 'task' ? `quickDoneTask('${t.id}')` : `quickDoneSub('${t.id}')`;
 
-  // Status menu — tasks only, same as My Day. Subtasks don't get Waiting/Stuck
-  // since they're sequential workflow steps.
+  // Status menu — on tasks and on the current subtask (same as My Day). Both get
+  // the full In Progress / Waiting / Stuck set; the subtask writes via setSubStatus.
   // The menu DOM id is namespaced with "week-" because the same task could
   // appear on multiple cards (daily-recurring tasks span the whole week);
   // otherwise duplicate IDs would break toggleStatusMenu.
   const menuId = `week-${t.id}-${colDateStr || 'x'}`;
-  const statusMenu = t.type === 'task' && !isViewingAs() ? `
+  const canSetStatus = (t.type === 'task' || t.type === 'subtask') && !isViewingAs();
+  const statusSetter = t.type === 'task' ? 'setTaskStatus' : 'setSubStatus';
+  const statusMenu = canSetStatus ? `
     <div class="status-menu" id="statusMenu-${menuId}">
-      <div class="status-menu-item ${t.status === 'In Progress' ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','In Progress','${t.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
-      <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
-      <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
+      <div class="status-menu-item ${t.status === 'In Progress' ? 'active' : ''}" onclick="${statusSetter}(event,'${t.id}','In Progress','${t.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
+      <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="${statusSetter}(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
+      <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="${statusSetter}(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
     </div>` : '';
-  const chevron = t.type === 'task' && !isViewingAs()
+  const chevron = canSetStatus
     ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${menuId}')" title="Set status">▾</div>`
     : '';
 
@@ -2253,16 +2255,18 @@ function mydayItem(t, today) {
   if (isWaiting) statusPill = '<span class="status-pill waiting">Waiting on Client</span>';
   else if (isStuck) statusPill = '<span class="status-pill stuck">Stuck</span>';
 
-  // Status menu — only on tasks (subtasks use the simpler three-step cycle and
-  // shouldn't have Waiting/Stuck since they're part of a sequential workflow).
-  // Hidden entirely while impersonating — view-as is read-only.
-  const statusMenu = t.type === 'task' && !isViewingAs() ? `
+  // Status menu — on tasks and on the current subtask (the unblocked, not-done
+  // step that surfaces here). Both get the full In Progress / Waiting / Stuck set;
+  // the subtask writes via setSubStatus. Hidden while impersonating (read-only).
+  const canSetStatus = (t.type === 'task' || t.type === 'subtask') && !isViewingAs();
+  const statusSetter = t.type === 'task' ? 'setTaskStatus' : 'setSubStatus';
+  const statusMenu = canSetStatus ? `
     <div class="status-menu" id="statusMenu-${t.id}">
-      <div class="status-menu-item ${t.status === 'In Progress' ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','In Progress','${t.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
-      <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
-      <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="setTaskStatus(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
+      <div class="status-menu-item ${t.status === 'In Progress' ? 'active' : ''}" onclick="${statusSetter}(event,'${t.id}','In Progress','${t.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
+      <div class="status-menu-item ${isWaiting ? 'active' : ''}" onclick="${statusSetter}(event,'${t.id}','Waiting on Client','${t.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
+      <div class="status-menu-item ${isStuck ? 'active' : ''}" onclick="${statusSetter}(event,'${t.id}','Stuck','${t.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
     </div>` : '';
-  const chevron = t.type === 'task' && !isViewingAs()
+  const chevron = canSetStatus
     ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${t.id}')" title="Set status">▾</div>`
     : '';
 
@@ -2443,6 +2447,35 @@ async function setTaskStatus(event, id, status, currentStatus) {
     reloadActiveView();
   } finally {
     inFlightTasks.delete(id);
+  }
+}
+
+// Set the CURRENT subtask (the unblocked, not-yet-done step in a sequence) to any
+// status from its menu — mirrors setTaskStatus but writes to the subtasks table.
+// "Done" delegates to quickDoneSub so the sequential chain + parent auto-complete
+// still run. Clicking the already-set status toggles it back to Not Started.
+async function setSubStatus(event, id, status, currentStatus) {
+  event.stopPropagation();
+  document.querySelectorAll('.status-menu.open').forEach(m => m.classList.remove('open'));
+  const onMyView = !!document.querySelector('.nav-item.active')?.id?.startsWith('nav-my');
+  if (onMyView && blockedByViewAs('change a subtask status')) return;
+  if (status === 'Done') { return quickDoneSub(id); }
+  const target = currentStatus === status ? 'Not Started' : status;
+  if (inFlightSubs.has(id)) return;
+  inFlightSubs.add(id);
+  try {
+    const data = await writeWithRetry(
+      () => sb.from('subtasks').update({ status: target, updated_at: new Date().toISOString() }).eq('id', id),
+      'Update subtask status'
+    );
+    if (!data) throw new Error('Update returned no row — likely an RLS policy is blocking it.');
+    reloadActiveView();
+  } catch (err) {
+    console.error('setSubStatus error:', err);
+    alert("Couldn't update subtask status. " + (err.message || ''));
+    reloadActiveView();
+  } finally {
+    inFlightSubs.delete(id);
   }
 }
 
@@ -3264,9 +3297,25 @@ function renderTaskItem(task, today) {
       const isBlocked = blocker && blocker.status !== 'Done';
       const sCheck = s.status === 'Done' ? 'done' : isBlocked ? 'blocked' : '';
       const clickFn = isBlocked ? '' : `onclick="toggleSub('${s.id}')"`;
+      // The current step (unblocked, not done) gets the same status menu tasks have.
+      const sActive = !isBlocked && s.status !== 'Done' && !isViewingAs();
+      const sMenuId = `clientsub-${s.id}`;
+      const sChevron = sActive ? `<div class="status-chevron" onclick="toggleStatusMenu(event,'${sMenuId}')" title="Set status">▾</div>
+          <div class="status-menu" id="statusMenu-${sMenuId}">
+            <div class="status-menu-item ${s.status === 'In Progress' ? 'active' : ''}" onclick="setSubStatus(event,'${s.id}','In Progress','${s.status||''}')"><span class="status-menu-dot" style="background:var(--accent)"></span>In Progress</div>
+            <div class="status-menu-item ${s.status === 'Waiting on Client' ? 'active' : ''}" onclick="setSubStatus(event,'${s.id}','Waiting on Client','${s.status||''}')"><span class="status-menu-dot" style="background:#f59e0b"></span>Waiting on Client</div>
+            <div class="status-menu-item ${s.status === 'Stuck' ? 'active' : ''}" onclick="setSubStatus(event,'${s.id}','Stuck','${s.status||''}')"><span class="status-menu-dot" style="background:var(--red)"></span>Stuck</div>
+          </div>` : '';
+      const sPill = s.status === 'In Progress' ? '<span class="status-pill inprogress">In Progress</span>'
+        : s.status === 'Waiting on Client' ? '<span class="status-pill waiting">Waiting on Client</span>'
+        : s.status === 'Stuck' ? '<span class="status-pill stuck">Stuck</span>' : '';
       subsHtml += `<div class="subtask-item ${isBlocked ? 'blocked' : ''}">
-        <div class="subtask-check ${sCheck}" ${clickFn}>${s.status === 'Done' ? '✓' : ''}</div>
+        <div class="myday-status-grp">
+          <div class="subtask-check ${sCheck}" ${clickFn}>${s.status === 'Done' ? '✓' : ''}</div>
+          ${sChevron}
+        </div>
         <span class="subtask-title ${s.status === 'Done' ? 'done' : ''}">${s.title}</span>
+        ${sPill}
         ${isBlocked ? '<span class="subtask-waiting">waiting</span>' : ''}
         <span class="subtask-assign">${avHtml(s.assigned_to)} ${s.assigned_to||''}</span>
       </div>`;
