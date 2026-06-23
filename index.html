@@ -1832,12 +1832,10 @@ async function loadMyDay() {
     // three review documents AND whose client has an incomplete gate.
     tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
-    // Tasks that have ANY subtasks are "parent" tasks — hide them from My Day.
-    // Only their subtasks should surface (gated by the blocked_by chain below).
-    const parentTaskIds = new Set(allSubs.map(s => s.task_id));
-
+    // Parent tasks (those with subtasks) now surface on My Day too, alongside
+    // their subtasks, so a multi-step task can be marked "In Progress" and seen
+    // here. Subtasks still surface independently (via the blocked_by chain).
     const myTasks = (tasks || []).filter(t => {
-      if (parentTaskIds.has(t.id)) return false;
       // Close tasks ignore cadence — they appear only during an active close.
       if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
@@ -1913,15 +1911,14 @@ async function loadMyWeek() {
     // Apply the Ready-for-Review gate
     tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
-    // Tasks that have ANY subtasks are "parent" tasks — hide them from My Week.
-    // Only their subtasks should surface (gated by the blocked_by chain below).
-    const parentTaskIds = new Set(allSubs.map(s => s.task_id));
+    // Parent tasks (those with subtasks) now surface on My Week too, alongside
+    // their subtasks, so a multi-step task can be marked "In Progress" and seen
+    // here. Subtasks still surface independently (via the blocked_by chain).
 
     // Filter tasks: due in window OR daily-recurring (which fire every day)
     const dailyFreqs = ['daily','weekdays','every_other_weekday'];
 
     const weekTasks = (tasks || []).filter(t => {
-      if (parentTaskIds.has(t.id)) return false;
       // Close tasks ignore cadence — they appear only during an active close.
       if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (dailyFreqs.includes(t.frequency)) return true;
