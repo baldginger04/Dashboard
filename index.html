@@ -872,22 +872,23 @@
         </div>
       </div>
       <div class="form-row">
-        <label class="form-label">Set recurring due date</label>
+        <label class="form-label">Due date &amp; recurrence</label>
         <div class="freq-panel">
           <div class="freq-grid">
             <div class="freq-col">
               <div class="freq-row">
                 <label class="freq-lbl">Frequency:</label>
                 <select class="form-select freq-select-main" id="freqType" onchange="onFreqTypeChange()">
+                  <option value="one_time" selected>One-time (no repeat)</option>
                   <option value="daily">Daily</option>
                   <option value="weekdays">Weekdays</option>
-                  <option value="weekly" selected>Weekly</option>
+                  <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
                   <option value="quarterly">Quarterly</option>
                   <option value="annually">Annually</option>
                 </select>
               </div>
-              <div class="freq-row">
+              <div class="freq-row" id="freqEveryRow">
                 <label class="freq-lbl">Every:</label>
                 <input type="number" class="form-input freq-num" id="freqInterval" min="1" max="99" value="1" oninput="renderFreqPreview()" />
                 <span id="freqUnitLabel" class="freq-unit">weeks</span>
@@ -3516,8 +3517,10 @@ function openTaskModal(clientId, category, taskId) {
   const delBtn = document.getElementById('taskDeleteBtn');
   if (delBtn) delBtn.style.display = taskId ? 'inline-flex' : 'none';
 
-  // Default the new freq panel state: Weekly, every 1, Monday.
-  document.getElementById('freqType').value = 'weekly';
+  // Default new tasks to one-off (no repeat). The interval/dow/day/month
+  // defaults below are just sensible fallbacks if the user later switches to a
+  // recurring frequency.
+  document.getElementById('freqType').value = 'one_time';
   document.getElementById('freqInterval').value = 1;
   document.getElementById('freqDow').value = 1;
   document.getElementById('freqDay').value = 1;
@@ -3561,8 +3564,11 @@ function openTaskModal(clientId, category, taskId) {
 // to match the selected frequency, then re-renders the preview.
 function onFreqTypeChange() {
   const freq = document.getElementById('freqType').value;
+  const isOneTime = freq === 'one_time';
   const unitMap = { daily: 'days', weekdays: 'weekdays', weekly: 'weeks', monthly: 'months', quarterly: 'quarters', annually: 'years' };
   document.getElementById('freqUnitLabel').textContent = unitMap[freq] || '';
+  // One-time tasks have no interval/day controls — hide the whole "Every…" row.
+  document.getElementById('freqEveryRow').style.display = isOneTime ? 'none' : '';
   // Show/hide the per-frequency inline controls.
   document.getElementById('freqDowWrap').style.display   = freq === 'weekly' ? 'flex' : 'none';
   document.getElementById('freqDayWrap').style.display   = ['monthly','quarterly','annually'].includes(freq) ? 'flex' : 'none';
@@ -3581,6 +3587,16 @@ function renderFreqPreview() {
     return;
   }
   const freq = document.getElementById('freqType').value;
+  // One-time tasks don't recur — show a single due date, no schedule.
+  if (freq === 'one_time') {
+    const f = tzFormatDate(startsOn, { month: 'short', day: 'numeric', year: 'numeric' });
+    el.innerHTML = `
+      <div class="freq-preview-head">Schedule preview</div>
+      <div class="freq-preview-next">Due once: ${f}</div>
+      <div class="freq-preview-then">Does not repeat</div>`;
+    document.getElementById('tmNextDue').value = startsOn;
+    return;
+  }
   const interval = Math.max(1, parseInt(document.getElementById('freqInterval').value, 10) || 1);
   const fDay   = parseInt(document.getElementById('freqDay').value, 10)   || null;
   const fDow   = parseInt(document.getElementById('freqDow').value, 10)   || null;
