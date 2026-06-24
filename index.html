@@ -174,9 +174,12 @@
     .auto-cal-sw{width:10px;height:10px;border-radius:3px;display:inline-block;flex-shrink:0}
     .msg-replies{margin:8px 0 0 14px;padding-left:12px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:8px}
     .msg-reply .msg-body{font-size:13px}
-    .msg-reply-box{display:flex;gap:6px;align-items:flex-end;margin-top:8px}
-    .msg-reply-input{flex:1;border:1px solid var(--border);border-radius:6px;resize:none;padding:6px 8px;font-family:'Inter',sans-serif;font-size:13px;outline:none;min-height:34px}
-    .msg-reply-input:focus{border-color:var(--accent)}
+    .reply-composer{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:10px}
+    .reply-composer .msg-input{display:block;border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none}
+    .reply-prev{padding:8px 12px;border-bottom:1px solid var(--border)}
+    .reply-foot{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg)}
+    .reply-attach{cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);transition:color .15s}
+    .reply-attach:hover{color:var(--accent)}
     .tool-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
     .tool-link{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:#fff;text-decoration:none;color:var(--text);transition:all .15s}
     .tool-link:hover{border-color:var(--accent);box-shadow:0 3px 12px rgba(0,0,0,.07);transform:translateY(-1px)}
@@ -4067,9 +4070,57 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
 // only visible when the "Show resolved" toggle is on — at which point they
 // render with strikethrough + a "Resolved" badge. Clients always see them in
 // the resolved style (never hidden). Anyone on the team can toggle the state.
+function chatAttachHtml(url) {
+  if (!url) return '';
+  const isPdf = /\.pdf(\?|$)/i.test(url);
+  if (isPdf) {
+    return `<div style="margin-top:8px"><a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);text-decoration:none;color:var(--text);font-size:13px;font-weight:500"><span style="font-size:18px">📄</span>Open PDF</a></div>`;
+  }
+  return `<div style="margin-top:8px"><img src="${url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" /></div>`;
+}
+// Reply composer mirrors the main "start a post" box: full width, same font,
+// "Reply…" placeholder, a single Reply button, and screenshot/PDF attach.
+function replyComposerHtml(rootId, kind) {
+  const inputCls = kind === 'team' ? 'team-reply-input' : 'msg-reply-input';
+  const onKey = kind === 'team' ? `teamReplyKey(event,'${rootId}')` : `msgReplyKey(event,'${rootId}')`;
+  const onSend = kind === 'team' ? `sendTeamReply('${rootId}')` : `sendMsgReply('${rootId}')`;
+  return `<div class="reply-composer">
+    <textarea class="msg-input ${inputCls}" data-root-id="${rootId}" rows="2" placeholder="Reply…" oninput="onMentionInput(event)" onkeydown="${onKey}"></textarea>
+    <div class="reply-prev" id="replyPrev_${rootId}" style="display:none"></div>
+    <div class="reply-foot">
+      <label class="reply-attach"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>Attach screenshot or PDF<input type="file" accept="image/*,application/pdf,.pdf" style="display:none" onchange="replyAttachSelect(event,'${rootId}')" /></label>
+      <button class="btn btn-primary btn-sm" onclick="${onSend}">Reply</button>
+    </div>
+  </div>`;
+}
+const replyFiles = new Map();
+function replyAttachSelect(e, rootId) {
+  const file = e.target.files[0];
+  if (!file) return;
+  replyFiles.set(rootId, file);
+  const wrap = document.getElementById('replyPrev_' + rootId);
+  if (!wrap) return;
+  const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
+  if (isPdf) {
+    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)"><span style="font-size:18px">📄</span><span>${escHtml(file.name)}</span><button onclick="clearReplyAttach('${rootId}')" style="margin-left:auto;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;line-height:1">×</button></div>`;
+    wrap.style.display = 'block';
+  } else {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      wrap.innerHTML = `<div style="position:relative;display:inline-block"><img src="${ev.target.result}" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" /><button onclick="clearReplyAttach('${rootId}')" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:11px;line-height:1">×</button></div>`;
+      wrap.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+}
+function clearReplyAttach(rootId) {
+  replyFiles.delete(rootId);
+  const wrap = document.getElementById('replyPrev_' + rootId);
+  if (wrap) { wrap.innerHTML = ''; wrap.style.display = 'none'; }
+}
 let currentMessages = [];
 function msgImgHtml(m) {
-  return m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
+  return chatAttachHtml(m.image_url);
 }
 function renderMsgReply(m) {
   const internalBadge = m.is_internal ? `<span class="msg-internal-badge">🔒 Internal</span>` : '';
@@ -4091,31 +4142,33 @@ function renderMsgCard(m, replies) {
     <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${internalBadge}${badgeHtml}${btnHtml}</div>
     <div class="msg-body">${highlightMentions(m.body)}${msgImgHtml(m)}</div>
     ${repliesHtml}
-    <div class="msg-reply-box">
-      <textarea class="msg-reply-input" data-root-id="${m.id}" rows="1" placeholder="Write a reply…" oninput="onMentionInput(event)" onkeydown="msgReplyKey(event,'${m.id}')"></textarea>
-      <button class="btn btn-primary btn-sm" onclick="sendMsgReply('${m.id}')">Reply</button>
-    </div>
+    ${replyComposerHtml(m.id, 'msg')}
   </div>`;
 }
 async function sendMsgReply(rootId) {
   const ta = document.querySelector('.msg-reply-input[data-root-id="' + rootId + '"]');
   if (!ta) return;
   const body = ta.value.trim();
-  if (!body) return;
+  const file = replyFiles.get(rootId);
+  if (!body && !file) return;
   const author = document.getElementById('sidebarName').textContent;
   const root = currentMessages.find(x => x.id === rootId);
   const isInternal = root ? !!root.is_internal : true;
   const client = allClients.find(c => c.id === currentClientId);
   const context = client ? client.name : 'a client';
+  let imageUrl = null;
+  if (file) { imageUrl = await uploadMsgImage(file, `client-${currentClientId}`); if (!imageUrl) { alert("Couldn't upload the attachment — please try again."); return; } }
+  const isPdf = file && (/pdf/i.test(file.type) || /\.pdf$/i.test(file.name));
+  const finalBody = body || (file ? (isPdf ? '📄 PDF' : '📷 Image') : '');
   try {
-    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body, is_team: true, parent_message_id: rootId, is_internal: isInternal }), 'Send reply');
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: finalBody, is_team: true, parent_message_id: rootId, is_internal: isInternal, image_url: imageUrl }), 'Send reply');
   } catch (err) {
     alert("Couldn't post your reply — " + (err.message || 'please try again.'));
     return;
   }
   ta.value = '';
-  const mentions = detectMentions(body);
-  for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, context, body, null); }
+  clearReplyAttach(rootId);
+  if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, context, body, imageUrl); } }
   await loadMessages(currentClientId);
   loadPortalBadge();
 }
@@ -4268,7 +4321,7 @@ async function loadTeamMessages() {
   list.scrollTop = list.scrollHeight;
 }
 function teamImgHtml(m) {
-  return m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
+  return chatAttachHtml(m.image_url);
 }
 function teamClearBtn(id) {
   return `<button onclick="clearTeamNote('${id}')" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Clear</button>`;
@@ -4285,23 +4338,25 @@ function renderTeamCard(m, replies) {
     <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${teamClearBtn(m.id)}</div>
     <div class="msg-body">${highlightMentions(m.body)}${teamImgHtml(m)}</div>
     ${repliesHtml}
-    <div class="msg-reply-box">
-      <textarea class="team-reply-input" data-root-id="${m.id}" rows="1" placeholder="Write a reply…" oninput="onMentionInput(event)" onkeydown="teamReplyKey(event,'${m.id}')"></textarea>
-      <button class="btn btn-primary btn-sm" onclick="sendTeamReply('${m.id}')">Reply</button>
-    </div>
+    ${replyComposerHtml(m.id, 'team')}
   </div>`;
 }
 async function sendTeamReply(rootId) {
   const ta = document.querySelector('.team-reply-input[data-root-id="' + rootId + '"]');
   if (!ta) return;
   const body = ta.value.trim();
-  if (!body) return;
+  const file = replyFiles.get(rootId);
+  if (!body && !file) return;
   const author = document.getElementById('sidebarName').textContent;
-  const { error } = await sb.from('team_messages').insert({ author, body, parent_message_id: rootId });
+  let imageUrl = null;
+  if (file) { imageUrl = await uploadMsgImage(file, 'team'); if (!imageUrl) { alert("Couldn't upload the attachment — please try again."); return; } }
+  const isPdf = file && (/pdf/i.test(file.type) || /\.pdf$/i.test(file.name));
+  const finalBody = body || (file ? (isPdf ? '📄 PDF' : '📷 Image') : '');
+  const { error } = await sb.from('team_messages').insert({ author, body: finalBody, parent_message_id: rootId, image_url: imageUrl });
   if (error) { alert('Could not post reply: ' + error.message); return; }
   ta.value = '';
-  const mentions = detectMentions(body);
-  for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, null); }
+  clearReplyAttach(rootId);
+  if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, imageUrl); } }
   await loadTeamMessages();
 }
 function teamReplyKey(e, rootId) {
