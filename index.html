@@ -1476,23 +1476,33 @@ function myClientIdSet() {
 // (subpost) adds a bubble ONLY when its author differs from the root author — a
 // reply from the same person folds into that post and adds nothing. Operates on
 // the uncleared rows; a reply whose root isn't present is treated as its own root.
-function bubbleCounts(rows) {
+function bubbleCounts(rows, meName) {
+  // A thread counts as exactly 1 bubble while it is "waiting on me" — i.e. the
+  // LATEST message in the thread is from someone other than me. Once I reply (I
+  // become the latest author) it drops to 0, and it comes back only when the
+  // other person posts again. Replies are grouped onto their root thread, so a
+  // post plus my replies is still one thread, and my own replies never add bubbles.
   const byId = new Map((rows || []).map(m => [m.id, m]));
-  const rootOf = (m) => {
+  const rootIdOf = (m) => {
     let r = m, guard = 0;
     while (r.parent_message_id && byId.has(r.parent_message_id) && guard++ < 50) r = byId.get(r.parent_message_id);
-    return r;
+    return r.id;
   };
+  const thread = new Map();   // rootId -> { latestAuthor, latestAt, client_id }
+  for (const m of (rows || [])) {
+    const rid = rootIdOf(m);
+    let t = thread.get(rid);
+    if (!t) { t = { latestAuthor: null, latestAt: null, client_id: null }; thread.set(rid, t); }
+    if (m.client_id != null) t.client_id = m.client_id;
+    if (!t.latestAt || new Date(m.created_at) > new Date(t.latestAt)) { t.latestAt = m.created_at; t.latestAuthor = m.author; }
+  }
   const perClient = {};
   let total = 0;
-  for (const m of (rows || [])) {
-    const root = rootOf(m);
-    const isRoot = (m.id === root.id);
-    if (!isRoot && m.author === root.author) continue;   // own follow-up → no bubble
+  thread.forEach((t) => {
+    if (t.latestAuthor === meName) return;   // I responded last → nothing waiting on me
     total++;
-    const cid = (m.client_id != null) ? m.client_id : (root.client_id != null ? root.client_id : null);
-    if (cid != null) perClient[cid] = (perClient[cid] || 0) + 1;
-  }
+    if (t.client_id != null) perClient[t.client_id] = (perClient[t.client_id] || 0) + 1;
+  });
   return { total, perClient };
 }
 
@@ -1500,10 +1510,10 @@ async function loadClientCommentCounts() {
   try {
     const { data, error } = await sb
       .from('messages')
-      .select('id, parent_message_id, author, cleared, client_id')
+      .select('id, parent_message_id, author, created_at, client_id')
       .eq('cleared', false);
     if (error) throw error;
-    const { perClient } = bubbleCounts(data || []);
+    const { perClient } = bubbleCounts(data || [], getViewingUserName());
     const owned = myClientIdSet();
     const counts = {};
     Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) counts[cid] = perClient[cid]; });
@@ -1830,11 +1840,11 @@ async function loadPortalBadge() {
   try {
     const { data, error } = await sb
       .from('messages')
-      .select('id, parent_message_id, author, cleared, client_id')
+      .select('id, parent_message_id, author, created_at, client_id')
       .eq('cleared', false);
     if (error) throw error;
 
-    const { perClient } = bubbleCounts(data || []);
+    const { perClient } = bubbleCounts(data || [], getViewingUserName());
     const owned = myClientIdSet();
     let count = 0;
     Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) count += perClient[cid]; });
@@ -4319,9 +4329,9 @@ async function loadTeamChatBadge() {
   const badge = document.getElementById('teamChatBadge');
   if (!badge) return;
   try {
-    const { data, error } = await sb.from('team_messages').select('id, parent_message_id, author').eq('cleared', false);
+    const { data, error } = await sb.from('team_messages').select('id, parent_message_id, author, created_at').eq('cleared', false);
     if (error) throw error;
-    const count = bubbleCounts(data || []).total;
+    const count = bubbleCounts(data || [], getViewingUserName()).total;
     if (count > 0) { badge.textContent = count > 99 ? '99+' : String(count); badge.style.display = ''; }
     else badge.style.display = 'none';
   } catch (err) {
