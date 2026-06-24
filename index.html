@@ -1472,24 +1472,41 @@ function myClientIdSet() {
   return ids;
 }
 
+// Bubble counting rule: each thread's root post counts as 1 bubble. A reply
+// (subpost) adds a bubble ONLY when its author differs from the root author — a
+// reply from the same person folds into that post and adds nothing. Operates on
+// the uncleared rows; a reply whose root isn't present is treated as its own root.
+function bubbleCounts(rows) {
+  const byId = new Map((rows || []).map(m => [m.id, m]));
+  const rootOf = (m) => {
+    let r = m, guard = 0;
+    while (r.parent_message_id && byId.has(r.parent_message_id) && guard++ < 50) r = byId.get(r.parent_message_id);
+    return r;
+  };
+  const perClient = {};
+  let total = 0;
+  for (const m of (rows || [])) {
+    const root = rootOf(m);
+    const isRoot = (m.id === root.id);
+    if (!isRoot && m.author === root.author) continue;   // own follow-up → no bubble
+    total++;
+    const cid = (m.client_id != null) ? m.client_id : (root.client_id != null ? root.client_id : null);
+    if (cid != null) perClient[cid] = (perClient[cid] || 0) + 1;
+  }
+  return { total, perClient };
+}
+
 async function loadClientCommentCounts() {
   try {
     const { data, error } = await sb
       .from('messages')
-      .select('id, parent_message_id, is_team, created_at, cleared, client_id')
+      .select('id, parent_message_id, author, cleared, client_id')
       .eq('cleared', false);
     if (error) throw error;
-    const latest = new Map();  // thread root -> latest message meta
-    for (const m of (data || [])) {
-      const key = m.parent_message_id || m.id;
-      const cur = latest.get(key);
-      if (!cur || new Date(m.created_at) > new Date(cur.created_at)) {
-        latest.set(key, { created_at: m.created_at, is_team: m.is_team, client_id: m.client_id });
-      }
-    }
+    const { perClient } = bubbleCounts(data || []);
     const owned = myClientIdSet();
     const counts = {};
-    latest.forEach((v) => { if (v.client_id && (!owned || owned.has(v.client_id))) counts[v.client_id] = (counts[v.client_id] || 0) + 1; });
+    Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) counts[cid] = perClient[cid]; });
     clientCommentCounts = counts;
   } catch (err) {
     console.error('loadClientCommentCounts error:', err);
@@ -1813,23 +1830,14 @@ async function loadPortalBadge() {
   try {
     const { data, error } = await sb
       .from('messages')
-      .select('id, parent_message_id, is_team, created_at, cleared, client_id')
+      .select('id, parent_message_id, author, cleared, client_id')
       .eq('cleared', false);
     if (error) throw error;
 
-    // Reduce to the latest message per thread (root id = parent_message_id || id).
-    const latest = new Map();
-    for (const m of (data || [])) {
-      const key = m.parent_message_id || m.id;
-      const cur = latest.get(key);
-      if (!cur || new Date(m.created_at) > new Date(cur.created_at)) {
-        latest.set(key, { created_at: m.created_at, is_team: m.is_team, client_id: m.client_id });
-      }
-    }
-
+    const { perClient } = bubbleCounts(data || []);
     const owned = myClientIdSet();
     let count = 0;
-    latest.forEach((v) => { if (!owned || (v.client_id && owned.has(v.client_id))) count++; });
+    Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) count += perClient[cid]; });
 
     const txt = count > 99 ? '99+' : String(count);
     [badge, document.getElementById('clientsBadge')].forEach((b) => {
@@ -4311,9 +4319,9 @@ async function loadTeamChatBadge() {
   const badge = document.getElementById('teamChatBadge');
   if (!badge) return;
   try {
-    const { data, error } = await sb.from('team_messages').select('id').eq('cleared', false);
+    const { data, error } = await sb.from('team_messages').select('id, parent_message_id, author').eq('cleared', false);
     if (error) throw error;
-    const count = (data || []).length;
+    const count = bubbleCounts(data || []).total;
     if (count > 0) { badge.textContent = count > 99 ? '99+' : String(count); badge.style.display = ''; }
     else badge.style.display = 'none';
   } catch (err) {
