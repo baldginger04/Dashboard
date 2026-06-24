@@ -594,7 +594,7 @@
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients</div>
         <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
         <div class="nav-section">Team</div>
-        <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat</div>
+        <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat <span class="nav-badge" id="teamChatBadge" style="display:none">0</span></div>
         <div class="nav-section">Tools</div>
         <a class="nav-item" id="nav-portal" href="https://client.baldginger.com/" target="_blank" rel="noopener">
           <span>🌐</span> Client Portal <span class="nav-badge" id="portalBadge" style="display:none">0</span>
@@ -1383,6 +1383,7 @@ async function showApp() {
   subscribeMyRealtime(name);
   // Sidebar Client Portal badge: initial count + live updates.
   loadPortalBadge();
+  loadTeamChatBadge();
   subscribePortalBadge();
 }
 
@@ -1398,8 +1399,7 @@ async function loadClientCommentCounts() {
     const { data, error } = await sb
       .from('messages')
       .select('id, parent_message_id, is_team, created_at, cleared, client_id')
-      .eq('cleared', false)
-      .eq('is_internal', false);
+      .eq('cleared', false);
     if (error) throw error;
     const latest = new Map();  // thread root -> latest message meta
     for (const m of (data || [])) {
@@ -1410,7 +1410,7 @@ async function loadClientCommentCounts() {
       }
     }
     const counts = {};
-    latest.forEach((v) => { if (v.is_team !== true && v.client_id) counts[v.client_id] = (counts[v.client_id] || 0) + 1; });
+    latest.forEach((v) => { if (v.client_id) counts[v.client_id] = (counts[v.client_id] || 0) + 1; });
     clientCommentCounts = counts;
   } catch (err) {
     console.error('loadClientCommentCounts error:', err);
@@ -1732,8 +1732,7 @@ async function loadPortalBadge() {
     const { data, error } = await sb
       .from('messages')
       .select('id, parent_message_id, is_team, created_at, cleared')
-      .eq('cleared', false)
-      .eq('is_internal', false);
+      .eq('cleared', false);
     if (error) throw error;
 
     // Reduce to the latest message per thread (root id = parent_message_id || id).
@@ -1747,7 +1746,7 @@ async function loadPortalBadge() {
     }
 
     let count = 0;
-    latest.forEach((v) => { if (v.is_team !== true) count++; });
+    latest.forEach(() => { count++; });   // any thread with an uncleared message
 
     if (count > 0) {
       badge.textContent = count > 99 ? '99+' : String(count);
@@ -1771,6 +1770,7 @@ function subscribePortalBadge() {
       if (portalBadgeDebounce) clearTimeout(portalBadgeDebounce);
       portalBadgeDebounce = setTimeout(() => { portalBadgeDebounce = null; loadPortalBadge(); refreshClientBubblesIfVisible(); }, 300);
     })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'team_messages' }, () => { loadTeamChatBadge(); })
     .subscribe();
 }
 
@@ -4033,7 +4033,22 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ── Team messages ─────────────────────────────────────────
+async function loadTeamChatBadge() {
+  const badge = document.getElementById('teamChatBadge');
+  if (!badge) return;
+  try {
+    const { data, error } = await sb.from('team_messages').select('id').eq('cleared', false);
+    if (error) throw error;
+    const count = (data || []).length;
+    if (count > 0) { badge.textContent = count > 99 ? '99+' : String(count); badge.style.display = ''; }
+    else badge.style.display = 'none';
+  } catch (err) {
+    console.error('loadTeamChatBadge error:', err);
+  }
+}
+
 async function loadTeamMessages() {
+  loadTeamChatBadge();
   const { data } = await sb.from('team_messages').select('*').eq('cleared', false).order('created_at');
   const list = document.getElementById('teamMsgList');
   if (!data || !data.length) { 
