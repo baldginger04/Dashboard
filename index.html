@@ -596,7 +596,7 @@
         <div class="nav-item" onclick="showPage('myweek')" id="nav-myweek">
           <span>📅</span> My Week <span class="nav-badge" id="myweekBadge" style="display:none">0</span>
         </div>
-        <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients</div>
+        <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients <span class="nav-badge" id="clientsBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
         <div class="nav-section">Team</div>
         <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat <span class="nav-badge" id="teamChatBadge" style="display:none">0</span></div>
@@ -1754,12 +1754,12 @@ async function loadPortalBadge() {
     let count = 0;
     latest.forEach(() => { count++; });   // any thread with an uncleared message
 
-    if (count > 0) {
-      badge.textContent = count > 99 ? '99+' : String(count);
-      badge.style.display = '';
-    } else {
-      badge.style.display = 'none';
-    }
+    const txt = count > 99 ? '99+' : String(count);
+    [badge, document.getElementById('clientsBadge')].forEach((b) => {
+      if (!b) return;
+      if (count > 0) { b.textContent = txt; b.style.display = ''; }
+      else b.style.display = 'none';
+    });
   } catch (err) {
     console.error('loadPortalBadge error:', err);
     // Non-critical — leave whatever the badge currently shows.
