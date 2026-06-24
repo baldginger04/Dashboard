@@ -4357,13 +4357,13 @@ const AUTO_PIPELINES = [
   { key: 'Mr. Greens',     section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
   { key: 'Segovia',        section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
   { key: 'UNFI',           section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
-  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120, dow: [] },
-  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
-  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
-  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
-  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
+  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120, dow: [3, 4] }, // Wed (Van Horn's) + Thu (Teddy's)
+  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [1] },    // Mon
+  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [2] },    // Tue
+  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [5] },    // Fri
+  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [0] },    // Sun
   { key: 'ALSCO',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [4] },
-  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
+  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [1] },    // Mon
 ];
 
 function autoEsc(s) {
