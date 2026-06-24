@@ -162,13 +162,27 @@
     .auto-cal-daily b{color:var(--text)}
     .auto-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
     .auto-cal-dow{background:var(--bg3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600;text-align:center;padding:6px 0}
-    .auto-cal-cell{background:#fff;min-height:76px;padding:5px 6px;display:flex;flex-direction:column;gap:3px}
+    .auto-cal-cell{background:#fff;min-height:104px;padding:5px 6px;display:flex;flex-direction:column;gap:2px}
     .auto-cal-cell.is-other{background:#faf9f6}
     .auto-cal-daynum{font-size:11px;color:var(--text3);font-weight:600;line-height:18px}
     .auto-cal-cell.is-today .auto-cal-daynum{color:#fff;background:var(--accent);width:18px;height:18px;border-radius:50%;text-align:center}
-    .auto-cal-chip{font-size:10px;background:var(--coral-light);color:#7a2e12;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+    .auto-cal-chip{display:block;font-size:10px;color:#333;border-radius:4px;padding:1px 6px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
     .auto-cal-tbd{font-size:12px;color:var(--text2);margin-top:10px}
     .auto-cal-tbd .auto-pill{margin:2px 4px 0 0;display:inline-block}
+    .auto-cal-legend{display:flex;flex-wrap:wrap;gap:5px 14px;font-size:11px;color:var(--text2);margin-bottom:10px}
+    .auto-cal-leg{display:inline-flex;align-items:center;gap:5px}
+    .auto-cal-sw{width:10px;height:10px;border-radius:3px;display:inline-block;flex-shrink:0}
+    .msg-replies{margin:8px 0 0 14px;padding-left:12px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:8px}
+    .msg-reply .msg-body{font-size:13px}
+    .msg-reply-box{display:flex;gap:6px;align-items:flex-end;margin-top:8px}
+    .msg-reply-input{flex:1;border:1px solid var(--border);border-radius:6px;resize:none;padding:6px 8px;font-family:'Inter',sans-serif;font-size:13px;outline:none;min-height:34px}
+    .msg-reply-input:focus{border-color:var(--accent)}
+    .tool-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+    .tool-link{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:#fff;text-decoration:none;color:var(--text);transition:all .15s}
+    .tool-link:hover{border-color:var(--accent);box-shadow:0 3px 12px rgba(0,0,0,.07);transform:translateY(-1px)}
+    .tool-link-icon{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0}
+    .tool-link-name{font-weight:600;font-size:14px}
+    .tool-link-sub{font-size:11px;color:var(--text3)}
     .auto-card.s-ok{border-left-color:var(--green)}
     .auto-card.s-warn{border-left-color:var(--accent2)}
     .auto-card.s-down{border-left-color:var(--red)}
@@ -620,6 +634,7 @@
         </a>
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
+        <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
       </nav>
       <div class="sidebar-bottom">
         <button class="logout-btn" onclick="doLogout()">Sign out</button>
@@ -869,6 +884,20 @@
             <a class="btn btn-secondary" style="text-decoration:none" href="https://baldginger-invoices.up.railway.app/log" target="_blank" rel="noopener">Activity log ↗</a>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:1.15rem">Opens in a new tab · password-protected (separate login from Triple)</div>
+        </div>
+      </div>
+
+      <!-- QUICK LINKS -->
+      <div class="page" id="page-links">
+        <div class="page-header"><div><div class="page-title">Quick Links</div><div class="page-sub">Jump straight to the apps we use every day</div></div></div>
+        <div class="card" style="padding:1.5rem">
+          <div class="tool-links">
+            <a class="tool-link" href="https://app.xtrachef.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#F26722">XC</span><span><span class="tool-link-name">XtraChef</span><br><span class="tool-link-sub">Invoice & cost management</span></span></a>
+            <a class="tool-link" href="https://pos.toasttab.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#FF4C00">T</span><span><span class="tool-link-name">Toast</span><br><span class="tool-link-sub">Toast Web back office</span></span></a>
+            <a class="tool-link" href="https://app.bill.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#1A8754">B</span><span><span class="tool-link-name">Bill.com</span><br><span class="tool-link-sub">AP / AR & payments</span></span></a>
+            <a class="tool-link" href="https://qbo.intuit.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#2CA01C">QB</span><span><span class="tool-link-name">QuickBooks Online</span><br><span class="tool-link-sub">The books</span></span></a>
+            <a class="tool-link" href="https://dashboard.stripe.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#635BFF">S</span><span><span class="tool-link-name">Stripe</span><br><span class="tool-link-sub">Payments dashboard</span></span></a>
+          </div>
         </div>
       </div>
 
@@ -4038,21 +4067,61 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
 // only visible when the "Show resolved" toggle is on — at which point they
 // render with strikethrough + a "Resolved" badge. Clients always see them in
 // the resolved style (never hidden). Anyone on the team can toggle the state.
-function renderMsgItem(m) {
-  const imgHtml = m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
+let currentMessages = [];
+function msgImgHtml(m) {
+  return m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
+}
+function renderMsgReply(m) {
+  const internalBadge = m.is_internal ? `<span class="msg-internal-badge">🔒 Internal</span>` : '';
+  const isResolved = !!m.cleared;
+  const btnLabel = isResolved ? 'Unmark' : '✓ Clear';
+  return `<div class="msg-reply${m.is_internal ? ' is-internal' : ''}" id="cmsg_${m.id}">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${internalBadge}<button class="msg-clear-btn" style="margin-left:auto" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button></div>
+    <div class="msg-body">${highlightMentions(m.body)}${msgImgHtml(m)}</div>
+  </div>`;
+}
+function renderMsgCard(m, replies) {
   const isResolved = !!m.cleared;
   const badgeHtml = isResolved ? `<span class="msg-resolved-badge">✓ Resolved</span>` : '';
-  // Internal notes are team-only — clients never receive them (enforced in the
-  // portal and by RLS). Badge them clearly so the team always knows what's visible.
   const internalBadge = m.is_internal ? `<span class="msg-internal-badge">🔒 Internal — team only</span>` : '';
-  // Button label flips based on current state. onclick calls the same toggle
-  // function either way; the function reads the row's current state and flips it.
   const btnLabel = isResolved ? 'Unmark' : '✓ Clear';
   const btnHtml = `<button class="msg-clear-btn" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button>`;
+  const repliesHtml = (replies && replies.length) ? `<div class="msg-replies">${replies.map(renderMsgReply).join('')}</div>` : '';
   return `<div class="msg-item${isResolved ? ' is-resolved' : ''}${m.is_internal ? ' is-internal' : ''}" id="cmsg_${m.id}">
     <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${internalBadge}${badgeHtml}${btnHtml}</div>
-    <div class="msg-body">${highlightMentions(m.body)}${imgHtml}</div>
+    <div class="msg-body">${highlightMentions(m.body)}${msgImgHtml(m)}</div>
+    ${repliesHtml}
+    <div class="msg-reply-box">
+      <textarea class="msg-reply-input" data-root-id="${m.id}" rows="1" placeholder="Write a reply…" oninput="onMentionInput(event)" onkeydown="msgReplyKey(event,'${m.id}')"></textarea>
+      <button class="btn btn-primary btn-sm" onclick="sendMsgReply('${m.id}')">Reply</button>
+    </div>
   </div>`;
+}
+async function sendMsgReply(rootId) {
+  const ta = document.querySelector('.msg-reply-input[data-root-id="' + rootId + '"]');
+  if (!ta) return;
+  const body = ta.value.trim();
+  if (!body) return;
+  const author = document.getElementById('sidebarName').textContent;
+  const root = currentMessages.find(x => x.id === rootId);
+  const isInternal = root ? !!root.is_internal : true;
+  const client = allClients.find(c => c.id === currentClientId);
+  const context = client ? client.name : 'a client';
+  try {
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body, is_team: true, parent_message_id: rootId, is_internal: isInternal }), 'Send reply');
+  } catch (err) {
+    alert("Couldn't post your reply — " + (err.message || 'please try again.'));
+    return;
+  }
+  ta.value = '';
+  const mentions = detectMentions(body);
+  for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, context, body, null); }
+  await loadMessages(currentClientId);
+  loadPortalBadge();
+}
+function msgReplyKey(e, rootId) {
+  if (mentionKeydown(e)) return;
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsgReply(rootId); }
 }
 
 // Flip the cleared boolean on a single message row. Called from the per-message
@@ -4071,7 +4140,7 @@ async function loadMessages(clientId) {
   const myToken = ++loadMessagesToken;
   const list = document.getElementById('msgList');
   // Toggle defaults to off → hide cleared messages. When on, show everything
-  // (cleared messages render with strikethrough + Resolved badge via renderMsgItem).
+  // (cleared messages render with strikethrough + Resolved badge via renderMsgCard).
   const showResolved = document.getElementById('showResolvedToggle')?.checked || false;
   // Wrapped in withTimeout + one retry to recover from Supabase cold-starts.
   const fetchMessages = () => {
@@ -4100,7 +4169,13 @@ async function loadMessages(clientId) {
       list.innerHTML = `<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">${emptyMsg}</div>`;
       return;
     }
-    list.innerHTML = data.map(renderMsgItem).join('');
+    currentMessages = data;
+    const repliesByRoot = {};
+    data.forEach(m => { if (m.parent_message_id) (repliesByRoot[m.parent_message_id] = repliesByRoot[m.parent_message_id] || []).push(m); });
+    const rootIds = new Set(data.filter(m => !m.parent_message_id).map(m => m.id));
+    const roots = data.filter(m => !m.parent_message_id || !rootIds.has(m.parent_message_id));
+    roots.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    list.innerHTML = roots.map(r => renderMsgCard(r, repliesByRoot[r.id] || [])).join('');
     list.scrollTop = list.scrollHeight;
   } catch (err) {
     if (myToken !== loadMessagesToken) return;  // don't paint error for stale call
@@ -4180,37 +4255,69 @@ async function loadTeamMessages() {
   loadTeamChatBadge();
   const { data } = await sb.from('team_messages').select('*').eq('cleared', false).order('created_at');
   const list = document.getElementById('teamMsgList');
-  if (!data || !data.length) { 
-    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No messages yet. Send something!</div>'; 
-    return; 
+  if (!data || !data.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No messages yet. Send something!</div>';
+    return;
   }
-  list.innerHTML = data.map(m => {
-    const imgHtml = m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
-    return `<div class="msg-item" id="tmsg_${m.id}">
-      <div class="msg-meta">
-        ${avHtml(m.author)}
-        <span class="msg-author" style="margin-left:6px">${m.author}</span>
-        <span class="msg-time">${fmtDateTime(m.created_at)}</span>
-        <button onclick="clearTeamNote('${m.id}')" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Clear</button>
-      </div>
-      <div class="msg-body">${highlightMentions(m.body)}${imgHtml}</div>
-    </div>`;
-  }).join('');
+  const repliesByRoot = {};
+  data.forEach(m => { if (m.parent_message_id) (repliesByRoot[m.parent_message_id] = repliesByRoot[m.parent_message_id] || []).push(m); });
+  const rootIds = new Set(data.filter(m => !m.parent_message_id).map(m => m.id));
+  const roots = data.filter(m => !m.parent_message_id || !rootIds.has(m.parent_message_id));
+  roots.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  list.innerHTML = roots.map(r => renderTeamCard(r, repliesByRoot[r.id] || [])).join('');
   list.scrollTop = list.scrollHeight;
+}
+function teamImgHtml(m) {
+  return m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
+}
+function teamClearBtn(id) {
+  return `<button onclick="clearTeamNote('${id}')" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Clear</button>`;
+}
+function renderTeamReply(m) {
+  return `<div class="msg-reply" id="tmsg_${m.id}">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${teamClearBtn(m.id)}</div>
+    <div class="msg-body">${highlightMentions(m.body)}${teamImgHtml(m)}</div>
+  </div>`;
+}
+function renderTeamCard(m, replies) {
+  const repliesHtml = (replies && replies.length) ? `<div class="msg-replies">${replies.map(renderTeamReply).join('')}</div>` : '';
+  return `<div class="msg-item" id="tmsg_${m.id}">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${teamClearBtn(m.id)}</div>
+    <div class="msg-body">${highlightMentions(m.body)}${teamImgHtml(m)}</div>
+    ${repliesHtml}
+    <div class="msg-reply-box">
+      <textarea class="team-reply-input" data-root-id="${m.id}" rows="1" placeholder="Write a reply…" oninput="onMentionInput(event)" onkeydown="teamReplyKey(event,'${m.id}')"></textarea>
+      <button class="btn btn-primary btn-sm" onclick="sendTeamReply('${m.id}')">Reply</button>
+    </div>
+  </div>`;
+}
+async function sendTeamReply(rootId) {
+  const ta = document.querySelector('.team-reply-input[data-root-id="' + rootId + '"]');
+  if (!ta) return;
+  const body = ta.value.trim();
+  if (!body) return;
+  const author = document.getElementById('sidebarName').textContent;
+  const { error } = await sb.from('team_messages').insert({ author, body, parent_message_id: rootId });
+  if (error) { alert('Could not post reply: ' + error.message); return; }
+  ta.value = '';
+  const mentions = detectMentions(body);
+  for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, null); }
+  await loadTeamMessages();
+}
+function teamReplyKey(e, rootId) {
+  if (mentionKeydown(e)) return;
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTeamReply(rootId); }
 }
 
 async function clearTeamNote(id) {
   try {
-    await writeOrThrow(sb.from('team_messages').update({ cleared: true }).eq('id', id), 'Clear note');
+    // Clearing a root cascades to its replies; clearing a reply clears just it.
+    await writeOrThrow(sb.from('team_messages').update({ cleared: true }).or('id.eq.' + id + ',parent_message_id.eq.' + id), 'Clear note');
   } catch (err) {
     alert("Couldn't clear this note — " + (err.message || 'please try again.'));
     return;
   }
-  document.getElementById('tmsg_' + id)?.remove();
-  const list = document.getElementById('teamMsgList');
-  if (!list.querySelector('.msg-item')) {
-    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No messages yet. Send something!</div>';
-  }
+  await loadTeamMessages();
 }
 
 function handleTeamMsgKey(e) {
@@ -4260,17 +4367,18 @@ function renderAutoCalendar(){
   const ref = autoCalRef, year = ref.getFullYear(), month = ref.getMonth();
   document.getElementById('autoCalLabel').textContent = ref.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
-  const daily = AUTO_PIPELINES.filter(p => p.daily);
-  document.getElementById('autoCalDaily').innerHTML = daily.length
-    ? '<b>Runs every day:</b> ' + daily.map(p => autoEsc(p.key) + ' (' + autoEsc(p.cadence) + ')').join(' \u00b7 ')
-    : '';
+  // Vendor color legend.
+  document.getElementById('autoCalDaily').innerHTML =
+    '<div class="auto-cal-legend">' +
+    Object.keys(AUTO_VENDOR_COLORS).map(v =>
+      `<span class="auto-cal-leg"><span class="auto-cal-sw" style="background:${AUTO_VENDOR_COLORS[v]}"></span>${autoEsc(v)}</span>`
+    ).join('') + '</div>';
+  const tbdEl = document.getElementById('autoCalTBD'); if (tbdEl) tbdEl.innerHTML = '';
 
-  const dowJobs = AUTO_PIPELINES.filter(p => Array.isArray(p.dow) && p.dow.length);
-  const tbd = AUTO_PIPELINES.filter(p => !p.daily && (!p.dow || !p.dow.length));
-  document.getElementById('autoCalTBD').innerHTML = tbd.length
-    ? '<b>Weekly \u2014 day not set yet:</b> ' + tbd.map(p => '<span class="auto-pill">' + autoEsc(p.key) + ' \u00b7 ' + autoEsc(p.cadence) + '</span>').join('')
-    : '';
-
+  const chipFor = e => {
+    const c = AUTO_VENDOR_COLORS[e.vendor] || '#888';
+    return `<span class="auto-cal-chip" style="background:${c}1a;border-left:3px solid ${c}" title="${autoEsc(e.label)}">${autoEsc(e.label)}</span>`;
+  };
   const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   const startDow = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -4283,9 +4391,8 @@ function renderAutoCalendar(){
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d), dow = date.getDay();
     const isToday = date.getTime() === today.getTime();
-    const chips = dowJobs.filter(p => p.dow.includes(dow))
-      .map(p => `<span class="auto-cal-chip" title="${autoEsc(p.key)} \u00b7 ${autoEsc(p.cadence)}">${autoEsc(p.key)}</span>`).join('');
-    cells += `<div class="auto-cal-cell${isToday ? ' is-today' : ''}"><span class="auto-cal-daynum">${d}</span>${chips}</div>`;
+    const runs = AUTO_SCHEDULE.filter(e => e.daily || (Array.isArray(e.dow) && e.dow.includes(dow)));
+    cells += `<div class="auto-cal-cell${isToday ? ' is-today' : ''}"><span class="auto-cal-daynum">${d}</span>${runs.map(chipFor).join('')}</div>`;
   }
   const trail = (7 - ((startDow + daysInMonth) % 7)) % 7;
   for (let i = 1; i <= trail; i++)
@@ -4346,24 +4453,57 @@ async function loadAutomation() {
 // SILENT still shows up — which is exactly the failure we want to catch.
 // key must match the label each script passes to logRun/logRun2 exactly.
 // staleH = hours of silence past which we flag it overdue (cadence + buffer).
-// Run-schedule fields drive the Automation Calendar:
-//   daily: true   -> runs every day (shown in the "Runs every day" banner)
-//   dow: [n,...]  -> runs on those weekdays (0=Sun, 1=Mon, ... 6=Sat)
-//   dow: []       -> weekly but the day isn't set yet (listed as "day not set")
 const AUTO_PIPELINES = [
-  { key: 'XtraChef Delivery', section: 'Delivery', cadence: 'hourly',  staleH: 3,   daily: true },
-  { key: 'Audubon → QBO',     section: 'Delivery', cadence: '~15 min', staleH: 1,   daily: true },
+  { key: 'XtraChef Delivery', section: 'Delivery', cadence: 'hourly',  staleH: 3 },
+  { key: 'Audubon → QBO',     section: 'Delivery', cadence: '~15 min', staleH: 1 },
 
-  { key: 'Mr. Greens',     section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
-  { key: 'Segovia',        section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
-  { key: 'UNFI',           section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
-  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120, dow: [3, 4] }, // Wed (Van Horn's) + Thu (Teddy's)
-  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [1] },    // Mon
-  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [2] },    // Tue
-  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [5] },    // Fri
-  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [0] },    // Sun
-  { key: 'ALSCO',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [4] },
-  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [1] },    // Mon
+  { key: 'Mr. Greens',     section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
+  { key: 'Segovia',        section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
+  { key: 'UNFI',           section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
+  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120 },
+  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'ALSCO',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+];
+
+// ── Automation Calendar schedule ─────────────────────────
+// Every scheduled run on the Run Schedule calendar, color-coded by vendor.
+//   daily: true  -> shows on every day
+//   dow: [n,...] -> shows on those weekdays (0=Sun, 1=Mon, ... 6=Sat)
+// Days come from the Apps Script triggers: Kehe Mon, Fintech Tue,
+// US Foods Van Horn's Wed / Teddy's Thu, ALSCO Thu, Faire Fri,
+// Slow Dough Sun, Skyvern Direct weekly Mon. Edit a label or move a run here.
+const AUTO_VENDOR_COLORS = {
+  'XtraChef':       '#2563EB',
+  'Audubon':        '#0D9488',
+  'Mr. Greens':     '#16A34A',
+  'Segovia':        '#65A30D',
+  'UNFI':           '#7C3AED',
+  'US Foods':       '#DC2626',
+  'Kehe':           '#EA580C',
+  'Fintech':        '#4F46E5',
+  'Faire':          '#DB2777',
+  'Slow Dough':     '#B45309',
+  'ALSCO':          '#0891B2',
+  'Skyvern Direct': '#C026D3',
+};
+const AUTO_SCHEDULE = [
+  { label: 'XtraChef — All Clients',        vendor: 'XtraChef',       daily: true },
+  { label: 'Audubon → QBO',                 vendor: 'Audubon',        daily: true },
+  { label: 'Mr. Greens — All Vendors',      vendor: 'Mr. Greens',     daily: true },
+  { label: 'Segovia — All Clients',         vendor: 'Segovia',        daily: true },
+  { label: 'UNFI — All Clients',            vendor: 'UNFI',           daily: true },
+  { label: 'Kehe — Radius',                 vendor: 'Kehe',           dow: [1] },
+  { label: 'Skyvern Direct — Segovia/UNFI', vendor: 'Skyvern Direct', dow: [1] },
+  { label: 'Fintech — All Clients',         vendor: 'Fintech',        dow: [2] },
+  { label: "US Foods — Van Horn's",         vendor: 'US Foods',       dow: [3] },
+  { label: "US Foods — Teddy's",            vendor: 'US Foods',       dow: [4] },
+  { label: 'ALSCO — All Clients',           vendor: 'ALSCO',          dow: [4] },
+  { label: 'Faire — Radius + Tiny Grocer',  vendor: 'Faire',          dow: [5] },
+  { label: 'Slow Dough — All Clients',      vendor: 'Slow Dough',     dow: [0] },
 ];
 
 function autoEsc(s) {
