@@ -183,7 +183,7 @@
     .tool-links{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
     .tool-link{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:#fff;text-decoration:none;color:var(--text);transition:all .15s}
     .tool-link:hover{border-color:var(--accent);box-shadow:0 3px 12px rgba(0,0,0,.07);transform:translateY(-1px)}
-    .tool-link-icon{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0}
+    .tool-link-icon{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;flex-shrink:0;background:#fff;border:1px solid var(--border);overflow:hidden}
     .tool-link-name{font-weight:600;font-size:14px}
     .tool-link-sub{font-size:11px;color:var(--text3)}
     .auto-card.s-ok{border-left-color:var(--green)}
@@ -895,11 +895,11 @@
         <div class="page-header"><div><div class="page-title">Quick Links</div><div class="page-sub">Jump straight to the apps we use every day</div></div></div>
         <div class="card" style="padding:1.5rem">
           <div class="tool-links">
-            <a class="tool-link" href="https://app.xtrachef.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#F26722">XC</span><span><span class="tool-link-name">XtraChef</span><br><span class="tool-link-sub">Invoice & cost management</span></span></a>
-            <a class="tool-link" href="https://pos.toasttab.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#FF4C00">T</span><span><span class="tool-link-name">Toast</span><br><span class="tool-link-sub">Toast Web back office</span></span></a>
-            <a class="tool-link" href="https://app.bill.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#1A8754">B</span><span><span class="tool-link-name">Bill.com</span><br><span class="tool-link-sub">AP / AR & payments</span></span></a>
-            <a class="tool-link" href="https://qbo.intuit.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#2CA01C">QB</span><span><span class="tool-link-name">QuickBooks Online</span><br><span class="tool-link-sub">The books</span></span></a>
-            <a class="tool-link" href="https://dashboard.stripe.com" target="_blank" rel="noopener"><span class="tool-link-icon" style="background:#635BFF">S</span><span><span class="tool-link-name">Stripe</span><br><span class="tool-link-sub">Payments dashboard</span></span></a>
+            <a class="tool-link" href="https://app.xtrachef.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=xtrachef.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='XC';p.style.background='#F26722';p.style.color='#fff'"/></span><span><span class="tool-link-name">XtraChef</span><br><span class="tool-link-sub">Invoice & cost management</span></span></a>
+            <a class="tool-link" href="https://pos.toasttab.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=toasttab.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='T';p.style.background='#FF4C00';p.style.color='#fff'"/></span><span><span class="tool-link-name">Toast</span><br><span class="tool-link-sub">Toast Web back office</span></span></a>
+            <a class="tool-link" href="https://app.bill.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=bill.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='B';p.style.background='#1A8754';p.style.color='#fff'"/></span><span><span class="tool-link-name">Bill.com</span><br><span class="tool-link-sub">AP / AR & payments</span></span></a>
+            <a class="tool-link" href="https://qbo.intuit.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=quickbooks.intuit.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='QB';p.style.background='#2CA01C';p.style.color='#fff'"/></span><span><span class="tool-link-name">QuickBooks Online</span><br><span class="tool-link-sub">The books</span></span></a>
+            <a class="tool-link" href="https://dashboard.stripe.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=stripe.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='S';p.style.background='#635BFF';p.style.color='#fff'"/></span><span><span class="tool-link-name">Stripe</span><br><span class="tool-link-sub">Payments dashboard</span></span></a>
           </div>
         </div>
       </div>
@@ -1460,6 +1460,18 @@ async function showApp() {
 // Clients list so you can see at a glance which clients are waiting on us.
 let clientCommentCounts = {};
 
+// Which clients the current (effective) user owns, by name match on preparer or
+// reviewer. Returns null when no scoping applies — the owner (Ed) viewing as
+// himself sees every client's bubbles. When Ed is viewing as a teammate, or a
+// teammate is logged in, only their own clients count toward the bubbles.
+function myClientIdSet() {
+  if (isAdmin() && !viewingAsName) return null;
+  const me = getViewingUserName();
+  const ids = new Set();
+  (allClients || []).forEach(c => { if (c && (c.preparer === me || c.reviewer === me)) ids.add(c.id); });
+  return ids;
+}
+
 async function loadClientCommentCounts() {
   try {
     const { data, error } = await sb
@@ -1475,8 +1487,9 @@ async function loadClientCommentCounts() {
         latest.set(key, { created_at: m.created_at, is_team: m.is_team, client_id: m.client_id });
       }
     }
+    const owned = myClientIdSet();
     const counts = {};
-    latest.forEach((v) => { if (v.client_id) counts[v.client_id] = (counts[v.client_id] || 0) + 1; });
+    latest.forEach((v) => { if (v.client_id && (!owned || owned.has(v.client_id))) counts[v.client_id] = (counts[v.client_id] || 0) + 1; });
     clientCommentCounts = counts;
   } catch (err) {
     console.error('loadClientCommentCounts error:', err);
@@ -1713,6 +1726,9 @@ function setViewingAs(name) {
   // either the impersonated name or the logged-in user.
   subscribeMyRealtime(getViewingUserName());
   reloadActiveView();
+  // Bubbles follow the effective user, so re-scope them on a view-as switch.
+  loadPortalBadge();
+  refreshClientBubblesIfVisible();
 }
 function clearViewingAs() { setViewingAs(''); }
 
@@ -1797,7 +1813,7 @@ async function loadPortalBadge() {
   try {
     const { data, error } = await sb
       .from('messages')
-      .select('id, parent_message_id, is_team, created_at, cleared')
+      .select('id, parent_message_id, is_team, created_at, cleared, client_id')
       .eq('cleared', false);
     if (error) throw error;
 
@@ -1807,12 +1823,13 @@ async function loadPortalBadge() {
       const key = m.parent_message_id || m.id;
       const cur = latest.get(key);
       if (!cur || new Date(m.created_at) > new Date(cur.created_at)) {
-        latest.set(key, { created_at: m.created_at, is_team: m.is_team });
+        latest.set(key, { created_at: m.created_at, is_team: m.is_team, client_id: m.client_id });
       }
     }
 
+    const owned = myClientIdSet();
     let count = 0;
-    latest.forEach(() => { count++; });   // any thread with an uncleared message
+    latest.forEach((v) => { if (!owned || (v.client_id && owned.has(v.client_id))) count++; });
 
     const txt = count > 99 ? '99+' : String(count);
     [badge, document.getElementById('clientsBadge')].forEach((b) => {
