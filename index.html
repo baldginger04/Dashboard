@@ -369,6 +369,8 @@
     .msg-item.is-resolved{opacity:.65;background:#fafbfc}
     .msg-item.is-resolved .msg-body{text-decoration:line-through;text-decoration-color:var(--text3)}
     .msg-resolved-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);border-radius:4px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
+    .msg-internal-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:4px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
+    .msg-item.is-internal{background:#fffaf5;border-color:#fde4cf}
     /* Per-message Clear/Unclear button. Always visible (not hover-revealed) per design;
        muted by default, picks up the accent color on hover. */
     .msg-clear-btn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s}
@@ -764,7 +766,10 @@
                   Attach image
                   <input type="file" id="imgUpload" accept="image/*" style="display:none" onchange="handleImgSelect(event)" />
                 </label>
-                <button class="btn btn-primary btn-sm" onclick="sendMessage()">Send</button>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <button class="btn btn-secondary btn-sm" onclick="sendMessage(false)" title="The client WILL see this in their portal">Send to client</button>
+                  <button class="btn btn-primary btn-sm" onclick="sendMessage(true)" title="Team-only — the client will NOT see this (Enter also posts an internal note)">Internal note</button>
+                </div>
               </div>
             </div>
             <div id="dropZoneHint" style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px">You can also drag and drop an image anywhere in this area</div>
@@ -1393,7 +1398,8 @@ async function loadClientCommentCounts() {
     const { data, error } = await sb
       .from('messages')
       .select('id, parent_message_id, is_team, created_at, cleared, client_id')
-      .eq('cleared', false);
+      .eq('cleared', false)
+      .eq('is_internal', false);
     if (error) throw error;
     const latest = new Map();  // thread root -> latest message meta
     for (const m of (data || [])) {
@@ -1726,7 +1732,8 @@ async function loadPortalBadge() {
     const { data, error } = await sb
       .from('messages')
       .select('id, parent_message_id, is_team, created_at, cleared')
-      .eq('cleared', false);
+      .eq('cleared', false)
+      .eq('is_internal', false);
     if (error) throw error;
 
     // Reduce to the latest message per thread (root id = parent_message_id || id).
@@ -3906,12 +3913,15 @@ function renderMsgItem(m) {
   const imgHtml = m.image_url ? `<div style="margin-top:8px"><img src="${m.image_url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${m.image_url}','_blank')" /></div>` : '';
   const isResolved = !!m.cleared;
   const badgeHtml = isResolved ? `<span class="msg-resolved-badge">✓ Resolved</span>` : '';
+  // Internal notes are team-only — clients never receive them (enforced in the
+  // portal and by RLS). Badge them clearly so the team always knows what's visible.
+  const internalBadge = m.is_internal ? `<span class="msg-internal-badge">🔒 Internal — team only</span>` : '';
   // Button label flips based on current state. onclick calls the same toggle
   // function either way; the function reads the row's current state and flips it.
   const btnLabel = isResolved ? 'Unmark' : '✓ Clear';
   const btnHtml = `<button class="msg-clear-btn" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button>`;
-  return `<div class="msg-item${isResolved ? ' is-resolved' : ''}" id="cmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${badgeHtml}${btnHtml}</div>
+  return `<div class="msg-item${isResolved ? ' is-resolved' : ''}${m.is_internal ? ' is-internal' : ''}" id="cmsg_${m.id}">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${internalBadge}${badgeHtml}${btnHtml}</div>
     <div class="msg-body">${highlightMentions(m.body)}${imgHtml}</div>
   </div>`;
 }
@@ -3971,7 +3981,7 @@ async function loadMessages(clientId) {
   }
 }
 
-async function sendMessage() {
+async function sendMessage(isInternal) {
   const body = document.getElementById('msgInput').value.trim();
   if (!body && !currentImgFile) return;
   if (!currentClientId) return;
@@ -3983,7 +3993,7 @@ async function sendMessage() {
   if (currentImgFile) imageUrl = await uploadMsgImage(currentImgFile, `client-${currentClientId}`);
 
   try {
-    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || '📷 Image', image_url: imageUrl, is_team: true }), 'Send message');
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || '📷 Image', image_url: imageUrl, is_team: true, is_internal: !!isInternal }), 'Send message');
   } catch (err) {
     alert("Couldn't send your message — " + (err.message || 'please try again.') + "\n\nIt was not posted, so your text is still here to retry.");
     return;
@@ -4068,7 +4078,7 @@ function handleTeamMsgKey(e) {
 function handleMsgKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
-    sendMessage();
+    sendMessage(true);  // Enter = internal team note; use "Send to client" to reach the client.
   }
 }
 
