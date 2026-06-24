@@ -155,6 +155,20 @@
     .auto-section-title:first-child{margin-top:0}
     .auto-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:10px}
     .auto-card{background:white;border:1px solid var(--border);border-left:3px solid var(--border2);border-radius:10px;padding:.85rem 1rem}
+    .auto-cal-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 .6rem}
+    .auto-cal-nav{display:flex;align-items:center;gap:6px}
+    #autoCalLabel{font-size:13px;font-weight:600;color:var(--text);min-width:140px;text-align:center;display:inline-block}
+    .auto-cal-daily{font-size:12px;color:var(--text2);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;margin-bottom:10px}
+    .auto-cal-daily b{color:var(--text)}
+    .auto-cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+    .auto-cal-dow{background:var(--bg3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600;text-align:center;padding:6px 0}
+    .auto-cal-cell{background:#fff;min-height:76px;padding:5px 6px;display:flex;flex-direction:column;gap:3px}
+    .auto-cal-cell.is-other{background:#faf9f6}
+    .auto-cal-daynum{font-size:11px;color:var(--text3);font-weight:600;line-height:18px}
+    .auto-cal-cell.is-today .auto-cal-daynum{color:#fff;background:var(--accent);width:18px;height:18px;border-radius:50%;text-align:center}
+    .auto-cal-chip{font-size:10px;background:var(--coral-light);color:#7a2e12;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+    .auto-cal-tbd{font-size:12px;color:var(--text2);margin-top:10px}
+    .auto-cal-tbd .auto-pill{margin:2px 4px 0 0;display:inline-block}
     .auto-card.s-ok{border-left-color:var(--green)}
     .auto-card.s-warn{border-left-color:var(--accent2)}
     .auto-card.s-down{border-left-color:var(--red)}
@@ -825,6 +839,20 @@
           <div class="metric-card"><div class="metric-label">Healthy</div><div class="metric-value mv-green" id="am-ok">—</div></div>
           <div class="metric-card"><div class="metric-label">Needs attention</div><div class="metric-value mv-orange" id="am-warn">—</div></div>
           <div class="metric-card"><div class="metric-label">Down / overdue</div><div class="metric-value mv-red" id="am-down">—</div></div>
+        </div>
+        <div id="autoCalWrap" style="margin-bottom:1.75rem">
+          <div class="auto-cal-head">
+            <span class="auto-section-title" style="margin:0">Run Schedule</span>
+            <div class="auto-cal-nav">
+              <button class="btn btn-ghost btn-sm" onclick="autoCalShift(-1)">‹</button>
+              <span id="autoCalLabel"></span>
+              <button class="btn btn-ghost btn-sm" onclick="autoCalShift(1)">›</button>
+              <button class="btn btn-ghost btn-sm" onclick="autoCalToday()">Today</button>
+            </div>
+          </div>
+          <div id="autoCalDaily" class="auto-cal-daily"></div>
+          <div id="autoCalGrid" class="auto-cal-grid"></div>
+          <div id="autoCalTBD" class="auto-cal-tbd"></div>
         </div>
         <div id="autoBoard"><div class="empty"><span class="spinner"></span></div></div>
       </div>
@@ -4223,6 +4251,48 @@ async function sendTeamMessage() {
 }
 
 // ── AUTOMATION ───────────────────────────────────────────
+let autoCalRef = new Date();
+function autoCalShift(n){ autoCalRef = new Date(autoCalRef.getFullYear(), autoCalRef.getMonth() + n, 1); renderAutoCalendar(); }
+function autoCalToday(){ autoCalRef = new Date(); renderAutoCalendar(); }
+function renderAutoCalendar(){
+  const grid = document.getElementById('autoCalGrid');
+  if (!grid) return;
+  const ref = autoCalRef, year = ref.getFullYear(), month = ref.getMonth();
+  document.getElementById('autoCalLabel').textContent = ref.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+  const daily = AUTO_PIPELINES.filter(p => p.daily);
+  document.getElementById('autoCalDaily').innerHTML = daily.length
+    ? '<b>Runs every day:</b> ' + daily.map(p => autoEsc(p.key) + ' (' + autoEsc(p.cadence) + ')').join(' \u00b7 ')
+    : '';
+
+  const dowJobs = AUTO_PIPELINES.filter(p => Array.isArray(p.dow) && p.dow.length);
+  const tbd = AUTO_PIPELINES.filter(p => !p.daily && (!p.dow || !p.dow.length));
+  document.getElementById('autoCalTBD').innerHTML = tbd.length
+    ? '<b>Weekly \u2014 day not set yet:</b> ' + tbd.map(p => '<span class="auto-pill">' + autoEsc(p.key) + ' \u00b7 ' + autoEsc(p.cadence) + '</span>').join('')
+    : '';
+
+  const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const startDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const prevDays = new Date(year, month, 0).getDate();
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  let cells = DOW.map(d => `<div class="auto-cal-dow">${d}</div>`).join('');
+  for (let i = startDow - 1; i >= 0; i--)
+    cells += `<div class="auto-cal-cell is-other"><span class="auto-cal-daynum">${prevDays - i}</span></div>`;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const date = new Date(year, month, d), dow = date.getDay();
+    const isToday = date.getTime() === today.getTime();
+    const chips = dowJobs.filter(p => p.dow.includes(dow))
+      .map(p => `<span class="auto-cal-chip" title="${autoEsc(p.key)} \u00b7 ${autoEsc(p.cadence)}">${autoEsc(p.key)}</span>`).join('');
+    cells += `<div class="auto-cal-cell${isToday ? ' is-today' : ''}"><span class="auto-cal-daynum">${d}</span>${chips}</div>`;
+  }
+  const trail = (7 - ((startDow + daysInMonth) % 7)) % 7;
+  for (let i = 1; i <= trail; i++)
+    cells += `<div class="auto-cal-cell is-other"><span class="auto-cal-daynum">${i}</span></div>`;
+  grid.innerHTML = cells;
+}
+
 async function loadAutomation() {
   const board = document.getElementById('autoBoard');
   if (!board) return;
@@ -4276,20 +4346,24 @@ async function loadAutomation() {
 // SILENT still shows up — which is exactly the failure we want to catch.
 // key must match the label each script passes to logRun/logRun2 exactly.
 // staleH = hours of silence past which we flag it overdue (cadence + buffer).
+// Run-schedule fields drive the Automation Calendar:
+//   daily: true   -> runs every day (shown in the "Runs every day" banner)
+//   dow: [n,...]  -> runs on those weekdays (0=Sun, 1=Mon, ... 6=Sat)
+//   dow: []       -> weekly but the day isn't set yet (listed as "day not set")
 const AUTO_PIPELINES = [
-  { key: 'XtraChef Delivery', section: 'Delivery', cadence: 'hourly',  staleH: 3 },
-  { key: 'Audubon → QBO',     section: 'Delivery', cadence: '~15 min', staleH: 1 },
+  { key: 'XtraChef Delivery', section: 'Delivery', cadence: 'hourly',  staleH: 3,   daily: true },
+  { key: 'Audubon → QBO',     section: 'Delivery', cadence: '~15 min', staleH: 1,   daily: true },
 
-  { key: 'Mr. Greens',     section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
-  { key: 'Segovia',        section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
-  { key: 'UNFI',           section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
-  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120 },
-  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'ALSCO',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  { key: 'Mr. Greens',     section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
+  { key: 'Segovia',        section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
+  { key: 'UNFI',           section: 'Vendor ingestion', cadence: 'daily',   staleH: 30,  daily: true },
+  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120, dow: [] },
+  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
+  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
+  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
+  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
+  { key: 'ALSCO',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [4] },
+  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200, dow: [] },
 ];
 
 function autoEsc(s) {
@@ -4347,7 +4421,7 @@ function showPage(name) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + name)?.classList.add('active');
   document.getElementById('nav-' + name)?.classList.add('active');
-  if (name === 'automation') { loadAutomation(); subscribeAutomationRealtime(); } else { unsubscribeAutomationRealtime(); }
+  if (name === 'automation') { loadAutomation(); renderAutoCalendar(); subscribeAutomationRealtime(); } else { unsubscribeAutomationRealtime(); }
   if (name === 'team') loadTeamMessages();
   if (name === 'search') { const el = document.getElementById('globalTaskSearch'); if (el) setTimeout(() => el.focus(), 50); }
   if (name === 'myday') loadMyDay();
