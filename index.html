@@ -371,6 +371,11 @@
     .msg-resolved-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);border-radius:4px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
     .msg-internal-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:4px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
     .msg-item.is-internal{background:#fffaf5;border-color:#fde4cf}
+    .mention{font-weight:600;color:var(--accent)}
+    .mention-dd{position:absolute;z-index:9999;background:#fff;border:1px solid var(--border2);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;max-height:240px;overflow-y:auto}
+    .mention-opt{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;font-size:13px;color:var(--text);cursor:pointer;white-space:nowrap}
+    .mention-opt.sel{background:var(--bg3)}
+    .mention-av{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#fff;flex-shrink:0}
     /* Per-message Clear/Unclear button. Always visible (not hover-revealed) per design;
        muted by default, picks up the accent color on hover. */
     .msg-clear-btn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s}
@@ -753,7 +758,7 @@
             </div>
             <div class="msg-list" id="msgList"></div>
             <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white">
-              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="handleMsgKey(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
+              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… type @ to mention someone" onkeydown="handleMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
               <div id="imgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
                 <div style="position:relative;display:inline-block">
                   <img id="imgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -785,7 +790,7 @@
         <div class="card" style="padding:1.25rem">
           <div class="msg-list" id="teamMsgList"><div class="empty"><span class="spinner"></span></div></div>
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
-            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Send a message to the team… use @Ed, @Jennifer, @Jen, or @Lydia to notify someone" onkeydown="handleTeamMsgKey(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
+            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Send a message to the team… type @ to mention someone" onkeydown="handleTeamMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
             <div id="teamImgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
               <div style="position:relative;display:inline-block">
                 <img id="teamImgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -1384,6 +1389,7 @@ async function showApp() {
   // Sidebar Client Portal badge: initial count + live updates.
   loadPortalBadge();
   loadTeamChatBadge();
+  loadTaggableUsers();
   subscribePortalBadge();
 }
 
@@ -3851,28 +3857,123 @@ async function uploadMsgImage(file, folder) {
 }
 
 // ── @mention detection & email ────────────────────────────
-function detectMentions(text) {
-  const mentions = [];
-  const patterns = [
-  { pattern: /@ed(?![a-z])/i,        name: 'Ed Hattrup' },
-  { pattern: /@jennifer/i,           name: 'Jennifer Mills' },
-  { pattern: /@jen(?!nifer)/i,       name: 'Jen Crane' },
-  { pattern: /@lydia/i,              name: 'Lydia Hattrup' },
-];
-  patterns.forEach(p => { if (p.pattern.test(text)) mentions.push(p.name); });
-  return [...new Set(mentions)];
+function escHtml(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escRe(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function mentionInitials(n){ return String(n||'').trim().split(/\s+/).map(w=>w[0]||'').join('').substring(0,2).toUpperCase(); }
+
+// Users that can be @mentioned. Sourced live from Supabase (profiles) via the
+// taggable_users() function so the list stays current as people are added.
+let taggableUsers = [];   // [{ id, name, email }]
+async function loadTaggableUsers() {
+  try {
+    const { data, error } = await sb.rpc('taggable_users');
+    if (error) throw error;
+    taggableUsers = (data || []).filter(u => u && u.name);
+  } catch (e) { console.error('loadTaggableUsers error:', e); }
 }
 
+function detectMentions(text) {
+  const names = [];
+  for (const u of taggableUsers) {
+    const re = new RegExp('@' + escRe(u.name) + '(?![\\w])', 'iu');
+    if (re.test(text)) names.push(u.name);
+  }
+  return [...new Set(names)];
+}
+
+// Render a posted message: bold each @Name with the "@" dropped (iMessage-style).
 function highlightMentions(text) {
-  return text
-    .replace(/@Ed/gi, '<span style="color:var(--accent);font-weight:500">@Ed</span>')
-    .replace(/@Jennifer/gi, '<span style="color:var(--blue);font-weight:500">@Jennifer</span>')
-    .replace(/@Jen/gi, '<span style="color:var(--green);font-weight:500">@Jen</span>')
-    .replace(/@Lydia/gi, '<span style="color:var(--purple);font-weight:500">@Lydia</span>');
+  let html = escHtml(text);
+  const users = [...taggableUsers].sort((a, b) => b.name.length - a.name.length);
+  for (const u of users) {
+    const re = new RegExp('@' + escRe(escHtml(u.name)) + '(?![\\w])', 'giu');
+    html = html.replace(re, '<span class="mention">' + escHtml(u.name) + '</span>');
+  }
+  return html;
+}
+
+// ── @mention autocomplete (works on a plain textarea) ─────
+let mentionDD = null, mentionCtx = null;
+function ensureMentionDD() {
+  if (mentionDD) return mentionDD;
+  mentionDD = document.createElement('div');
+  mentionDD.className = 'mention-dd';
+  mentionDD.style.display = 'none';
+  document.body.appendChild(mentionDD);
+  document.addEventListener('mousedown', (e) => {
+    if (mentionDDOpen() && !mentionDD.contains(e.target) && e.target !== mentionCtx.input) closeMentionDD();
+  });
+  return mentionDD;
+}
+function closeMentionDD(){ if (mentionDD) mentionDD.style.display = 'none'; mentionCtx = null; }
+function mentionDDOpen(){ return !!(mentionDD && mentionDD.style.display !== 'none' && mentionCtx); }
+function activeMentionQuery(input) {
+  const pos = input.selectionStart;
+  if (pos !== input.selectionEnd) return null;
+  const m = input.value.slice(0, pos).match(/(?:^|\s)@([^\s@]{0,30})$/);
+  if (!m) return null;
+  return { start: pos - m[1].length - 1, query: m[1] };
+}
+function onMentionInput(e) {
+  const input = e.target;
+  const q = activeMentionQuery(input);
+  if (!q) { closeMentionDD(); return; }
+  const ql = q.query.toLowerCase();
+  const matches = taggableUsers.filter(u => {
+    const n = u.name.toLowerCase();
+    return !ql || n.startsWith(ql) || n.split(/\s+/).some(w => w.startsWith(ql));
+  }).slice(0, 8);
+  if (!matches.length) { closeMentionDD(); return; }
+  mentionCtx = { input, start: q.start, items: matches, sel: 0 };
+  renderMentionDD();
+}
+function renderMentionDD() {
+  const dd = ensureMentionDD();
+  const { input, items, sel } = mentionCtx;
+  dd.innerHTML = items.map((u, i) =>
+    `<div class="mention-opt${i === sel ? ' sel' : ''}" data-i="${i}"><span class="mention-av ${avClass(u.name)}">${escHtml(mentionInitials(u.name))}</span><span>${escHtml(u.name)}</span></div>`).join('');
+  dd.querySelectorAll('.mention-opt').forEach(el => {
+    el.onmousedown = (ev) => { ev.preventDefault(); pickMention(parseInt(el.dataset.i, 10)); };
+  });
+  dd.style.display = 'block';
+  const r = input.getBoundingClientRect();
+  dd.style.minWidth = Math.min(Math.max(r.width, 180), 280) + 'px';
+  dd.style.left = (window.scrollX + r.left) + 'px';
+  dd.style.top = (window.scrollY + r.top - dd.offsetHeight - 4) + 'px';
+}
+function moveMentionSel(d) {
+  if (!mentionCtx) return;
+  const n = mentionCtx.items.length;
+  mentionCtx.sel = (mentionCtx.sel + d + n) % n;
+  renderMentionDD();
+}
+function pickMention(i) {
+  if (!mentionCtx) return;
+  const { input, start, items, sel } = mentionCtx;
+  const user = items[i == null ? sel : i];
+  const pos = input.selectionStart;
+  if (!user) { closeMentionDD(); return; }
+  const insert = '@' + user.name + ' ';
+  const before = input.value.slice(0, start);
+  input.value = before + insert + input.value.slice(pos);
+  const caret = (before + insert).length;
+  closeMentionDD();
+  input.focus();
+  input.setSelectionRange(caret, caret);
+}
+// Returns true if it consumed the key (caller then skips its own send logic).
+function mentionKeydown(e) {
+  if (!mentionDDOpen()) return false;
+  if (e.key === 'ArrowDown') { e.preventDefault(); moveMentionSel(1); return true; }
+  if (e.key === 'ArrowUp')   { e.preventDefault(); moveMentionSel(-1); return true; }
+  if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); pickMention(); return true; }
+  if (e.key === 'Escape')    { e.preventDefault(); closeMentionDD(); return true; }
+  return false;
 }
 
 async function sendMentionEmail(mentionedName, author, context, body, imageUrl) {
-  const toEmail = TEAM_EMAILS[mentionedName];
+  const u = taggableUsers.find(x => x.name === mentionedName);
+  const toEmail = (u && u.email) || TEAM_EMAILS[mentionedName];
   if (!toEmail) return;
   const imgHtml = imageUrl ? `<br><br><img src="${imageUrl}" style="max-width:400px;border-radius:6px;border:1px solid #e2e5ea" />` : '';
   const emailBody = `
@@ -4085,12 +4186,14 @@ async function clearTeamNote(id) {
 }
 
 function handleTeamMsgKey(e) {
+  if (mentionKeydown(e)) return;
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendTeamMessage();
   }
 }
 function handleMsgKey(e) {
+  if (mentionKeydown(e)) return;
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage(true);  // Enter = internal team note; use "Send to client" to reach the client.
