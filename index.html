@@ -1850,29 +1850,40 @@ function unsubscribeMyRealtime() {
 // message was posted by a non-team author. Team RLS lets us see every client's
 // messages, so this is a firm-wide count across all clients.
 async function loadPortalBadge() {
-  const badge = document.getElementById('portalBadge');
-  if (!badge) return;
+  const portalB = document.getElementById('portalBadge');
+  const clientsB = document.getElementById('clientsBadge');
+  if (!portalB && !clientsB) return;
   try {
     const { data, error } = await sb
       .from('messages')
-      .select('id, parent_message_id, author, created_at, client_id')
+      .select('id, parent_message_id, author, created_at, client_id, is_internal')
       .eq('cleared', false);
     if (error) throw error;
 
-    const { perClient } = bubbleCounts(data || [], getViewingUserName());
+    const me = getViewingUserName();
     const owned = myClientIdSet();
-    let count = 0;
-    Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) count += perClient[cid]; });
+    const sumOwned = (rows) => {
+      const { perClient } = bubbleCounts(rows, me);
+      let c = 0;
+      Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) c += perClient[cid]; });
+      return c;
+    };
+    // Clients badge: every waiting thread (internal team notes + client-facing).
+    // Client Portal badge: ONLY client-facing threads — internal team-only notes
+    // never appear on the portal, so they must not bump that badge.
+    const clientsCount = sumOwned(data || []);
+    const portalCount  = sumOwned((data || []).filter(m => !m.is_internal));
 
-    const txt = count > 99 ? '99+' : String(count);
-    [badge, document.getElementById('clientsBadge')].forEach((b) => {
+    const setBadge = (b, n) => {
       if (!b) return;
-      if (count > 0) { b.textContent = txt; b.style.display = ''; }
+      if (n > 0) { b.textContent = n > 99 ? '99+' : String(n); b.style.display = ''; }
       else b.style.display = 'none';
-    });
+    };
+    setBadge(clientsB, clientsCount);
+    setBadge(portalB, portalCount);
   } catch (err) {
     console.error('loadPortalBadge error:', err);
-    // Non-critical — leave whatever the badge currently shows.
+    // Non-critical — leave whatever the badges currently show.
   }
 }
 
@@ -4275,8 +4286,8 @@ async function loadMessages(clientId) {
     currentMessages = data;
     const repliesByRoot = {};
     data.forEach(m => { if (m.parent_message_id) (repliesByRoot[m.parent_message_id] = repliesByRoot[m.parent_message_id] || []).push(m); });
-    const rootIds = new Set(data.filter(m => !m.parent_message_id).map(m => m.id));
-    const roots = data.filter(m => !m.parent_message_id || !rootIds.has(m.parent_message_id));
+    const presentIds = new Set(data.map(m => m.id));
+    const roots = data.filter(m => !m.parent_message_id || !presentIds.has(m.parent_message_id));
     roots.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     list.innerHTML = roots.map(r => renderMsgCard(r, repliesByRoot[r.id] || [])).join('');
     list.scrollTop = list.scrollHeight;
@@ -4367,8 +4378,8 @@ async function loadTeamMessages() {
   }
   const repliesByRoot = {};
   data.forEach(m => { if (m.parent_message_id) (repliesByRoot[m.parent_message_id] = repliesByRoot[m.parent_message_id] || []).push(m); });
-  const rootIds = new Set(data.filter(m => !m.parent_message_id).map(m => m.id));
-  const roots = data.filter(m => !m.parent_message_id || !rootIds.has(m.parent_message_id));
+  const presentIds = new Set(data.map(m => m.id));
+  const roots = data.filter(m => !m.parent_message_id || !presentIds.has(m.parent_message_id));
   roots.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
   list.innerHTML = roots.map(r => renderTeamCard(r, repliesByRoot[r.id] || [])).join('');
   list.scrollTop = list.scrollHeight;
