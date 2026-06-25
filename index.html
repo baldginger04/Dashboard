@@ -172,7 +172,11 @@
     .auto-cal-tbd{font-size:12px;color:var(--text2);margin-top:10px}
     .auto-cal-tbd .auto-pill{margin:2px 4px 0 0;display:inline-block}
     .auto-cal-legend{display:flex;flex-wrap:wrap;gap:5px 14px;font-size:11px;color:var(--text2);margin-bottom:10px}
-    .auto-cal-leg{display:inline-flex;align-items:center;gap:5px}
+    .auto-cal-leg{display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:2px 8px;border-radius:999px;border:1px solid transparent;transition:all .12s;user-select:none}
+    .auto-cal-leg:hover{background:var(--bg3)}
+    .auto-cal-leg.is-active{border-color:var(--border2);background:#fff;font-weight:600;color:var(--text)}
+    .auto-cal-leg.is-dim{opacity:.38}
+    .auto-cal-sw-all{background:conic-gradient(#16A34A,#7C3AED,#DC2626,#EA580C,#DB2777,#16A34A)}
     .auto-cal-sw{width:10px;height:10px;border-radius:3px;display:inline-block;flex-shrink:0}
     .msg-replies{margin:8px 0 0 14px;padding-left:12px;border-left:2px solid var(--border);display:flex;flex-direction:column;gap:8px}
     .msg-reply .msg-body{font-size:13px}
@@ -401,6 +405,8 @@
        team side it only appears when "Show resolved" is toggled on. */
     .msg-item.is-resolved{opacity:.65;background:#fafbfc}
     .msg-item.is-resolved .msg-body{text-decoration:line-through;text-decoration-color:var(--text3)}
+    .msg-reply.is-resolved{opacity:.65}
+    .msg-reply.is-resolved .msg-body{text-decoration:line-through;text-decoration-color:var(--text3)}
     .msg-resolved-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:var(--green);background:var(--green-bg);border:1px solid var(--green-border);border-radius:4px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
     .msg-internal-badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:500;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:4px;padding:1px 6px;letter-spacing:.02em;text-transform:uppercase}
     .msg-item.is-internal{background:#fffaf5;border-color:#fde4cf}
@@ -822,6 +828,13 @@
           <div><div class="page-title">Team Chat</div><div class="page-sub">Internal communication for the Bald Ginger team</div></div>
         </div>
         <div class="card" style="padding:1.25rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem;font-size:12px;color:var(--text3)">
+            <span></span>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none">
+              <input type="checkbox" id="showClearedTeamToggle" onchange="loadTeamMessages()" style="cursor:pointer">
+              Show cleared
+            </label>
+          </div>
           <div class="msg-list" id="teamMsgList"><div class="empty"><span class="spinner"></span></div></div>
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
             <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Send a message to the team… type @ to mention someone" onkeydown="handleTeamMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
@@ -4343,10 +4356,13 @@ async function loadTeamChatBadge() {
 
 async function loadTeamMessages() {
   loadTeamChatBadge();
-  const { data } = await sb.from('team_messages').select('*').eq('cleared', false).order('created_at');
+  const showCleared = document.getElementById('showClearedTeamToggle')?.checked;
+  let q = sb.from('team_messages').select('*');
+  if (!showCleared) q = q.eq('cleared', false);
+  const { data } = await q.order('created_at');
   const list = document.getElementById('teamMsgList');
   if (!data || !data.length) {
-    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">No messages yet. Send something!</div>';
+    list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">' + (showCleared ? 'No messages yet. Send something!' : 'No active messages. Toggle "Show cleared" to see cleared ones.') + '</div>';
     return;
   }
   const repliesByRoot = {};
@@ -4360,19 +4376,23 @@ async function loadTeamMessages() {
 function teamImgHtml(m) {
   return chatAttachHtml(m.image_url);
 }
-function teamClearBtn(id) {
-  return `<button onclick="clearTeamNote('${id}')" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s" onmouseover="this.style.borderColor='var(--red)';this.style.color='var(--red)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text3)'">Clear</button>`;
+function teamClearBtn(m) {
+  if (m.cleared) return `<button class="msg-clear-btn" style="margin-left:auto" onclick="reopenTeamNote('${m.id}')">↩ Reopen</button>`;
+  return `<button class="msg-clear-btn" style="margin-left:auto" onclick="clearTeamNote('${m.id}')">✓ Clear</button>`;
 }
 function renderTeamReply(m) {
-  return `<div class="msg-reply" id="tmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${teamClearBtn(m.id)}</div>
+  const isResolved = !!m.cleared;
+  return `<div class="msg-reply${isResolved ? ' is-resolved' : ''}" id="tmsg_${m.id}">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${teamClearBtn(m)}</div>
     <div class="msg-body">${highlightMentions(m.body)}${teamImgHtml(m)}</div>
   </div>`;
 }
 function renderTeamCard(m, replies) {
+  const isResolved = !!m.cleared;
+  const badgeHtml = isResolved ? `<span class="msg-resolved-badge">✓ Resolved</span>` : '';
   const repliesHtml = (replies && replies.length) ? `<div class="msg-replies">${replies.map(renderTeamReply).join('')}</div>` : '';
-  return `<div class="msg-item" id="tmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${teamClearBtn(m.id)}</div>
+  return `<div class="msg-item${isResolved ? ' is-resolved' : ''}" id="tmsg_${m.id}">
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${badgeHtml}${teamClearBtn(m)}</div>
     <div class="msg-body">${highlightMentions(m.body)}${teamImgHtml(m)}</div>
     ${repliesHtml}
     ${replyComposerHtml(m.id, 'team')}
@@ -4407,6 +4427,17 @@ async function clearTeamNote(id) {
     await writeOrThrow(sb.from('team_messages').update({ cleared: true }).or('id.eq.' + id + ',parent_message_id.eq.' + id), 'Clear note');
   } catch (err) {
     alert("Couldn't clear this note — " + (err.message || 'please try again.'));
+    return;
+  }
+  await loadTeamMessages();
+}
+
+// Reverse of clearTeamNote — un-clears a root (and its replies) or a single reply.
+async function reopenTeamNote(id) {
+  try {
+    await writeOrThrow(sb.from('team_messages').update({ cleared: false }).or('id.eq.' + id + ',parent_message_id.eq.' + id), 'Reopen note');
+  } catch (err) {
+    alert("Couldn't reopen this note — " + (err.message || 'please try again.'));
     return;
   }
   await loadTeamMessages();
@@ -4451,6 +4482,8 @@ async function sendTeamMessage() {
 
 // ── AUTOMATION ───────────────────────────────────────────
 let autoCalRef = new Date();
+let autoVendorFilter = null;
+function autoSetVendor(v){ autoVendorFilter = (v && autoVendorFilter === v) ? null : v; renderAutoCalendar(); }
 function autoCalShift(n){ autoCalRef = new Date(autoCalRef.getFullYear(), autoCalRef.getMonth() + n, 1); renderAutoCalendar(); }
 function autoCalToday(){ autoCalRef = new Date(); renderAutoCalendar(); }
 function renderAutoCalendar(){
@@ -4462,9 +4495,11 @@ function renderAutoCalendar(){
   // Vendor color legend.
   document.getElementById('autoCalDaily').innerHTML =
     '<div class="auto-cal-legend">' +
-    Object.keys(AUTO_VENDOR_COLORS).map(v =>
-      `<span class="auto-cal-leg"><span class="auto-cal-sw" style="background:${AUTO_VENDOR_COLORS[v]}"></span>${autoEsc(v)}</span>`
-    ).join('') + '</div>';
+    `<span class="auto-cal-leg${autoVendorFilter ? '' : ' is-active'}" onclick="autoSetVendor(null)" title="Show all vendors"><span class="auto-cal-sw auto-cal-sw-all"></span>All vendors</span>` +
+    Object.keys(AUTO_VENDOR_COLORS).map(v => {
+      const active = autoVendorFilter === v, dim = autoVendorFilter && !active;
+      return `<span class="auto-cal-leg${active ? ' is-active' : ''}${dim ? ' is-dim' : ''}" onclick="autoSetVendor('${v}')"><span class="auto-cal-sw" style="background:${AUTO_VENDOR_COLORS[v]}"></span>${autoEsc(v)}</span>`;
+    }).join('') + '</div>';
   const tbdEl = document.getElementById('autoCalTBD'); if (tbdEl) tbdEl.innerHTML = '';
 
   const chipFor = e => {
@@ -4483,7 +4518,7 @@ function renderAutoCalendar(){
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d), dow = date.getDay();
     const isToday = date.getTime() === today.getTime();
-    const runs = AUTO_SCHEDULE.filter(e => e.daily || (Array.isArray(e.dow) && e.dow.includes(dow)));
+    const runs = AUTO_SCHEDULE.filter(e => (e.daily || (Array.isArray(e.dow) && e.dow.includes(dow))) && (!autoVendorFilter || e.vendor === autoVendorFilter));
     cells += `<div class="auto-cal-cell${isToday ? ' is-today' : ''}"><span class="auto-cal-daynum">${d}</span>${runs.map(chipFor).join('')}</div>`;
   }
   const trail = (7 - ((startDow + daysInMonth) % 7)) % 7;
