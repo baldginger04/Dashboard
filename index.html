@@ -4,6 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Bald Ginger — Team</title>
+
+  <!-- ===== PWA / installable app ===== -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#1B2A4B" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+  <!-- iOS "Add to Home Screen": standalone, light status bar, app title + icon -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Triple" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <!-- ================================= -->
+
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <!-- Supabase cold-start warmup. Free/Pro projects sleep after idle and the
@@ -4995,6 +5009,16 @@ init();
         if (e.key === 'Escape') setOpen(false);
       });
     })();
+  </script>
+
+  <!-- Register the PWA service worker (network-first; see sw.js). Wrapped so a
+       missing/unsupported SW never blocks the app. -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function () {});
+      });
+    }
   </script>
 </body>
 </html>
