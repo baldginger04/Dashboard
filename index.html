@@ -1430,24 +1430,37 @@ function showLogin() {
 async function showApp() {
   // ── TEAM-ONLY GUARD ─────────────────────────────────────
   // Triple is a Bald Ginger staff app. Non-team users (clients) belong in the portal.
-  // Check profiles.is_team; if false or no profile, sign out and redirect.
+  // We only bounce a user when we get a DEFINITIVE answer that they are not team
+  // (or inactive). A transient failure to read the profile (cold-start timeout,
+  // brief network drop) must NOT sign out an already-authenticated user — that
+  // was causing spurious logouts. Retry a few times; if we still can't verify,
+  // fail open and let them in (RLS still protects all data, and the next clean
+  // load will route a genuine non-team user correctly).
   try {
-    const { data: profile, error: profileErr } = await sb
-      .from('profiles')
-      .select('is_team, active')
-      .eq('id', currentUser.id)
-      .single();
-    if (profileErr || !profile || profile.is_team !== true || profile.active === false) {
-      await sb.auth.signOut();
-      // Redirect to the client portal; their session was just cleared so the portal will show its login.
-      window.location.href = 'https://client.baldginger.com/';
-      return;
+    let profile = null, lastErr = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const { data, error } = await sb
+        .from('profiles')
+        .select('is_team, active')
+        .eq('id', currentUser.id)
+        .single();
+      if (!error && data) { profile = data; break; }
+      lastErr = error;
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 600 * attempt));
+    }
+    if (profile) {
+      if (profile.is_team !== true || profile.active === false) {
+        await sb.auth.signOut();
+        // Redirect to the client portal; their session was just cleared so the portal will show its login.
+        window.location.href = 'https://client.baldginger.com/';
+        return;
+      }
+    } else {
+      console.warn('Team guard could not verify profile; keeping session and proceeding.', lastErr);
     }
   } catch (e) {
-    console.error('Team guard error:', e);
-    await sb.auth.signOut();
-    window.location.href = 'https://client.baldginger.com/';
-    return;
+    // Never sign out on an unexpected error here — keep the user logged in.
+    console.error('Team guard error (session kept):', e);
   }
 
   document.getElementById('loginScreen').style.display = 'none';
