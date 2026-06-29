@@ -814,16 +814,17 @@
             <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white">
               <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… type @ to mention someone" onkeydown="handleMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
               <div id="imgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
-                <div style="position:relative;display:inline-block">
+                <div id="imgPreviewImgBox" style="position:relative;display:inline-block">
                   <img id="imgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
                   <button onclick="clearImg()" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0">×</button>
                 </div>
+                <div id="imgPreviewFileBox" style="display:none"></div>
               </div>
               <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg)">
                 <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-                  Attach image
-                  <input type="file" id="imgUpload" accept="image/*" style="display:none" onchange="handleImgSelect(event)" />
+                  Attach file
+                  <input type="file" id="imgUpload" style="display:none" onchange="handleImgSelect(event)" />
                 </label>
                 <div style="display:flex;gap:8px;align-items:center">
                   <button class="btn btn-secondary btn-sm" onclick="sendMessage(false)" title="The client WILL see this in their portal">Send to client</button>
@@ -831,7 +832,7 @@
                 </div>
               </div>
             </div>
-            <div id="dropZoneHint" style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px">You can also drag and drop an image anywhere in this area</div>
+            <div id="dropZoneHint" style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px">You can also drag and drop a file anywhere in this area</div>
           </div>
         </div>
       </div>
@@ -853,16 +854,17 @@
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
             <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Send a message to the team… type @ to mention someone" onkeydown="handleTeamMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
             <div id="teamImgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
-              <div style="position:relative;display:inline-block">
+              <div id="teamImgPreviewImgBox" style="position:relative;display:inline-block">
                 <img id="teamImgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
                 <button onclick="clearTeamImg()" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0">×</button>
               </div>
+              <div id="teamImgPreviewFileBox" style="display:none"></div>
             </div>
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--bg)">
               <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
-                Attach image
-                <input type="file" id="teamImgUpload" accept="image/*" style="display:none" onchange="handleTeamImgSelect(event)" />
+                Attach file
+                <input type="file" id="teamImgUpload" style="display:none" onchange="handleTeamImgSelect(event)" />
               </label>
               <button class="btn btn-primary btn-sm" onclick="sendTeamMessage()">Post</button>
             </div>
@@ -3967,37 +3969,45 @@ const TEAM_EMAILS = {
 let currentImgFile = null;
 let currentTeamImgFile = null;
 
-function handleImgSelect(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  currentImgFile = file;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    document.getElementById('imgPreview').src = ev.target.result;
-    document.getElementById('imgPreviewWrap').style.display = 'block';
-  };
-  reader.readAsDataURL(file);
+// Preview an attachment in a composer: image → inline thumbnail, anything else
+// → filename chip. `ids` names the wrap/img-box/img/file-box elements.
+function previewAttachment(file, ids, onClearAttr) {
+  const wrap = document.getElementById(ids.wrap);
+  if (!wrap) return;
+  const imgBox = document.getElementById(ids.imgBox);
+  const fileBox = document.getElementById(ids.fileBox);
+  if (isImageFile(file)) {
+    if (fileBox) { fileBox.style.display = 'none'; fileBox.innerHTML = ''; }
+    if (imgBox) imgBox.style.display = 'inline-block';
+    const reader = new FileReader();
+    reader.onload = ev => { const im = document.getElementById(ids.img); if (im) im.src = ev.target.result; wrap.style.display = 'block'; };
+    reader.readAsDataURL(file);
+  } else {
+    if (imgBox) imgBox.style.display = 'none';
+    if (fileBox) { fileBox.innerHTML = fileChipHtml(file.name, onClearAttr); fileBox.style.display = 'block'; }
+    wrap.style.display = 'block';
+  }
 }
+const CLIENT_ATTACH_IDS = { wrap: 'imgPreviewWrap', imgBox: 'imgPreviewImgBox', img: 'imgPreview', fileBox: 'imgPreviewFileBox' };
+const TEAM_ATTACH_IDS   = { wrap: 'teamImgPreviewWrap', imgBox: 'teamImgPreviewImgBox', img: 'teamImgPreview', fileBox: 'teamImgPreviewFileBox' };
+function setClientAttachment(file) { if (!file) return; currentImgFile = file; previewAttachment(file, CLIENT_ATTACH_IDS, 'clearImg()'); }
+function setTeamAttachment(file)   { if (!file) return; currentTeamImgFile = file; previewAttachment(file, TEAM_ATTACH_IDS, 'clearTeamImg()'); }
+
+function handleImgSelect(e) { const file = e.target.files[0]; if (file) setClientAttachment(file); }
 function clearImg() {
   currentImgFile = null;
-  document.getElementById('imgPreview').src = '';
+  const img = document.getElementById('imgPreview'); if (img) img.src = '';
+  const fileBox = document.getElementById('imgPreviewFileBox'); if (fileBox) { fileBox.innerHTML = ''; fileBox.style.display = 'none'; }
+  const imgBox = document.getElementById('imgPreviewImgBox'); if (imgBox) imgBox.style.display = 'inline-block';
   document.getElementById('imgPreviewWrap').style.display = 'none';
   document.getElementById('imgUpload').value = '';
 }
-function handleTeamImgSelect(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-  currentTeamImgFile = file;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    document.getElementById('teamImgPreview').src = ev.target.result;
-    document.getElementById('teamImgPreviewWrap').style.display = 'block';
-  };
-  reader.readAsDataURL(file);
-}
+function handleTeamImgSelect(e) { const file = e.target.files[0]; if (file) setTeamAttachment(file); }
 function clearTeamImg() {
   currentTeamImgFile = null;
-  document.getElementById('teamImgPreview').src = '';
+  const img = document.getElementById('teamImgPreview'); if (img) img.src = '';
+  const fileBox = document.getElementById('teamImgPreviewFileBox'); if (fileBox) { fileBox.innerHTML = ''; fileBox.style.display = 'none'; }
+  const imgBox = document.getElementById('teamImgPreviewImgBox'); if (imgBox) imgBox.style.display = 'inline-block';
   document.getElementById('teamImgPreviewWrap').style.display = 'none';
   document.getElementById('teamImgUpload').value = '';
 }
@@ -4009,6 +4019,22 @@ async function uploadMsgImage(file, folder) {
   if (error) { console.error('Upload error:', error); return null; }
   const { data: urlData } = sb.storage.from('message-images').getPublicUrl(path);
   return urlData.publicUrl;
+}
+
+// ── Attachments: any file type, not just images ───────────
+// Shared by the client-message, reply, and Team Chat composers so behavior
+// stays consistent. Images preview/render inline; everything else (PDF, xlsx,
+// docx, csv, …) shows a filename chip / open link.
+function isImageFile(file) { return !!file && /^image\//i.test(file.type || ''); }
+function attachPlaceholderText(file) {
+  if (!file) return '';
+  if (isImageFile(file)) return '📷 Image';
+  if (/pdf/i.test(file.type) || /\.pdf$/i.test(file.name)) return '📄 PDF';
+  return '📎 ' + file.name;
+}
+// Composer preview chip for a non-image attachment (filename + remove ×).
+function fileChipHtml(name, onClearAttr) {
+  return `<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)"><span style="font-size:18px">📎</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:240px">${escHtml(name)}</span><button onclick="${onClearAttr}" style="margin-left:auto;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;line-height:1">×</button></div>`;
 }
 
 // ── @mention detection & email ────────────────────────────
@@ -4167,11 +4193,14 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
 // the resolved style (never hidden). Anyone on the team can toggle the state.
 function chatAttachHtml(url) {
   if (!url) return '';
-  const isPdf = /\.pdf(\?|$)/i.test(url);
-  if (isPdf) {
-    return `<div style="margin-top:8px"><a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);text-decoration:none;color:var(--text);font-size:13px;font-weight:500"><span style="font-size:18px">📄</span>Open PDF</a></div>`;
+  const ext = (url.split('?')[0].split('.').pop() || '').toLowerCase();
+  const isImg = ['png','jpg','jpeg','gif','webp','svg','bmp','heic','heif','avif'].includes(ext);
+  if (isImg) {
+    return `<div style="margin-top:8px"><img src="${url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" /></div>`;
   }
-  return `<div style="margin-top:8px"><img src="${url}" style="max-width:100%;max-height:300px;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="window.open('${url}','_blank')" /></div>`;
+  const icon = ext === 'pdf' ? '📄' : '📎';
+  const label = ext === 'pdf' ? 'Open PDF' : (ext ? `Open file (${ext.toUpperCase()})` : 'Open attachment');
+  return `<div style="margin-top:8px"><a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg3);text-decoration:none;color:var(--text);font-size:13px;font-weight:500"><span style="font-size:18px">${icon}</span>${label}</a></div>`;
 }
 // Reply composer mirrors the main "start a post" box: full width, same font,
 // "Reply…" placeholder, a single Reply button, and screenshot/PDF attach.
@@ -4183,7 +4212,7 @@ function replyComposerHtml(rootId, kind) {
     <textarea class="msg-input ${inputCls}" data-root-id="${rootId}" rows="2" placeholder="Reply…" oninput="onMentionInput(event)" onkeydown="${onKey}"></textarea>
     <div class="reply-prev" id="replyPrev_${rootId}" style="display:none"></div>
     <div class="reply-foot">
-      <label class="reply-attach"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>Attach screenshot or PDF<input type="file" accept="image/*,application/pdf,.pdf" style="display:none" onchange="replyAttachSelect(event,'${rootId}')" /></label>
+      <label class="reply-attach"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>Attach file<input type="file" style="display:none" onchange="replyAttachSelect(event,'${rootId}')" /></label>
       <button class="btn btn-primary btn-sm" onclick="${onSend}">Reply</button>
     </div>
   </div>`;
@@ -4195,17 +4224,16 @@ function replyAttachSelect(e, rootId) {
   replyFiles.set(rootId, file);
   const wrap = document.getElementById('replyPrev_' + rootId);
   if (!wrap) return;
-  const isPdf = /pdf/i.test(file.type) || /\.pdf$/i.test(file.name);
-  if (isPdf) {
-    wrap.innerHTML = `<div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text)"><span style="font-size:18px">📄</span><span>${escHtml(file.name)}</span><button onclick="clearReplyAttach('${rootId}')" style="margin-left:auto;background:var(--red);color:#fff;border:none;border-radius:50%;width:18px;height:18px;cursor:pointer;font-size:11px;line-height:1">×</button></div>`;
-    wrap.style.display = 'block';
-  } else {
+  if (isImageFile(file)) {
     const reader = new FileReader();
     reader.onload = ev => {
       wrap.innerHTML = `<div style="position:relative;display:inline-block"><img src="${ev.target.result}" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" /><button onclick="clearReplyAttach('${rootId}')" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;border:none;cursor:pointer;font-size:11px;line-height:1">×</button></div>`;
       wrap.style.display = 'block';
     };
     reader.readAsDataURL(file);
+  } else {
+    wrap.innerHTML = fileChipHtml(file.name, `clearReplyAttach('${rootId}')`);
+    wrap.style.display = 'block';
   }
 }
 function clearReplyAttach(rootId) {
@@ -4253,8 +4281,7 @@ async function sendMsgReply(rootId) {
   const context = client ? client.name : 'a client';
   let imageUrl = null;
   if (file) { imageUrl = await uploadMsgImage(file, `client-${currentClientId}`); if (!imageUrl) { alert("Couldn't upload the attachment — please try again."); return; } }
-  const isPdf = file && (/pdf/i.test(file.type) || /\.pdf$/i.test(file.name));
-  const finalBody = body || (file ? (isPdf ? '📄 PDF' : '📷 Image') : '');
+  const finalBody = body || attachPlaceholderText(file);
   try {
     await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: finalBody, is_team: true, parent_message_id: rootId, is_internal: isInternal, image_url: imageUrl }), 'Send reply');
   } catch (err) {
@@ -4345,7 +4372,7 @@ async function sendMessage(isInternal) {
   if (currentImgFile) imageUrl = await uploadMsgImage(currentImgFile, `client-${currentClientId}`);
 
   try {
-    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || '📷 Image', image_url: imageUrl, is_team: true, is_internal: !!isInternal }), 'Send message');
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || attachPlaceholderText(currentImgFile), image_url: imageUrl, is_team: true, is_internal: !!isInternal }), 'Send message');
   } catch (err) {
     alert("Couldn't send your message — " + (err.message || 'please try again.') + "\n\nIt was not posted, so your text is still here to retry.");
     return;
@@ -4371,15 +4398,7 @@ document.addEventListener('DOMContentLoaded', () => {
     msgCard.addEventListener('drop', e => {
       e.preventDefault(); msgCard.style.outline = '';
       const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) {
-        currentImgFile = file;
-        const reader = new FileReader();
-        reader.onload = ev => {
-          document.getElementById('imgPreview').src = ev.target.result;
-          document.getElementById('imgPreviewWrap').style.display = 'block';
-        };
-        reader.readAsDataURL(file);
-      }
+      if (file) setClientAttachment(file);
     });
   }
 });
@@ -4452,8 +4471,7 @@ async function sendTeamReply(rootId) {
   const author = document.getElementById('sidebarName').textContent;
   let imageUrl = null;
   if (file) { imageUrl = await uploadMsgImage(file, 'team'); if (!imageUrl) { alert("Couldn't upload the attachment — please try again."); return; } }
-  const isPdf = file && (/pdf/i.test(file.type) || /\.pdf$/i.test(file.name));
-  const finalBody = body || (file ? (isPdf ? '📄 PDF' : '📷 Image') : '');
+  const finalBody = body || attachPlaceholderText(file);
   const { error } = await sb.from('team_messages').insert({ author, body: finalBody, parent_message_id: rootId, image_url: imageUrl });
   if (error) { alert('Could not post reply: ' + error.message); return; }
   ta.value = '';
@@ -4511,7 +4529,7 @@ async function sendTeamMessage() {
   let imageUrl = null;
   if (currentTeamImgFile) imageUrl = await uploadMsgImage(currentTeamImgFile, 'team');
 
-  const { error } = await sb.from('team_messages').insert({ author, body: body || '📷 Image', image_url: imageUrl });
+  const { error } = await sb.from('team_messages').insert({ author, body: body || attachPlaceholderText(currentTeamImgFile), image_url: imageUrl });
   if (error) { console.error('Team message error:', error); alert('Could not post message: ' + error.message); return; }
   document.getElementById('teamMsgInput').value = '';
   clearTeamImg();
