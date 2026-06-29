@@ -1577,13 +1577,14 @@ function clientQBubble(clientId) {
   return ` <span class="client-q-bubble" title="${label}">${n > 99 ? '99+' : n}</span>`;
 }
 
-// Refresh the Clients-list bubbles in place when a portal message changes, but
-// only while the Clients page is actually on screen (avoids needless work).
+// Refresh the Clients-list bubbles when a message changes. We always recount —
+// even if the Clients page isn't on screen — so the counts are correct the
+// moment you navigate back to it (e.g. after answering a note from inside a
+// client's detail view). The table is only re-rendered when it's visible.
 async function refreshClientBubblesIfVisible() {
-  const page = document.getElementById('page-clients');
-  if (!page || !page.classList.contains('active')) return;
   await loadClientCommentCounts();
-  renderClientsTable(allClients);
+  const page = document.getElementById('page-clients');
+  if (page && page.classList.contains('active')) renderClientsTable(allClients);
 }
 
 async function loadClients() {
@@ -4733,6 +4734,10 @@ function showPage(name) {
   if (name === 'search') { const el = document.getElementById('globalTaskSearch'); if (el) setTimeout(() => el.focus(), 50); }
   if (name === 'myday') loadMyDay();
   if (name === 'myweek') loadMyWeek();
+  // Returning to the Clients list: recount the per-client bubbles so a note you
+  // just answered (from a client's detail view) drops off immediately. The page
+  // is already marked active above, so this both recounts and re-renders.
+  if (name === 'clients') refreshClientBubblesIfVisible();
 }
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
