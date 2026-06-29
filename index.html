@@ -1496,10 +1496,11 @@ async function showApp() {
 }
 
 // ── CLIENTS ──────────────────────────────────────────────
-// Per-client count of open Client Questions: portal message threads (cleared=
-// false) whose latest reply is from the client — the same definition as the
-// sidebar Client Portal badge, grouped per client. Powers the bubbles on the
-// Clients list so you can see at a glance which clients are waiting on us.
+// Per-client count of open INTERNAL threads (is_internal=true, cleared=false)
+// whose latest message is from someone other than the current user. Powers the
+// bubbles on the Clients list. Client-facing conversations are intentionally
+// excluded — those surface under the Client Portal badge instead, keeping the
+// Clients area focused on internal team communication.
 let clientCommentCounts = {};
 
 // Which clients the current (effective) user owns, by name match on preparer or
@@ -1552,10 +1553,13 @@ async function loadClientCommentCounts() {
   try {
     const { data, error } = await sb
       .from('messages')
-      .select('id, parent_message_id, author, created_at, client_id')
+      .select('id, parent_message_id, author, created_at, client_id, is_internal')
       .eq('cleared', false);
     if (error) throw error;
-    const { perClient } = bubbleCounts(data || [], getViewingUserName());
+    // Internal-only: the Clients-list bubbles reflect internal team communication.
+    // Client-facing conversations are surfaced by the Client Portal badge instead.
+    const internalRows = (data || []).filter(m => m.is_internal);
+    const { perClient } = bubbleCounts(internalRows, getViewingUserName());
     const owned = myClientIdSet();
     const counts = {};
     Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) counts[cid] = perClient[cid]; });
@@ -1569,7 +1573,7 @@ async function loadClientCommentCounts() {
 function clientQBubble(clientId) {
   const n = clientCommentCounts[clientId] || 0;
   if (!n) return '';
-  const label = n === 1 ? '1 open client question' : `${n} open client questions`;
+  const label = n === 1 ? '1 open internal note' : `${n} open internal notes`;
   return ` <span class="client-q-bubble" title="${label}">${n > 99 ? '99+' : n}</span>`;
 }
 
@@ -1895,10 +1899,12 @@ async function loadPortalBadge() {
       Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) c += perClient[cid]; });
       return c;
     };
-    // Clients badge: every waiting thread (internal team notes + client-facing).
+    // Clients badge: ONLY internal team notes (is_internal=true). Client-facing
+    // conversations belong to the Client Portal badge, not here — the Clients
+    // area is for internal communication only.
     // Client Portal badge: ONLY client-facing threads — internal team-only notes
     // never appear on the portal, so they must not bump that badge.
-    const clientsCount = sumOwned(data || []);
+    const clientsCount = sumOwned((data || []).filter(m => m.is_internal));
     const portalCount  = sumOwned((data || []).filter(m => !m.is_internal));
 
     const setBadge = (b, n) => {
