@@ -662,6 +662,7 @@
         <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
       </nav>
       <div class="sidebar-bottom">
+        <button class="logout-btn" id="enableNotifBtn" onclick="enableTriplePush()" style="margin-bottom:8px">🔔 Enable notifications</button>
         <button class="logout-btn" onclick="doLogout()">Sign out</button>
       </div>
     </div>
@@ -1169,6 +1170,77 @@ const sb = supabase.createClient(SB_URL, SB_KEY, {
 
 const USERS = ['Ed Hattrup','Jennifer Mills','Jen Crane','Lydia Hattrup'];
 
+// ── Web Push notifications + app-icon badge ───────────────
+const VAPID_PUBLIC_KEY = 'BM2Fsxg1AV20SX0G0UnT_o_c-Qfl3KlfCZHYwj42SBoim2vPmnMpQ2DR_rFg1a5iST56KoTXFWEsRxYkXGtSuBw';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+  return arr;
+}
+
+// App-icon badge: reflect the precise unread total while the app is open.
+function updateAppBadge(n) {
+  try {
+    if (!('setAppBadge' in navigator)) return;
+    if (n > 0) navigator.setAppBadge(n); else navigator.clearAppBadge();
+  } catch (_) {}
+}
+
+// Subscribe this device to push. Must be triggered by a user gesture (iOS).
+async function enableTriplePush() {
+  const btn = document.getElementById('enableNotifBtn');
+  try {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) {
+      alert('This device or browser does not support push. On iPhone, add Triple to your Home Screen and open it from there (not Safari) first.');
+      return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { alert('Notifications are turned off. You can re-enable them for Triple in your device settings.'); refreshNotifButton(); return; }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) {
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    const j = sub.toJSON();
+    const name = document.getElementById('sidebarName')?.textContent || '';
+    const { error } = await sb.from('push_subscriptions').upsert({
+      user_id: currentUser.id,
+      name,
+      endpoint: sub.endpoint,
+      p256dh: j.keys?.p256dh,
+      auth: j.keys?.auth
+    }, { onConflict: 'endpoint' });
+    if (error) throw error;
+    refreshNotifButton();
+  } catch (err) {
+    console.error('enableTriplePush failed:', err);
+    alert("Couldn't turn on notifications — please try again.");
+  }
+}
+
+// Reflect the right label/state on the enable button.
+async function refreshNotifButton() {
+  const btn = document.getElementById('enableNotifBtn');
+  if (!btn) return;
+  if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) { btn.style.display = 'none'; return; }
+  let subscribed = false;
+  try { const reg = await navigator.serviceWorker.ready; subscribed = !!(await reg.pushManager.getSubscription()); } catch (_) {}
+  if (Notification.permission === 'granted' && subscribed) { btn.textContent = '🔔 Notifications on'; btn.disabled = true; }
+  else { btn.textContent = '🔔 Enable notifications'; btn.disabled = false; }
+}
+
+// Keep the app-icon badge accurate when the app is reopened/refocused.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && currentUser) loadPortalBadge();
+});
+
 // Race a promise against a timeout. Rejects with { code: 'TIMEOUT' } if the
 // promise doesn't settle in time. Used to recover from Supabase cold-starts
 // where a hung query would otherwise leave a spinner forever.
@@ -1477,6 +1549,7 @@ async function showApp() {
   document.getElementById('sidebarAvatar').textContent = initials;
   document.getElementById('sidebarAvatar').className = 'user-avatar ' + avClass(name);
   document.getElementById('sidebarRole').textContent = email.includes('ed@') ? 'Owner' : 'Preparer';
+  refreshNotifButton();
   // Greeting and date are based on the user's Central time, not browser local.
   const centralHour = parseInt(new Intl.DateTimeFormat('en-US', { timeZone: BG_TZ, hour: 'numeric', hour12: false }).format(new Date()), 10);
   const greeting = centralHour < 12 ? 'Good morning' : centralHour < 17 ? 'Good afternoon' : 'Good evening';
@@ -1917,6 +1990,7 @@ async function loadPortalBadge() {
     };
     setBadge(clientsB, clientsCount);
     setBadge(portalB, portalCount);
+    updateAppBadge(clientsCount + portalCount);
   } catch (err) {
     console.error('loadPortalBadge error:', err);
     // Non-critical — leave whatever the badges currently show.
