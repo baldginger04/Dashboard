@@ -660,6 +660,7 @@
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
+        <div class="nav-item" onclick="showPage('admin')" id="nav-admin" style="display:none"><span>⚙️</span> Admin</div>
       </nav>
       <div class="sidebar-bottom">
         <button class="logout-btn" id="enableNotifBtn" onclick="enableTriplePush()" style="margin-bottom:8px">🔔 Enable notifications</button>
@@ -968,6 +969,51 @@
             <a class="tool-link" href="https://app.bill.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=bill.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='B';p.style.background='#1A8754';p.style.color='#fff'"/></span><span><span class="tool-link-name">Bill.com</span><br><span class="tool-link-sub">AP / AR & payments</span></span></a>
             <a class="tool-link" href="https://qbo.intuit.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=quickbooks.intuit.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='QB';p.style.background='#2CA01C';p.style.color='#fff'"/></span><span><span class="tool-link-name">QuickBooks Online</span><br><span class="tool-link-sub">The books</span></span></a>
             <a class="tool-link" href="https://dashboard.stripe.com" target="_blank" rel="noopener"><span class="tool-link-icon"><img src="https://www.google.com/s2/favicons?domain=stripe.com&sz=64" alt="" width="26" height="26" onerror="const p=this.parentNode;p.textContent='S';p.style.background='#635BFF';p.style.color='#fff'"/></span><span><span class="tool-link-name">Stripe</span><br><span class="tool-link-sub">Payments dashboard</span></span></a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ADMIN (owner only) -->
+      <div class="page" id="page-admin">
+        <style>
+          #page-admin .ad-grid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start}
+          @media(max-width:900px){#page-admin .ad-grid{grid-template-columns:1fr}}
+          #page-admin .ad-field{margin-bottom:.7rem}
+          #page-admin .ad-field label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);font-weight:700;margin-bottom:4px}
+          #page-admin .ad-input{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;box-sizing:border-box}
+          #page-admin .ad-clients{border:1px solid var(--border);border-radius:8px;max-height:240px;overflow:auto;padding:4px}
+          #page-admin .ad-cli{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:13px}
+          #page-admin .ad-cli:hover{background:var(--warm)}
+          #page-admin .ad-user{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff}
+          #page-admin .ad-user.inactive{opacity:.65}
+          #page-admin .ad-user-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+          #page-admin .ad-user-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+          #page-admin .ad-user-email{font-size:12px;color:var(--text2);margin-top:2px}
+          #page-admin .ad-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+          #page-admin .ad-chip{display:inline-flex;align-items:center;gap:4px;background:var(--warm);border:1px solid var(--border);border-radius:14px;padding:2px 4px 2px 10px;font-size:12px}
+          #page-admin .ad-chip button{border:none;background:none;cursor:pointer;color:var(--text3);font-size:14px;line-height:1;padding:0 3px;border-radius:50%}
+          #page-admin .ad-chip button:hover{color:var(--red)}
+          #page-admin .ad-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:10px;background:#fde8e8;color:var(--red)}
+          #page-admin .ad-msg{font-size:12px;margin-top:10px;min-height:16px}
+          #page-admin .ad-addrow{display:flex;gap:6px;margin-top:10px;align-items:center}
+          #page-admin .ad-addrow select{flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px;font-family:inherit;background:#fff}
+        </style>
+        <div class="page-header"><div><div class="page-title">Admin</div><div class="page-sub">Provision portal logins and manage who sees which clients</div></div></div>
+        <div class="ad-grid">
+          <div class="card" style="padding:1.2rem">
+            <div class="rc-sec-title" style="margin-bottom:.9rem">Add a portal user</div>
+            <div class="ad-field"><label>Full name</label><input class="ad-input" id="adName" placeholder="Jane Smith"></div>
+            <div class="ad-field"><label>Email</label><input class="ad-input" id="adEmail" type="email" placeholder="jane@theirbar.com"></div>
+            <div class="ad-field"><label>Clients</label>
+              <input class="ad-input" id="adCliSearch" placeholder="Filter clients…" style="margin-bottom:6px" oninput="window.AdminFilter && window.AdminFilter(this.value)">
+              <div class="ad-clients" id="adClients"></div>
+            </div>
+            <button class="btn btn-primary" id="adProvision" style="width:100%;margin-top:.5rem" onclick="window.AdminProvision && window.AdminProvision()">Invite &amp; grant access</button>
+            <div class="ad-msg" id="adMsg"></div>
+          </div>
+          <div>
+            <div class="rc-sec-title" style="margin-bottom:.9rem">Portal users <span id="adCount" style="color:var(--text3);font-weight:400"></span></div>
+            <div id="adUsers"></div>
           </div>
         </div>
       </div>
@@ -1593,6 +1639,8 @@ async function showApp() {
   document.getElementById('mydayDate').textContent = tzFormatDate(tzToday(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
+  // Owner-only: reveal the Admin (provisioning) tab.
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; }
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek()]);
@@ -4878,6 +4926,7 @@ function showPage(name) {
   if (name === 'search') { const el = document.getElementById('globalTaskSearch'); if (el) setTimeout(() => el.focus(), 50); }
   if (name === 'myday') loadMyDay();
   if (name === 'myweek') loadMyWeek();
+  if (name === 'admin' && window.AdminLoad) window.AdminLoad();
   // Returning to the Clients list: recount the per-client bubbles so a note you
   // just answered (from a client's detail view) drops off immediately. The page
   // is already marked active above, so this both recounts and re-renders.
@@ -5374,5 +5423,106 @@ init();
 })();
 </script>
 
+<script>
+/* ADMIN-TAB */
+(function(){
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(ch){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch];}); }
+  var selected = new Set();
+  var users = [];
+  function clientsList(){
+    var arr = (typeof allClients!=='undefined' && allClients) ? allClients.slice() : [];
+    return arr.filter(function(c){return c && c.id;}).sort(function(a,b){return (a.name||"").localeCompare(b.name||"");});
+  }
+  function clientName(id){ var c=(typeof allClients!=='undefined'&&allClients||[]).find(function(x){return x.id===id;}); return c?c.name:id; }
+  function call(body){ return sb.functions.invoke('admin-users',{body:body}); }
+  function ok(res){ return res && !res.error && res.data && res.data.ok; }
+  function errMsg(res){ return (res && res.data && res.data.message) || (res && res.error && res.error.message) || 'request failed'; }
+  function msg(t,good){ var m=document.getElementById('adMsg'); if(m){ m.textContent=t; m.style.color=good?'var(--green)':'var(--red)'; } }
+
+  function renderPicker(filter){
+    var host=document.getElementById('adClients'); if(!host) return;
+    var f=(filter||"").toLowerCase();
+    var list=clientsList().filter(function(c){return !f || (c.name||"").toLowerCase().indexOf(f)>=0;});
+    host.innerHTML = list.length ? list.map(function(c){
+      return `<label class="ad-cli"><input type="checkbox" ${selected.has(c.id)?'checked':''} onchange="window.AdminPick('${c.id}',this.checked)"> ${esc(c.name)}</label>`;
+    }).join('') : '<div style="padding:8px;color:var(--text3);font-size:12px">No clients match.</div>';
+  }
+  window.AdminPick=function(id,on){ if(on) selected.add(id); else selected.delete(id); };
+  window.AdminFilter=function(v){ renderPicker(v); };
+
+  function renderUsers(){
+    var host=document.getElementById('adUsers'); if(!host) return;
+    var cnt=document.getElementById('adCount'); if(cnt) cnt.textContent = users.length?('· '+users.length):'';
+    if(!users.length){ host.innerHTML='<div class="empty" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:1.5rem;color:var(--text3)">No portal users yet.</div>'; return; }
+    host.innerHTML = users.map(function(u){
+      var chips=(u.clients||[]).map(function(c){
+        return `<span class="ad-chip">${esc(c.name||clientName(c.client_id))}<button title="Remove access" onclick="window.AdminRevoke('${u.id}','${c.client_id}')">×</button></span>`;
+      }).join('') || '<span style="font-size:12px;color:var(--text3)">No clients linked</span>';
+      var have={}; (u.clients||[]).forEach(function(c){have[c.client_id]=1;});
+      var opts=clientsList().filter(function(c){return !have[c.id];}).map(function(c){return `<option value="${c.id}">${esc(c.name)}</option>`;}).join('');
+      var addRow = opts ? `<div class="ad-addrow"><select id="adadd-${u.id}"><option value="">+ add client…</option>${opts}</select><button class="btn btn-ghost btn-sm" onclick="window.AdminGrant('${u.id}')">Add</button></div>` : '';
+      var off = u.active===false;
+      var badge = off ? '<span class="ad-badge">Deactivated</span>' : '';
+      var toggle = off
+        ? `<button class="btn btn-ghost btn-sm" onclick="window.AdminToggle('${u.id}',true)">Reactivate</button>`
+        : `<button class="btn btn-ghost btn-sm" onclick="window.AdminToggle('${u.id}',false)">Deactivate</button>`;
+      return `<div class="ad-user${off?' inactive':''}"><div class="ad-user-top"><div><div class="ad-user-name">${esc(u.full_name||'(no name)')} ${badge}</div><div class="ad-user-email">${esc(u.email)}</div></div><div>${toggle}</div></div><div class="ad-chips">${chips}</div>${addRow}</div>`;
+    }).join('');
+  }
+
+  window.AdminLoad=async function(){
+    var search=document.getElementById('adCliSearch');
+    renderPicker(search?search.value:'');
+    var host=document.getElementById('adUsers'); if(host) host.innerHTML='<div class="empty" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:1.5rem;color:var(--text3)">Loading…</div>';
+    if(!clientsList().length){ try{ var r=await sb.from('clients').select('id,name').order('name'); if(r.data){ allClients = r.data; } }catch(e){} renderPicker(search?search.value:''); }
+    try{
+      var res=await call({action:'list'});
+      if(!ok(res)) throw new Error(errMsg(res));
+      users=res.data.users||[]; renderUsers();
+    }catch(e){
+      if(host) host.innerHTML='<div class="empty" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:1.5rem;color:var(--red)">Could not load users: '+esc(e.message)+'</div>';
+    }
+  };
+
+  window.AdminProvision=async function(){
+    var name=(document.getElementById('adName').value||"").trim();
+    var email=(document.getElementById('adEmail').value||"").trim();
+    var ids=Array.from(selected);
+    if(!email){ msg('Email is required.',false); return; }
+    if(!ids.length){ msg('Pick at least one client.',false); return; }
+    var btn=document.getElementById('adProvision'); var orig=btn.textContent; btn.disabled=true; btn.textContent='Inviting…'; msg('',true);
+    try{
+      var res=await call({action:'provision',full_name:name,email:email,client_ids:ids});
+      if(!ok(res)) throw new Error(errMsg(res));
+      var d=res.data;
+      msg((d.invited?'Invited ':'Updated ')+email+' · linked '+d.linked+' client'+(d.linked===1?'':'s')+(d.skipped?(' ('+d.skipped+' already had)'):'')+'.',true);
+      document.getElementById('adName').value=''; document.getElementById('adEmail').value=''; selected.clear();
+      renderPicker(document.getElementById('adCliSearch').value);
+      await window.AdminLoad();
+    }catch(e){ msg('Error: '+e.message,false); }
+    finally{ btn.disabled=false; btn.textContent=orig; }
+  };
+
+  window.AdminGrant=async function(uid){
+    var sel=document.getElementById('adadd-'+uid); var cid=sel&&sel.value; if(!cid) return;
+    sel.disabled=true;
+    try{ var res=await call({action:'grant',user_id:uid,client_ids:[cid]}); if(!ok(res)) throw new Error(errMsg(res)); await window.AdminLoad(); }
+    catch(e){ alert('Could not add client: '+e.message); sel.disabled=false; }
+  };
+
+  window.AdminRevoke=async function(uid,cid){
+    if(!confirm("Remove this client from the user's access?")) return;
+    try{ var res=await call({action:'revoke',user_id:uid,client_id:cid}); if(!ok(res)) throw new Error(errMsg(res)); await window.AdminLoad(); }
+    catch(e){ alert('Could not remove: '+e.message); }
+  };
+
+  window.AdminToggle=async function(uid,activate){
+    var verb=activate?'Reactivate':'Deactivate';
+    if(!confirm(verb+" this user"+(activate?"":" — their login will be blocked until reactivated")+"?")) return;
+    try{ var res=await call({action:activate?'reactivate':'deactivate',user_id:uid}); if(!ok(res)) throw new Error(errMsg(res)); await window.AdminLoad(); }
+    catch(e){ alert('Could not update: '+e.message); }
+  };
+})();
+</script>
 </body>
 </html>
