@@ -907,18 +907,54 @@
         <div id="autoBoard"><div class="empty"><span class="spinner"></span></div></div>
       </div>
 
-      <!-- STATEMENT RECONCILER (placeholder — building next) -->
+      <!-- STATEMENT RECONCILER -->
       <div class="page" id="page-reconciler">
-        <div class="page-header"><div><div class="page-title">Statement Reconciler</div><div class="page-sub">Match statements against the books</div></div></div>
-        <div class="card" style="padding:2.5rem;text-align:center">
-          <div style="font-size:34px;margin-bottom:.6rem">🧾</div>
-          <div style="font-size:17px;font-weight:700;color:var(--navy);margin-bottom:.45rem">Invoice Reconciler</div>
-          <div style="font-size:13px;color:var(--text2);max-width:470px;margin:0 auto 1.6rem;line-height:1.6">Reconcile invoices against the books, and see what the Gmail watcher has routed to Dropbox. The watcher checks for invoice emails every 5 minutes and files attachments into each client's folder automatically.</div>
-          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-            <a class="btn btn-primary" style="text-decoration:none" href="https://baldginger-invoices.up.railway.app/" target="_blank" rel="noopener">Open Invoice Reconciler ↗</a>
-            <a class="btn btn-secondary" style="text-decoration:none" href="https://baldginger-invoices.up.railway.app/log" target="_blank" rel="noopener">Activity log ↗</a>
-          </div>
-          <div style="font-size:11px;color:var(--text3);margin-top:1.15rem">Opens in a new tab · password-protected (separate login from Triple)</div>
+        <style>
+          #page-reconciler .rc-muted{color:var(--text3);font-size:13px}
+          #page-reconciler .rc-err{color:var(--red);font-size:13px}
+          #page-reconciler .rc-warn{color:var(--yellow);font-size:11px;font-weight:700;margin-left:6px}
+          #page-reconciler .rc-chip{border:1px solid var(--border2);background:#fff;color:var(--navy);border-radius:20px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;margin:0 8px 8px 0}
+          #page-reconciler .rc-chip:hover{border-color:var(--coral)}
+          #page-reconciler .rc-chip-sel{background:var(--navy);color:#fff;border-color:var(--navy)}
+          #page-reconciler .rc-row{display:flex;gap:24px;flex-wrap:wrap;margin:0 0 .25rem}
+          #page-reconciler .rc-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:2px}
+          #page-reconciler .rc-val{font-size:15px;font-weight:700;color:var(--navy)}
+          #page-reconciler .rc-tbl{width:100%;border-collapse:collapse;margin-top:.8rem;font-size:13px}
+          #page-reconciler .rc-tbl th{text-align:left;color:var(--text2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;border-bottom:1px solid var(--border)}
+          #page-reconciler .rc-tbl td{padding:7px 10px;border-bottom:1px solid var(--border)}
+          #page-reconciler .rc-pill{color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:10px;white-space:nowrap}
+          #page-reconciler .rc-cards{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:.5rem}
+          #page-reconciler .rc-card{flex:1;min-width:120px;background:var(--warm);border-radius:10px;padding:14px 16px;text-align:center}
+          #page-reconciler .rc-card-n{font-size:24px;font-weight:800}
+          #page-reconciler .rc-card-l{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+          #page-reconciler .rc-drop{display:block;border:2px dashed var(--border2);border-radius:12px;padding:1.6rem;text-align:center;cursor:pointer}
+          #page-reconciler .rc-drop:hover{border-color:var(--coral)}
+          #page-reconciler .rc-sec-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:700;margin:0 0 .6rem}
+        </style>
+
+        <div class="page-header"><div><div class="page-title">Statement Reconciler</div><div class="page-sub">Match vendor statements against the books in QuickBooks</div></div></div>
+
+        <div class="card" style="padding:1.4rem;margin-bottom:1rem">
+          <div class="rc-sec-title">Connected companies</div>
+          <div id="rcCompanies"><span class="rc-muted">Loading&hellip;</span></div>
+          <div style="margin-top:.6rem"><button class="btn btn-secondary" onclick="ReconConnect()">+ Connect a client</button></div>
+        </div>
+
+        <div class="card" id="rcWork" style="padding:1.4rem;margin-bottom:1rem;display:none">
+          <div class="rc-sec-title" id="rcWorkTitle">Reconcile</div>
+          <label class="rc-drop" for="rcFile">
+            <div style="font-size:24px">&#128196;</div>
+            <div style="font-weight:700;color:var(--navy);margin-top:.3rem">Drop or choose a statement PDF</div>
+            <div class="rc-muted" style="margin-top:.2rem">Claude reads the statement and pulls out the invoice lines</div>
+          </label>
+          <input type="file" id="rcFile" accept="application/pdf" style="display:none" onchange="ReconFile(this)" />
+          <div id="rcExtract" style="margin-top:1rem"></div>
+          <div id="rcResults" style="margin-top:1.2rem"></div>
+        </div>
+
+        <div class="card" style="padding:1.4rem">
+          <div class="rc-sec-title">Recent reconciliations</div>
+          <div id="rcHistory"><span class="rc-muted">Pick a company to see its history.</span></div>
         </div>
       </div>
 
@@ -5136,5 +5172,191 @@ init();
       });
     }
   </script>
+<script>
+/* Statement Reconciler - talks to the Supabase Edge Functions */
+(function(){
+  const FN = 'https://evfemokwtofbarjeezhu.supabase.co/functions/v1';
+  let companies = [], cur = null, extracted = null, vendors = [];
+  const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+  const fmt  = n => (n==null||isNaN(n)) ? '\u2014' : Number(n).toLocaleString('en-US',{style:'currency',currency:'USD'});
+
+  function toast(msg, kind){
+    let t = document.getElementById('rcToast');
+    if(!t){ t=document.createElement('div'); t.id='rcToast';
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%';
+      document.body.appendChild(t); }
+    t.style.background = kind==='warn' ? '#b93232' : (kind==='ok' ? '#1e7a45' : '#1B2A4B');
+    t.textContent = msg; t.style.opacity='1';
+    clearTimeout(t.__h); t.__h=setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; }, 4200);
+  }
+
+  async function invoke(name, body){
+    const r = await sb.functions.invoke(name, body ? { body } : undefined);
+    if (r.error) throw new Error(r.error.message || 'Request failed');
+    if (r.data && r.data.error){ const e=new Error(r.data.error); e.code=r.data.code; throw e; }
+    return r.data;
+  }
+
+  const isExpired = c => !c.refresh_expires_at || new Date(c.refresh_expires_at) < new Date();
+
+  async function loadCompanies(){
+    const box = document.getElementById('rcCompanies');
+    box.innerHTML = '<span class="rc-muted">Loading\u2026</span>';
+    try { companies = (await invoke('qbo-list')).companies || []; renderCompanies(); }
+    catch(e){ box.innerHTML = '<span class="rc-muted">Could not load companies: '+e.message+'</span>'; }
+  }
+  function renderCompanies(){
+    const box = document.getElementById('rcCompanies');
+    if(!companies.length){ box.innerHTML='<span class="rc-muted">No companies connected yet \u2014 click \u201CConnect a client\u201D.</span>'; return; }
+    box.innerHTML = companies.map(c=>{
+      const sel = cur && cur.realm_id===c.realm_id;
+      return '<button class="rc-chip'+(sel?' rc-chip-sel':'')+'" onclick="ReconPick(\''+c.realm_id+'\')">'+(c.company_name||c.realm_id)+(isExpired(c)?' <span class="rc-warn">reconnect</span>':'')+'</button>';
+    }).join('');
+  }
+
+  function pick(realm){
+    cur = companies.find(c=>c.realm_id===realm) || null;
+    extracted = null; vendors = [];
+    renderCompanies();
+    document.getElementById('rcWork').style.display = cur ? 'block' : 'none';
+    document.getElementById('rcExtract').innerHTML = '';
+    document.getElementById('rcResults').innerHTML = '';
+    if(cur){
+      document.getElementById('rcWorkTitle').textContent = 'Reconcile \u2014 ' + (cur.company_name||'');
+      if(isExpired(cur)) toast('This connection may be expired \u2014 reconnect if it errors.','warn');
+      loadHistory();
+    }
+  }
+  function connect(){ window.location.href = FN + '/qbo-auth'; }
+
+  async function processFile(f){
+    if(!f) return;
+    if(!cur){ toast('Pick a company first','warn'); return; }
+    if(f.type !== 'application/pdf'){ toast('Please choose a PDF','warn'); return; }
+    const ex = document.getElementById('rcExtract');
+    document.getElementById('rcResults').innerHTML = '';
+    ex.innerHTML = '<div class="rc-muted">Reading '+f.name+'\u2026 (10\u201320s)</div>';
+    try {
+      const b64 = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(f); });
+      extracted = await invoke('statement-extract', { pdf_base64: b64, filename: f.name });
+      vendors = (await invoke('qbo-vendors', { realm_id: cur.realm_id })).vendors || [];
+      renderExtract();
+    } catch(e){
+      ex.innerHTML = e.code==='reconnect_needed'
+        ? '<div class="rc-err">Connection expired. <button class="btn btn-secondary" onclick="ReconConnect()">Reconnect</button></div>'
+        : '<div class="rc-err">'+e.message+'</div>';
+    }
+  }
+
+  function bestVendorIdx(){
+    const t = norm(extracted && extracted.vendor_name); if(!t) return -1;
+    let i = vendors.findIndex(v=>norm(v.name)===t); if(i>=0) return i;
+    return vendors.findIndex(v=>norm(v.name).includes(t)||t.includes(norm(v.name)));
+  }
+  function renderExtract(){
+    const inv = (extracted.invoices)||[];
+    const rows = inv.map(i=>'<tr><td>'+(i.invoice_number||'')+'</td><td>'+(i.date||'')+'</td><td style="text-align:right">'+fmt(i.amount)+'</td><td>'+(i.status||'')+'</td></tr>').join('');
+    const opts = vendors.map(v=>'<option value="'+v.id+'">'+v.name+'</option>').join('');
+    document.getElementById('rcExtract').innerHTML =
+      '<div class="rc-row">'+
+        '<div><div class="rc-lbl">Statement vendor</div><div class="rc-val">'+(extracted.vendor_name||'\u2014')+'</div></div>'+
+        '<div><div class="rc-lbl">Statement date</div><div class="rc-val">'+(extracted.statement_date||'\u2014')+'</div></div>'+
+        '<div><div class="rc-lbl">Lines found</div><div class="rc-val">'+inv.length+'</div></div>'+
+      '</div>'+
+      '<table class="rc-tbl"><thead><tr><th>Invoice #</th><th>Date</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<div class="rc-row" style="align-items:flex-end;margin-top:1rem">'+
+        '<div style="flex:1;min-width:220px"><div class="rc-lbl">Match to QuickBooks vendor</div>'+
+          '<select id="rcVendor" class="form-select">'+(opts||'<option>No vendors found</option>')+'</select></div>'+
+        '<button class="btn btn-primary" onclick="ReconRun()">Reconcile '+inv.length+' line'+(inv.length===1?'':'s')+'</button>'+
+      '</div>';
+    const bi = bestVendorIdx();
+    if(bi>=0) document.getElementById('rcVendor').selectedIndex = bi;
+  }
+
+  const META = {
+    MATCHED:{l:'Matched',c:'var(--green)'}, AMOUNT_MISMATCH:{l:'Amount mismatch',c:'var(--yellow)'},
+    DATE_MISMATCH:{l:'Date mismatch',c:'var(--yellow)'}, MISSING_IN_QBO:{l:'Missing in QBO',c:'var(--red)'},
+    NOT_IN_STATEMENT:{l:'Not on statement',c:'var(--blue)'}
+  };
+  async function run(){
+    const sel = document.getElementById('rcVendor');
+    if(!sel || !sel.value){ toast('Pick a vendor first','warn'); return; }
+    const vid = sel.value, vname = sel.options[sel.selectedIndex].text;
+    const res = document.getElementById('rcResults');
+    res.innerHTML = '<div class="rc-muted">Reconciling\u2026</div>';
+    try {
+      const d = await invoke('qbo-reconcile', {
+        realm_id: cur.realm_id, vendor_id: vid, invoices: extracted.invoices||[],
+        company_name: cur.company_name, vendor_name: vname, statement_date: extracted.statement_date
+      });
+      renderResults(d); loadHistory();
+      if(d.saved===false) toast('Result shown, but history save failed','warn');
+    } catch(e){
+      res.innerHTML = e.code==='reconnect_needed'
+        ? '<div class="rc-err">Connection expired. <button class="btn btn-secondary" onclick="ReconConnect()">Reconnect</button></div>'
+        : '<div class="rc-err">'+e.message+'</div>';
+    }
+  }
+  function renderResults(d){
+    const s = d.summary||{};
+    const cards = [['Matched',s.matched,'var(--green)'],['Amount mismatch',s.amount_mismatch,'var(--yellow)'],
+      ['Date mismatch',s.date_mismatch,'var(--yellow)'],['Missing in QBO',s.missing_in_qbo,'var(--red)'],
+      ['Not on statement',s.not_in_statement,'var(--blue)']]
+      .map(a=>'<div class="rc-card"><div class="rc-card-n" style="color:'+a[2]+'">'+(a[1]||0)+'</div><div class="rc-card-l">'+a[0]+'</div></div>').join('');
+    const rows = (d.rows||[]).map(r=>{ const m=META[r.match]||{l:r.match,c:'var(--text2)'};
+      return '<tr><td>'+(r.invoice_number||'')+'</td><td>'+(r.date||'\u2014')+'</td><td style="text-align:right">'+fmt(r.amount)+'</td>'+
+        '<td>'+(r.qbo_date||'\u2014')+'</td><td style="text-align:right">'+fmt(r.qbo_amount)+'</td>'+
+        '<td><span class="rc-pill" style="background:'+m.c+'">'+m.l+'</span></td></tr>'; }).join('');
+    document.getElementById('rcResults').innerHTML =
+      '<div class="rc-cards">'+cards+'</div>'+
+      '<table class="rc-tbl"><thead><tr><th>Invoice #</th><th>Stmt date</th><th style="text-align:right">Stmt amt</th><th>QBO date</th><th style="text-align:right">QBO amt</th><th>Status</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
+  async function loadHistory(){
+    const h = document.getElementById('rcHistory'); if(!h||!cur) return;
+    h.innerHTML = '<div class="rc-muted">Loading history\u2026</div>';
+    try {
+      const { data, error } = await sb.from('reconciliations')
+        .select('vendor_name, statement_date, summary, created_at')
+        .eq('realm_id', cur.realm_id).order('created_at',{ascending:false}).limit(15);
+      if(error) throw error;
+      if(!data.length){ h.innerHTML='<div class="rc-muted">No reconciliations saved for this client yet.</div>'; return; }
+      h.innerHTML = '<table class="rc-tbl"><thead><tr><th>When</th><th>Vendor</th><th>Statement</th><th style="text-align:right">Matched / Total</th></tr></thead><tbody>'+
+        data.map(r=>{ const s=r.summary||{}; const w=new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+          return '<tr><td>'+w+'</td><td>'+(r.vendor_name||'\u2014')+'</td><td>'+(r.statement_date||'\u2014')+'</td><td style="text-align:right">'+(s.matched||0)+' / '+(s.total||0)+'</td></tr>'; }).join('')+
+        '</tbody></table>';
+    } catch(e){ h.innerHTML='<div class="rc-muted">Could not load history.</div>'; }
+  }
+
+  window.ReconPick=pick; window.ReconConnect=connect; window.ReconRun=run;
+  window.ReconFile=function(input){ const f=input.files&&input.files[0]; processFile(f); input.value=''; };
+
+  const _sp = window.showPage;
+  window.showPage = function(n){ _sp(n); if(n==='reconciler'){ companies.length?renderCompanies():loadCompanies(); wireDrop(); } };
+  function wireDrop(){
+    const z = document.querySelector('#page-reconciler .rc-drop'); if(!z||z.__w) return; z.__w=true;
+    ['dragover','dragenter'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.style.borderColor='var(--coral)';}));
+    ['dragleave','drop'].forEach(ev=>z.addEventListener(ev,e=>{e.preventDefault();z.style.borderColor='';}));
+    z.addEventListener('drop',e=>{ const f=e.dataTransfer.files&&e.dataTransfer.files[0]; processFile(f); });
+  }
+
+  function handleReturn(){
+    const p = new URLSearchParams(location.search);
+    if(p.get('qbo')==='connected'){
+      const co = p.get('company')||''; toast('Connected'+(co?' '+co:'')+' \u2713','ok');
+      history.replaceState({},'',location.origin+location.pathname);
+      let tries=0; const land=()=>{ if(window.showPage) window.showPage('reconciler'); if(++tries<3) setTimeout(land,700); };
+      setTimeout(land,500);
+    } else if(p.get('qbo_error')){
+      toast('QuickBooks connection failed: '+p.get('qbo_error'),'warn');
+      history.replaceState({},'',location.origin+location.pathname);
+    }
+  }
+  (document.readyState==='loading')
+    ? document.addEventListener('DOMContentLoaded',()=>setTimeout(handleReturn,400))
+    : setTimeout(handleReturn,400);
+})();
+</script>
+
 </body>
 </html>
