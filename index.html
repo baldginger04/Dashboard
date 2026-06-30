@@ -2113,17 +2113,21 @@ async function loadMyDay() {
     // three review documents AND whose client has an incomplete gate.
     tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
-    // Tasks that have ANY subtasks are "parent" tasks — hide them from My Day.
-    // Only their subtasks should surface (gated by the blocked_by chain below).
+    // Parent tasks (those with steps) surface alongside their subtasks now,
+    // rendered status-only so they can't be force-completed. parentTaskIds tags
+    // them; progByTask drives the "x of y steps done" hint.
     const parentTaskIds = new Set(allSubs.map(s => s.task_id));
+    const progByTask = {};
+    allSubs.forEach(s => { const p = progByTask[s.task_id] || (progByTask[s.task_id] = { done: 0, total: 0 }); p.total++; if (s.status === 'Done') p.done++; });
 
     const myTasks = (tasks || []).filter(t => {
-      if (parentTaskIds.has(t.id)) return false;
       // Close tasks ignore cadence — they appear only during an active close.
       if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
       return t.next_due <= today;
     });
+    // Parents surface status-only; tag them + attach step progress for the renderer.
+    myTasks.forEach(t => { if (parentTaskIds.has(t.id)) { t._isParent = true; t._prog = progByTask[t.id] || { done: 0, total: 0 }; } });
 
     const mySubs = (subtasks || []).filter(s => {
       if (!s.blocked_by) return true;
@@ -2194,21 +2198,25 @@ async function loadMyWeek() {
     // Apply the Ready-for-Review gate
     tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
-    // Tasks that have ANY subtasks are "parent" tasks — hide them from My Week.
-    // Only their subtasks should surface (gated by the blocked_by chain below).
+    // Parent tasks (those with steps) surface alongside their subtasks now,
+    // rendered status-only so they can't be force-completed. parentTaskIds tags
+    // them; progByTask drives the "x of y steps done" hint.
     const parentTaskIds = new Set(allSubs.map(s => s.task_id));
+    const progByTask = {};
+    allSubs.forEach(s => { const p = progByTask[s.task_id] || (progByTask[s.task_id] = { done: 0, total: 0 }); p.total++; if (s.status === 'Done') p.done++; });
 
     // Filter tasks: due in window OR daily-recurring (which fire every day)
     const dailyFreqs = ['daily','weekdays','every_other_weekday'];
 
     const weekTasks = (tasks || []).filter(t => {
-      if (parentTaskIds.has(t.id)) return false;
       // Close tasks ignore cadence — they appear only during an active close.
       if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (dailyFreqs.includes(t.frequency)) return true;
       // include overdue rolled-up to today, plus tasks due during the window
       return t.next_due && t.next_due <= weekEndStr;
     });
+    // Parents surface status-only; tag them + attach step progress for the renderer.
+    weekTasks.forEach(t => { if (parentTaskIds.has(t.id)) { t._isParent = true; t._prog = progByTask[t.id] || { done: 0, total: 0 }; } });
 
     const weekSubs = (subtasks || []).filter(s => {
       if (!s.blocked_by) return true;
@@ -2255,7 +2263,8 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
     ...tasks.map(t => ({
       id: t.id, type: 'task', title: t.title,
       client: t.clients?.name || '', clientId: t.client_id || '',
-      due: t.next_due, freq: t.frequency, status: t.status || 'Not Started'
+      due: t.next_due, freq: t.frequency, status: t.status || 'Not Started',
+      isParent: !!t._isParent, prog: t._prog || null
     })),
     ...subs.map(s => ({
       id: s.id, type: 'subtask', title: s.title,
@@ -2372,7 +2381,9 @@ function myweekItem(t, colDateStr) {
     : '';
   return `<div class="week-card ${rowClass}">
     <div class="myday-status-grp">
-      <div class="myday-check" onclick="${onClick}"></div>
+      ${t.isParent
+        ? `<div class="myday-check" style="cursor:default;border-style:dashed;color:var(--text3);font-size:11px" title="Parent task — completes automatically when its steps are done">☰</div>`
+        : `<div class="myday-check" onclick="${onClick}"></div>`}
       ${chevron}
       ${statusMenu}
     </div>
@@ -2380,6 +2391,7 @@ function myweekItem(t, colDateStr) {
       <div class="week-card-title">${t.title}</div>
       ${t.client ? `<div class="week-card-client">${t.client}</div>` : ''}
       ${parentLabel}
+      ${t.isParent && t.prog ? `<div class="week-card-meta">${t.prog.done} of ${t.prog.total} steps done</div>` : ''}
       ${statusPill}
       ${overdueLabel}
       ${recurringLabel}
@@ -2414,7 +2426,8 @@ function renderMyDay(tasks, subs, today) {
       due: t.next_due,
       daysOverdue: t.next_due ? daysBetween(today, t.next_due) : 0,
       freq: t.frequency,
-      status: t.status || 'Not Started'
+      status: t.status || 'Not Started',
+      isParent: !!t._isParent, prog: t._prog || null
     })),
     ...subs.map(s => ({
       id: s.id, type: 'subtask', title: s.title,
@@ -2562,7 +2575,7 @@ function mydayItem(t, today) {
     : '';
   const dataAttr = t.type === 'task' ? `data-task-id="${t.id}"` : `data-sub-id="${t.id}"`;
   // Selection checkbox — only on task cards (not subtasks) and not while impersonating.
-  const selectable = selectionMode && t.type === 'task' && !isViewingAs();
+  const selectable = selectionMode && t.type === 'task' && !t.isParent && !isViewingAs();
   const isSel = selectable && selectedTaskIds.has(t.id);
   const selBox = selectable
     ? `<div class="task-sel ${isSel ? 'checked' : ''}" onclick="toggleTaskSelection(event,'${t.id}')">${isSel ? '✓' : ''}</div>`
@@ -2570,13 +2583,16 @@ function mydayItem(t, today) {
   return `<div class="myday-item ${rowClass} ${isSel ? 'selected' : ''}" ${dataAttr} ${selectable ? `data-tid="${t.id}"` : ''}>
     ${selBox}
     <div class="myday-status-grp">
-      <div class="${checkClass}" onclick="${onClick}">${checkInner}</div>
+      ${t.isParent
+        ? `<div class="myday-check" style="cursor:default;border-style:dashed;color:var(--text3);font-size:11px" title="Parent task — completes automatically when its steps are done">☰</div>`
+        : `<div class="${checkClass}" onclick="${onClick}">${checkInner}</div>`}
       ${chevron}
       ${statusMenu}
     </div>
     <div class="myday-title">${t.title}</div>
     ${statusPill}
     ${clientLabel}
+    ${t.isParent && t.prog ? `<span class="myday-client-inline" style="color:var(--text3)">${t.prog.done} of ${t.prog.total} steps done</span>` : ''}
     ${dueLabel}
     ${editBtn}
   </div>`;
