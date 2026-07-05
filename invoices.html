@@ -221,10 +221,39 @@ async function renderList(){
       <thead><tr><th>Vendor</th><th>Invoice #</th><th>Date</th><th class="r">Total</th>${state.client?'':'<th>Client</th>'}<th>Coded</th><th>Status</th></tr></thead>
       <tbody>${rows.map(rowHtml).join('')}</tbody></table></div>`;
 
-  app.innerHTML=`<div class="tabs">${tabsHtml}</div>${body}`;
+  const uploadBar=`<div class="bulk" style="justify-content:flex-end;margin:0 0 10px">
+      <button class="btn pri" id="uploadBtn">↑ Upload invoice</button>
+      <input type="file" id="uploadFile" accept="application/pdf,image/*" style="display:none">
+    </div>`;
+  app.innerHTML=`${uploadBar}<div class="tabs">${tabsHtml}</div>${body}`;
   document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{ state.tab=b.dataset.tab; renderList(); });
   document.querySelectorAll('tr.click').forEach(tr=>tr.onclick=()=>openInvoice(tr.dataset.id));
+  document.getElementById('uploadBtn').onclick=startUpload;
+  document.getElementById('uploadFile').onchange=handleUpload;
   if(rows&&rows.length) fillCoded(rows.map(r=>r.id));
+}
+
+// ---------- manual upload (respects the client switcher) ----------
+function startUpload(){
+  if(!state.client){ toast('Pick a client first — use the switcher, top right.'); state.swOpen=true; renderSwitcher(); return; }
+  document.getElementById('uploadFile').click();
+}
+async function handleUpload(e){
+  const file=e.target.files[0]; e.target.value=''; if(!file) return;
+  const name=state.clients[state.client]||'client';
+  app.innerHTML=`<div class="empty"><span class="spin"></span> Reading “${esc(file.name)}” and coding it for ${esc(name)}…<br><span class="note">Multi-page invoices take a few seconds.</span></div>`;
+  try{
+    const dataUrl=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    const { data, error }=await sb.functions.invoke('invoice-extract',{ body:{ file:dataUrl, mime:file.type||'application/pdf', client_id:state.client, source:'manual' } });
+    if(error){ toast('Upload failed: '+error.message); await renderList(); return; }
+    if(data?.mode==='duplicate'){ toast('Already in the queue — skipped as a duplicate.'); state.tab='all'; await refresh(); return; }
+    if(data?.mode==='rejected'){ toast('Couldn’t read it clearly'+(data.quality_issues?.length?': '+data.quality_issues[0]:'.')); await renderList(); return; }
+    if(data?.mode==='written' && data.invoice_id){
+      toast(`Coded — ${data.auto_coded||0} auto, ${data.needs_review||0} to review.`);
+      await loadCounts(); openInvoice(data.invoice_id); return;   // drop you straight onto it
+    }
+    toast('Unexpected response.'); await renderList();
+  }catch(err){ toast('Upload error: '+String(err?.message||err)); await renderList(); }
 }
 function rowHtml(r){
   const [b,label]=BADGE[r.status]||['b-ready',r.status];
@@ -333,7 +362,7 @@ function renderDetail(inv, lines, acct){
     <div class="bulk" style="margin-top:16px">
       <button class="btn pri" id="save">Save coding</button>
       <button class="btn" id="approve" ${(openReview>0||foots===false)?'disabled':''}>Approve for QBO</button>
-      ${inv.status==='duplicate'?`<button class="btn danger" id="del">Delete duplicate</button>`:''}
+      <button class="btn danger" id="del">Delete</button>
       <span class="note">${openReview>0?`${openReview} line${openReview>1?'s':''} still need an account.`:'All lines coded — ready to approve.'}</span>
     </div>`;
 
@@ -380,9 +409,13 @@ async function approve(inv, lines, acct){
 }
 
 async function deleteInvoice(inv){
-  if(!confirm(`Delete this duplicate?\n${inv.vendor} · ${inv.invoice_number||'no #'} · ${money(inv.total)}\nRemoves it from the queue; the QBO bill is untouched.`)) return;
-  await sb.from('invoice_queue').delete().eq('id',inv.id);
-  toast('Duplicate removed.'); await refresh();
+  const head=`Delete this invoice?\n${inv.vendor} · ${inv.invoice_number||'no #'} · ${money(inv.total)}`;
+  const msg = inv.status==='pushed'
+    ? `${head}\n\n⚠ This one was already PUSHED to QuickBooks. Deleting it here removes it from the queue only — the bill in QBO will NOT be deleted and must be handled in QuickBooks.`
+    : `${head}\n\nRemoves it from the queue. Nothing has been posted to QuickBooks.`;
+  if(!confirm(msg)) return;
+  await sb.from('invoice_queue').delete().eq('id',inv.id);   // lines cascade
+  toast('Removed from the queue.'); await refresh();
 }
 </script>
 </body>
