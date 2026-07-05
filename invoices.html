@@ -114,7 +114,33 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 
 const SUPABASE_URL  = 'https://evfemokwtofbarjeezhu.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV2ZmVtb2t3dG9mYmFyamVlemh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk1NDUxMjQsImV4cCI6MjA5NTEyMTEyNH0.B9OSeB9CEP0TX80dJWpBPAIP6IEhYIzYlYKe4WL-6B0';
-const sb = createClient(SUPABASE_URL, SUPABASE_ANON); // shares Triple's session on this origin
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON, {
+  auth: { persistSession: true, autoRefreshToken: true }
+});
+
+// Triple stores its session in localStorage, possibly chunked across
+// sb-<ref>-auth-token(.0)(.1)... . Read + reassemble it and hand it to our
+// client, so this standalone page picks up the login you already have in Triple.
+async function adoptTripleSession(){
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session) return true;
+  }catch{}
+  try{
+    const keys = Object.keys(localStorage).filter(k => /sb-.*-auth-token(\.\d+)?$/.test(k)).sort();
+    if(!keys.length) return false;
+    const raw = keys.map(k => localStorage.getItem(k) || '').join('');
+    // stored value may be a JSON object, or base64 prefixed with "base64-"
+    let text = raw;
+    if(raw.startsWith('base64-')) text = atob(raw.slice(7));
+    const parsed = JSON.parse(text);
+    const access_token  = parsed.access_token  || parsed.currentSession?.access_token;
+    const refresh_token = parsed.refresh_token || parsed.currentSession?.refresh_token;
+    if(!access_token || !refresh_token) return false;
+    const { data, error } = await sb.auth.setSession({ access_token, refresh_token });
+    return !!(data?.session && !error);
+  }catch(e){ console.warn('session adopt failed', e); return false; }
+}
 
 const TABS = [
   { key:'needs_review', label:'Needs Review', where:['needs_review'] },
@@ -138,8 +164,9 @@ function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg
 
 // ---------- boot ----------
 (async function boot(){
+  await adoptTripleSession();
   const { data:{ user } } = await sb.auth.getUser();
-  if(!user){ app.innerHTML = signedOut('You’re not signed in. Open Triple, log in, then reload this page.'); return; }
+  if(!user){ app.innerHTML = signedOut('You’re not signed in. Open Triple in another tab, make sure you’re logged in, then reload this page.'); return; }
   const { data:prof } = await sb.from('profiles').select('is_team,full_name').eq('id',user.id).maybeSingle();
   if(!prof?.is_team){ app.innerHTML = signedOut('This queue is for the Bald Ginger team.'); return; }
   state.me = user; document.getElementById('me').textContent = prof.full_name || user.email;
