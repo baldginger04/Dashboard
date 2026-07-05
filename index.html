@@ -659,6 +659,7 @@
         </a>
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
+        <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
         <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
         <div class="nav-item" onclick="showPage('admin')" id="nav-admin" style="display:none"><span>⚙️</span> Admin</div>
       </nav>
@@ -957,6 +958,75 @@
           <div class="rc-sec-title">Recent reconciliations</div>
           <div id="rcHistory"><span class="rc-muted">Pick a company to see its history.</span></div>
         </div>
+      </div>
+
+      <!-- INVOICES (AP queue) -->
+      <div class="page" id="page-invoices">
+        <style>
+          #page-invoices .inv-switch{position:relative}
+          #page-invoices .inv-sw-btn{display:flex;align-items:center;gap:8px;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 13px;font-family:'Hanken Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer}
+          #page-invoices .inv-sw-btn:hover{opacity:.92}
+          #page-invoices .inv-sw-btn .pin{color:var(--accent2)}
+          #page-invoices .inv-sw-btn .car{opacity:.6;font-size:11px}
+          #page-invoices .inv-sw-pop{position:absolute;top:44px;right:0;width:280px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 34px rgba(20,30,55,.22);z-index:40;overflow:hidden;display:none}
+          #page-invoices .inv-sw-pop.open{display:block}
+          #page-invoices .inv-sw-search{padding:10px}
+          #page-invoices .inv-sw-search input{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif}
+          #page-invoices .inv-sw-list{max-height:320px;overflow:auto;padding-bottom:6px}
+          #page-invoices .inv-sw-item{display:flex;align-items:center;gap:10px;padding:9px 14px;cursor:pointer;font-size:13px}
+          #page-invoices .inv-sw-item:hover{background:var(--bg3)}
+          #page-invoices .inv-sw-item.on{background:rgba(216,91,49,.10)}
+          #page-invoices .inv-sw-item .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);opacity:0}
+          #page-invoices .inv-sw-item.on .dot{opacity:1}
+          #page-invoices .inv-sw-item .nm{font-weight:600}
+          #page-invoices .inv-tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:16px}
+          #page-invoices .inv-tab{border:0;background:none;font-family:'Hanken Grotesk',sans-serif;font-weight:600;font-size:13px;color:var(--text2);padding:9px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+          #page-invoices .inv-tab:hover{color:var(--text)}
+          #page-invoices .inv-tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+          #page-invoices .inv-tab .n{display:inline-block;min-width:18px;margin-left:6px;padding:1px 6px;border-radius:9px;background:var(--bg3);color:var(--text2);font-size:11px;font-family:'Inter',sans-serif;font-weight:600}
+          #page-invoices .inv-tab.on .n{background:rgba(216,91,49,.14);color:var(--accent)}
+          #page-invoices .inv-tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+          #page-invoices .inv-tbl th{text-align:left;font-family:'Hanken Grotesk',sans-serif;font-weight:600;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;padding:11px 14px;border-bottom:1px solid var(--border);background:#fbfbfc}
+          #page-invoices .inv-tbl td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+          #page-invoices .inv-tbl tr:last-child td{border-bottom:0}
+          #page-invoices .inv-tbl tr.click{cursor:pointer}
+          #page-invoices .inv-tbl tr.click:hover{background:#fbfaf8}
+          #page-invoices .inv-mono{font-variant-numeric:tabular-nums}
+          #page-invoices .inv-r{text-align:right}
+          #page-invoices .inv-dim{color:var(--text3)}
+          #page-invoices .inv-badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;font-family:'Hanken Grotesk',sans-serif}
+          #page-invoices .inv-b-review{background:var(--yellow-bg);color:var(--yellow)}
+          #page-invoices .inv-b-ready{background:var(--blue-bg);color:var(--blue)}
+          #page-invoices .inv-b-approved{background:var(--green-bg);color:var(--green)}
+          #page-invoices .inv-b-dup{background:var(--red-bg);color:var(--red)}
+          #page-invoices .inv-b-pushed{background:var(--bg3);color:var(--text2)}
+          #page-invoices .inv-pill b{color:var(--green)}
+          #page-invoices .inv-back{background:none;border:0;color:var(--accent);font-weight:600;cursor:pointer;padding:0;font-size:13px;margin-bottom:10px}
+          #page-invoices .inv-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px 22px;margin:10px 0 4px}
+          #page-invoices .inv-meta div small{display:block;color:var(--text3);font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+          #page-invoices .inv-meta div span{font-weight:600;font-size:14px}
+          #page-invoices .inv-foot{padding:9px 12px;border-radius:8px;font-size:13px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
+          #page-invoices .inv-foot.ok{background:var(--green-bg);color:var(--green)}
+          #page-invoices .inv-foot.bad{background:var(--red-bg);color:var(--red)}
+          #page-invoices .inv-acctsel{padding:6px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;min-width:230px;max-width:290px;font-size:13px}
+          #page-invoices tr.inv-needs td{background:#fffdf7}
+          #page-invoices tr.inv-charge td{background:#f7f9fc}
+          #page-invoices .inv-tag{font-size:10px;font-weight:700;color:var(--accent2);letter-spacing:.5px}
+          #page-invoices .inv-coded{font-weight:600}
+          #page-invoices .inv-warnbar{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border);border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:14px}
+          #page-invoices .inv-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 12px}
+          #page-invoices .inv-note{font-size:12px;color:var(--text3)}
+        </style>
+        <div class="page-header">
+          <div><div class="page-title">Invoices</div><div class="page-sub">Code and approve vendor invoices before they post to QuickBooks</div></div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <div class="inv-switch" id="invSwitch"></div>
+            <button class="btn btn-primary" id="invUploadBtn" onclick="InvStartUpload()">&#8593; Upload</button>
+            <input type="file" id="invUploadFile" accept="application/pdf,image/*" style="display:none" onchange="InvHandleUpload(this)">
+          </div>
+        </div>
+        <div id="invTabs" class="inv-tabs"></div>
+        <div id="invBody"><div class="empty"><span class="spinner"></span> Loading&hellip;</div></div>
       </div>
 
       <!-- QUICK LINKS -->
@@ -4931,12 +5001,215 @@ function showPage(name) {
   // just answered (from a client's detail view) drops off immediately. The page
   // is already marked active above, so this both recounts and re-renders.
   if (name === 'clients') refreshClientBubblesIfVisible();
+  if (name === 'invoices') InvLoad();
 }
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name)?.classList.add('active');
   document.querySelectorAll('.tab').forEach(t => { if (t.getAttribute('onclick') === `showTab('${name}')`) t.classList.add('active'); });
+}
+
+// ══════════════════════════════════════════════════════════
+// INVOICES (AP queue) — extract-code-approve, native Triple tab
+// ══════════════════════════════════════════════════════════
+const Inv = { tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null };
+const INV_TABS = [
+  { key:'needs_review', label:'Needs Review', where:['needs_review'] },
+  { key:'pending',      label:'Ready',        where:['pending'] },
+  { key:'approved',     label:'Approved',     where:['approved'] },
+  { key:'duplicate',    label:'Duplicates',   where:['duplicate'] },
+  { key:'pushed',       label:'Pushed',       where:['pushed'] },
+  { key:'all',          label:'All',          where:null },
+];
+const INV_BADGE = { needs_review:['inv-b-review','Needs review'], pending:['inv-b-ready','Ready'], approved:['inv-b-approved','Approved'], duplicate:['inv-b-dup','Duplicate'], pushed:['inv-b-pushed','Pushed'], error:['inv-b-dup','Error'] };
+const invMoney = n => (n==null?'—':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
+const invEsc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function InvLoad(){
+  if(!Inv.loaded){
+    const { data:cl } = await sb.from('clients').select('id,name').order('name');
+    (cl||[]).forEach(c=>Inv.clients[c.id]=c.name);
+    if(Inv.client && !Inv.clients[Inv.client]) Inv.client='';
+    if(!Inv._clickBound){ document.addEventListener('click',()=>{ if(Inv.swOpen){ Inv.swOpen=false; InvRenderSwitcher(); } }); Inv._clickBound=true; }
+    Inv.loaded=true;
+  }
+  InvRenderSwitcher();
+  await InvRefresh();
+}
+async function InvRefresh(){ await InvLoadCounts(); await InvRenderList(); }
+
+function InvRenderSwitcher(){
+  const el=document.getElementById('invSwitch'); if(!el) return;
+  const label = Inv.client ? (Inv.clients[Inv.client]||'Client') : 'All clients';
+  const items = [['','All clients']].concat(Object.entries(Inv.clients).sort((a,b)=>a[1].localeCompare(b[1])));
+  el.innerHTML = '<button class="inv-sw-btn" onclick="InvToggleSwitch(event)"><span class="pin">&#9673;</span> '+invEsc(label)+' <span class="car">&#9662;</span></button>'
+    + '<div class="inv-sw-pop '+(Inv.swOpen?'open':'')+'"><div class="inv-sw-search"><input id="invSwSearch" placeholder="Find client…" autocomplete="off" oninput="InvSwFilter(this.value)"></div>'
+    + '<div class="inv-sw-list" id="invSwList">'
+    + items.map(([id,n])=>'<div class="inv-sw-item '+(id===Inv.client?'on':'')+'" onclick="InvPickClient(\''+id+'\')"><span class="dot"></span><span class="nm">'+invEsc(n)+'</span></div>').join('')
+    + '</div></div>';
+  const btn=document.getElementById('invUploadBtn');
+  if(btn) btn.textContent = Inv.client ? ('\u2191 Upload for '+(Inv.clients[Inv.client]||'client')) : '\u2191 Upload';
+  if(Inv.swOpen) setTimeout(()=>document.getElementById('invSwSearch')?.focus(),0);
+}
+function InvToggleSwitch(e){ e.stopPropagation(); Inv.swOpen=!Inv.swOpen; InvRenderSwitcher(); }
+function InvSwFilter(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#invSwList .inv-sw-item').forEach(it=>{ it.style.display = it.textContent.toLowerCase().includes(q)?'':'none'; }); }
+async function InvPickClient(id){ Inv.client=id; localStorage.setItem('bg_inv_client',id); Inv.swOpen=false; InvRenderSwitcher(); await InvRefresh(); }
+
+async function InvLoadCounts(){
+  const counts={};
+  await Promise.all(INV_TABS.filter(t=>t.where).map(async t=>{
+    let q=sb.from('invoice_queue').select('id',{count:'exact',head:true}).in('status',t.where);
+    if(Inv.client) q=q.eq('client_id',Inv.client);
+    const { count }=await q; counts[t.key]=count||0;
+  }));
+  Inv.counts=counts;
+}
+async function InvRenderList(){
+  const tab=INV_TABS.find(t=>t.key===Inv.tab);
+  let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status,source,qbo_bill_id,created_at').order('created_at',{ascending:false}).limit(300);
+  if(tab.where) q=q.in('status',tab.where);
+  if(Inv.client) q=q.eq('client_id',Inv.client);
+  const { data:rows, error }=await q;
+  document.getElementById('invTabs').innerHTML = INV_TABS.map(t=>'<button class="inv-tab '+(t.key===Inv.tab?'on':'')+'" onclick="InvSetTab(\''+t.key+'\')">'+t.label+(t.where?'<span class="n">'+(Inv.counts[t.key]??'')+'</span>':'')+'</button>').join('');
+  const body=document.getElementById('invBody');
+  if(error){ body.innerHTML='<div class="empty">Couldn’t load: '+invEsc(error.message)+'</div>'; return; }
+  if(!rows.length){ body.innerHTML=InvEmptyFor(Inv.tab); return; }
+  body.innerHTML='<table class="inv-tbl"><thead><tr><th>Vendor</th><th>Invoice #</th><th>Date</th><th class="inv-r">Total</th>'+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
+  InvFillCoded(rows.map(r=>r.id));
+}
+function InvRowHtml(r){
+  const b=INV_BADGE[r.status]||['inv-b-ready',r.status];
+  return '<tr class="click" onclick="InvOpenInvoice(\''+r.id+'\')">'
+    +'<td style="font-weight:600">'+invEsc(r.vendor||'—')+'</td>'
+    +'<td class="inv-mono inv-dim">'+invEsc(r.invoice_number||'—')+'</td>'
+    +'<td class="inv-dim">'+invEsc(r.invoice_date||'—')+'</td>'
+    +'<td class="inv-r inv-mono">'+invMoney(r.total)+'</td>'
+    +(Inv.client?'':'<td class="inv-dim">'+invEsc(Inv.clients[r.client_id]||'—')+'</td>')
+    +'<td><span class="inv-pill inv-dim" data-coded="'+r.id+'">—</span></td>'
+    +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span>'+(r.status==='duplicate'&&r.qbo_bill_id?' <span class="inv-dim" style="font-size:11px">in QBO #'+invEsc(r.qbo_bill_id)+'</span>':'')+'</td></tr>';
+}
+function InvEmptyFor(tab){
+  const m={needs_review:'Nothing waiting on you.',pending:'Nothing ready to approve.',approved:'Nothing approved and waiting.',duplicate:'No duplicates flagged.',pushed:'Nothing posted to QBO yet.',all:'No invoices yet.'}[tab]||'Nothing here.';
+  return '<div class="empty">'+m+'</div>';
+}
+async function InvFillCoded(ids){
+  if(!ids.length) return;
+  const { data }=await sb.from('invoice_lines').select('invoice_id,needs_review,is_charge').in('invoice_id',ids);
+  const g={}; (data||[]).forEach(l=>{ const o=g[l.invoice_id]??(g[l.invoice_id]={t:0,c:0}); if(!l.is_charge){o.t++; if(!l.needs_review)o.c++;} });
+  ids.forEach(id=>{ const el=document.querySelector('[data-coded="'+id+'"]'); if(!el)return; const o=g[id]; if(!o){el.textContent='—';return;} el.innerHTML=(o.c===o.t)?'<b>'+o.c+'/'+o.t+'</b>':o.c+'/'+o.t; });
+}
+function InvSetTab(k){ Inv.tab=k; InvRenderList(); }
+
+async function InvGetAccounts(clientId){
+  if(Inv.acctCache[clientId]) return Inv.acctCache[clientId];
+  let res={ connected:false, options:[], nameByCode:{}, byId:{} };
+  try{
+    const r=await sb.functions.invoke('qbo-accounts',{ body:{ client_id:clientId } });
+    const d=r.data;
+    if(!r.error && d&&d.ok){
+      res.connected=true;
+      res.options=d.accounts.map(a=>({ value:a.acct_num||a.id, id:a.id, label:a.label, code:a.acct_num }));
+      d.accounts.forEach(a=>{ res.byId[a.acct_num||a.id]=a; if(a.acct_num) res.nameByCode[a.acct_num]=a.name; });
+    }
+  }catch(e){}
+  if(!res.connected){
+    const { data:gn }=await sb.from('gl_names').select('gl_code,gl_name').eq('client_id',clientId);
+    (gn||[]).forEach(x=>res.nameByCode[x.gl_code]=x.gl_name);
+    const { data:codes }=await sb.from('item_map').select('gl_account').eq('client_id',clientId).limit(3000);
+    const set=new Set((codes||[]).map(x=>x.gl_account)); Object.keys(res.nameByCode).forEach(c=>set.add(c));
+    res.options=[...set].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true})).map(c=>({ value:c, id:null, code:c, label: res.nameByCode[c]?(c+' · '+res.nameByCode[c]):c }));
+  }
+  Inv.acctCache[clientId]=res; return res;
+}
+function InvAcctLabel(acct, code){ if(!code) return '—'; if(acct.byId&&acct.byId[code]) return acct.byId[code].label; return acct.nameByCode[code]?(code+' · '+acct.nameByCode[code]):code; }
+
+async function InvOpenInvoice(id){
+  document.getElementById('invBody').innerHTML='<div class="empty"><span class="spinner"></span> Opening&hellip;</div>';
+  const { data:inv }=await sb.from('invoice_queue').select('*').eq('id',id).single();
+  const { data:lines }=await sb.from('invoice_lines').select('*').eq('invoice_id',id).order('line_number');
+  const acct=await InvGetAccounts(inv.client_id);
+  Inv.current={ inv, lines:lines||[], acct };
+  InvRenderDetail();
+}
+function InvRenderDetail(){
+  const { inv, lines, acct }=Inv.current;
+  const products=lines.filter(l=>!l.is_charge), charges=lines.filter(l=>l.is_charge);
+  const lineSum=lines.reduce((s,l)=>s+(Number(l.amount)||0),0);
+  const grand=Math.round((lineSum+(Number(inv.tax)||0))*100)/100;
+  const foots=inv.total!=null?Math.abs(grand-Number(inv.total))<0.01:null;
+  const openReview=lines.filter(l=>l.needs_review).length;
+  const b=INV_BADGE[inv.status]||['inv-b-ready',inv.status];
+  const optsFor=sel=>'<option value="">Select account…</option>'+acct.options.map(o=>'<option value="'+o.value+'" '+(o.value===sel?'selected':'')+'>'+invEsc(o.label)+'</option>').join('');
+  const lineRow=l=>{
+    const cls=l.needs_review?'inv-needs':(l.is_charge?'inv-charge':'');
+    const cell=l.needs_review?'<select class="inv-acctsel" data-line="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'">'+optsFor(l.final_account)+'</select>':'<span class="inv-coded">'+invEsc(InvAcctLabel(acct,l.final_account))+'</span>';
+    return '<tr class="'+cls+'"><td class="inv-dim inv-mono">'+l.line_number+'</td><td>'+invEsc(l.raw_description||'—')+(l.is_charge?' <span class="inv-tag">CHARGE</span>':'')+(l.vendor_item_code?'<br><small class="inv-dim inv-mono">'+invEsc(l.vendor_item_code)+'</small>':'')+'</td><td class="inv-r inv-mono inv-dim">'+(l.quantity??'')+'</td><td class="inv-r inv-mono">'+invMoney(l.amount)+'</td><td>'+cell+'</td></tr>';
+  };
+  const notConn=!acct.connected?'<div class="inv-warnbar">QuickBooks isn’t linked for this client yet — accounts show from your chart names; codes still save. Link it in Statement Reconciler to resolve to live QBO accounts.</div>':'';
+  const bulk=openReview>0?'<div class="inv-bar"><span class="inv-note">Bulk:</span><select class="inv-acctsel" id="invBulkSel">'+optsFor('')+'</select><button class="btn btn-secondary btn-sm" onclick="InvBulkApply()">Apply to all uncoded</button></div>':'';
+  document.getElementById('invBody').innerHTML=
+    '<button class="inv-back" onclick="InvRenderList()">← Back to queue</button>'+notConn
+    +'<div style="font-family:\'Hanken Grotesk\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);margin:.2em 0">'+invEsc(inv.vendor||'—')+' <span class="inv-badge '+b[0]+'" style="vertical-align:middle">'+b[1]+'</span></div>'
+    +'<div class="inv-meta"><div><small>Invoice #</small><span class="inv-mono">'+invEsc(inv.invoice_number||'—')+'</span></div><div><small>Date</small><span>'+invEsc(inv.invoice_date||'—')+'</span></div><div><small>Client</small><span>'+invEsc(Inv.clients[inv.client_id]||'—')+'</span></div><div><small>Source</small><span>'+invEsc(inv.source||'—')+'</span></div><div><small>Subtotal</small><span class="inv-mono">'+invMoney(inv.subtotal)+'</span></div><div><small>Tax</small><span class="inv-mono">'+invMoney(inv.tax)+'</span></div><div><small>Total</small><span class="inv-mono">'+invMoney(inv.total)+'</span></div></div>'
+    +'<div style="margin:8px 0 12px">'+(foots===null?'':foots?'<span class="inv-foot ok">✓ Balances — lines + tax = '+invMoney(grand)+'</span>':'<span class="inv-foot bad">✕ Off by '+invMoney(Math.abs(grand-Number(inv.total)))+' — computed '+invMoney(grand)+' vs '+invMoney(inv.total)+'</span>')+'</div>'
+    +bulk
+    +'<table class="inv-tbl"><thead><tr><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
+    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" onclick="InvApprove()" '+((openReview>0||foots===false)?'disabled':'')+'>Approve for QBO</button><button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>';
+}
+function InvBulkApply(){ const v=document.getElementById('invBulkSel').value; if(!v)return; document.querySelectorAll('#invBody select[data-line]').forEach(s=>{ if(!s.value) s.value=v; }); }
+
+async function InvSaveCoding(){
+  const { inv, acct }=Inv.current;
+  const sels=[...document.querySelectorAll('#invBody select[data-line]')];
+  const lineUpdates=[], mapRows=[];
+  for(const s of sels){ const code=s.value; if(!code) continue; const qid=acct.byId&&acct.byId[code]?acct.byId[code].id:null;
+    lineUpdates.push({id:s.dataset.line,final_account:code,qbo_account_id:qid});
+    if(s.dataset.mk) mapRows.push({client_id:inv.client_id,vendor:inv.vendor,match_key:s.dataset.mk,gl_account:code,qbo_account_id:qid,updated_at:new Date().toISOString()}); }
+  if(!lineUpdates.length){ toast('Pick an account first.'); return; }
+  for(const u of lineUpdates) await sb.from('invoice_lines').update({final_account:u.final_account,qbo_account_id:u.qbo_account_id,needs_review:false}).eq('id',u.id);
+  if(mapRows.length) await sb.from('item_map').upsert(mapRows,{onConflict:'client_id,vendor,match_key'});
+  const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
+  const status=(rem&&rem.length)?'needs_review':'pending';
+  await sb.from('invoice_queue').update({status}).eq('id',inv.id);
+  toast(mapRows.length?('Saved — '+mapRows.length+' item'+(mapRows.length>1?'s':'')+' learned.'):'Saved.', 'ok');
+  await InvLoadCounts();
+  await InvOpenInvoice(inv.id);
+}
+async function InvApprove(){
+  const { inv, lines, acct }=Inv.current;
+  if(acct.connected){ for(const l of lines){ if(!l.qbo_account_id && l.final_account && acct.byId&&acct.byId[l.final_account]) await sb.from('invoice_lines').update({qbo_account_id:acct.byId[l.final_account].id}).eq('id',l.id); } }
+  await sb.from('invoice_queue').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',inv.id);
+  toast('Approved — queued for the QBO push.', 'ok');
+  Inv.tab='approved'; await InvRefresh();
+}
+async function InvDelete(){
+  const { inv }=Inv.current;
+  const head='Delete this invoice?\n'+inv.vendor+' · '+(inv.invoice_number||'no #')+' · '+invMoney(inv.total);
+  const msg = inv.status==='pushed' ? head+'\n\n⚠ This one was already PUSHED to QuickBooks. Deleting here clears the queue only — the QBO bill must be handled in QuickBooks.' : head+'\n\nRemoves it from the queue. Nothing has been posted to QuickBooks.';
+  if(!confirm(msg)) return;
+  await sb.from('invoice_queue').delete().eq('id',inv.id);
+  toast('Removed from the queue.', 'ok'); await InvRefresh();
+}
+
+function InvStartUpload(){
+  if(!Inv.client){ toast('Pick a client first — use the switcher, top right.'); Inv.swOpen=true; InvRenderSwitcher(); return; }
+  document.getElementById('invUploadFile').click();
+}
+async function InvHandleUpload(input){
+  const file=input.files[0]; input.value=''; if(!file) return;
+  const name=Inv.clients[Inv.client]||'client';
+  document.getElementById('invBody').innerHTML='<div class="empty"><span class="spinner"></span> Reading “'+invEsc(file.name)+'” and coding it for '+invEsc(name)+'…<br><span class="inv-note">Multi-page invoices take a few seconds.</span></div>';
+  try{
+    const dataUrl=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    const r=await sb.functions.invoke('invoice-extract',{ body:{ file:dataUrl, mime:file.type||'application/pdf', client_id:Inv.client, source:'manual' } });
+    if(r.error){ toast('Upload failed: '+r.error.message,'warn'); await InvRenderList(); return; }
+    const d=r.data;
+    if(d&&d.mode==='duplicate'){ toast('Already in the queue — skipped as a duplicate.'); Inv.tab='all'; await InvRefresh(); return; }
+    if(d&&d.mode==='rejected'){ toast('Couldn’t read it clearly'+(d.quality_issues&&d.quality_issues.length?': '+d.quality_issues[0]:'.'),'warn'); await InvRenderList(); return; }
+    if(d&&d.mode==='written'&&d.invoice_id){ toast('Coded — '+(d.auto_coded||0)+' auto, '+(d.needs_review||0)+' to review.','ok'); await InvLoadCounts(); await InvOpenInvoice(d.invoice_id); return; }
+    toast('Unexpected response.'); await InvRenderList();
+  }catch(err){ toast('Upload error: '+String(err&&err.message||err),'warn'); await InvRenderList(); }
 }
 
 // ── GLOBAL TASK SEARCH (across all clients) ──────────────
