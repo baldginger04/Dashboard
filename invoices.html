@@ -126,11 +126,17 @@ async function adoptTripleSession(){
     const { data:{ session } } = await sb.auth.getSession();
     if(session) return true;
   }catch{}
-  try{
+  // Triple's Supabase client uses a custom storageKey: "triple-auth".
+  // Fall back to the default chunked sb-<ref>-auth-token(.N) if that's absent.
+  function readStored(){
+    const direct = localStorage.getItem('triple-auth');
+    if(direct) return direct;
     const keys = Object.keys(localStorage).filter(k => /sb-.*-auth-token(\.\d+)?$/.test(k)).sort();
-    if(!keys.length) return false;
-    const raw = keys.map(k => localStorage.getItem(k) || '').join('');
-    // stored value may be a JSON object, or base64 prefixed with "base64-"
+    return keys.length ? keys.map(k => localStorage.getItem(k) || '').join('') : null;
+  }
+  try{
+    const raw = readStored();
+    if(!raw) return false;
     let text = raw;
     if(raw.startsWith('base64-')) text = atob(raw.slice(7));
     const parsed = JSON.parse(text);
