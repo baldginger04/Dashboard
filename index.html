@@ -827,7 +827,7 @@
                 <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
                   Attach file
-                  <input type="file" id="imgUpload" style="display:none" onchange="handleImgSelect(event)" />
+                  <input type="file" id="imgUpload" multiple style="display:none" onchange="handleImgSelect(event)" />
                 </label>
                 <div style="display:flex;gap:8px;align-items:center">
                   <button class="btn btn-secondary btn-sm" onclick="sendMessage(false)" title="The client WILL see this in their portal">Send to client</button>
@@ -867,7 +867,7 @@
               <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);transition:color .15s" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--text3)'">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
                 Attach file
-                <input type="file" id="teamImgUpload" style="display:none" onchange="handleTeamImgSelect(event)" />
+                <input type="file" id="teamImgUpload" multiple style="display:none" onchange="handleTeamImgSelect(event)" />
               </label>
               <button class="btn btn-primary btn-sm" onclick="sendTeamMessage()">Post</button>
             </div>
@@ -4322,8 +4322,8 @@ const TEAM_EMAILS = {
 };
 
 // ── Image handling ────────────────────────────────────────
-let currentImgFile = null;
-let currentTeamImgFile = null;
+// (single-file currentImgFile / currentTeamImgFile replaced by the
+//  multi-attachment arrays declared below)
 
 // Preview an attachment in a composer: image → inline thumbnail, anything else
 // → filename chip. `ids` names the wrap/img-box/img/file-box elements.
@@ -4346,26 +4346,66 @@ function previewAttachment(file, ids, onClearAttr) {
 }
 const CLIENT_ATTACH_IDS = { wrap: 'imgPreviewWrap', imgBox: 'imgPreviewImgBox', img: 'imgPreview', fileBox: 'imgPreviewFileBox' };
 const TEAM_ATTACH_IDS   = { wrap: 'teamImgPreviewWrap', imgBox: 'teamImgPreviewImgBox', img: 'teamImgPreview', fileBox: 'teamImgPreviewFileBox' };
-function setClientAttachment(file) { if (!file) return; currentImgFile = file; previewAttachment(file, CLIENT_ATTACH_IDS, 'clearImg()'); }
-function setTeamAttachment(file)   { if (!file) return; currentTeamImgFile = file; previewAttachment(file, TEAM_ATTACH_IDS, 'clearTeamImg()'); }
+let currentImgFiles = [];      // client-message composer attachments (multi)
+let currentTeamImgFiles = [];  // team-chat composer attachments (multi)
 
-function handleImgSelect(e) { const file = e.target.files[0]; if (file) setClientAttachment(file); }
-function clearImg() {
-  currentImgFile = null;
-  const img = document.getElementById('imgPreview'); if (img) img.src = '';
-  const fileBox = document.getElementById('imgPreviewFileBox'); if (fileBox) { fileBox.innerHTML = ''; fileBox.style.display = 'none'; }
-  const imgBox = document.getElementById('imgPreviewImgBox'); if (imgBox) imgBox.style.display = 'inline-block';
-  document.getElementById('imgPreviewWrap').style.display = 'none';
-  document.getElementById('imgUpload').value = '';
+// Render all pending attachments for a composer into its preview wrap:
+// images as thumbnails, other files as name chips, each with its own ×.
+function renderAttachPreview(wrapId, files, removeFnName) {
+  const wrap = document.getElementById(wrapId);
+  if (!wrap) return;
+  if (!files.length) { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
+  wrap.style.display = 'block';
+  wrap.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start"></div>';
+  const row = wrap.firstChild;
+  files.forEach((file, i) => {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:relative;display:inline-block';
+    if (isImageFile(file)) {
+      const img = document.createElement('img');
+      img.style.cssText = 'max-height:90px;max-width:160px;border-radius:4px;border:1px solid var(--border);display:block';
+      const reader = new FileReader();
+      reader.onload = ev => { img.src = ev.target.result; };
+      reader.readAsDataURL(file);
+      box.appendChild(img);
+    } else {
+      box.innerHTML = `<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);border:1px solid var(--border);border-radius:4px;padding:6px 10px;max-width:220px;background:white"><span>📎</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(file.name)}</span></div>`;
+    }
+    const x = document.createElement('button');
+    x.textContent = '×';
+    x.title = 'Remove this attachment';
+    x.style.cssText = 'position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--red);color:white;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0';
+    x.onclick = () => window[removeFnName](i);
+    box.appendChild(x);
+    row.appendChild(box);
+  });
 }
-function handleTeamImgSelect(e) { const file = e.target.files[0]; if (file) setTeamAttachment(file); }
+
+function addClientAttachments(fileList) {
+  for (const f of (fileList || [])) if (f) currentImgFiles.push(f);
+  renderAttachPreview('imgPreviewWrap', currentImgFiles, 'removeClientAttachment');
+}
+function removeClientAttachment(i) { currentImgFiles.splice(i, 1); renderAttachPreview('imgPreviewWrap', currentImgFiles, 'removeClientAttachment'); }
+// Kept for older call sites (drag-drop etc.) — now just appends.
+function setClientAttachment(file) { if (file) addClientAttachments([file]); }
+function handleImgSelect(e) { addClientAttachments(e.target.files); e.target.value = ''; }
+function clearImg() {
+  currentImgFiles = [];
+  renderAttachPreview('imgPreviewWrap', currentImgFiles, 'removeClientAttachment');
+  const inp = document.getElementById('imgUpload'); if (inp) inp.value = '';
+}
+
+function addTeamAttachments(fileList) {
+  for (const f of (fileList || [])) if (f) currentTeamImgFiles.push(f);
+  renderAttachPreview('teamImgPreviewWrap', currentTeamImgFiles, 'removeTeamAttachment');
+}
+function removeTeamAttachment(i) { currentTeamImgFiles.splice(i, 1); renderAttachPreview('teamImgPreviewWrap', currentTeamImgFiles, 'removeTeamAttachment'); }
+function setTeamAttachment(file) { if (file) addTeamAttachments([file]); }
+function handleTeamImgSelect(e) { addTeamAttachments(e.target.files); e.target.value = ''; }
 function clearTeamImg() {
-  currentTeamImgFile = null;
-  const img = document.getElementById('teamImgPreview'); if (img) img.src = '';
-  const fileBox = document.getElementById('teamImgPreviewFileBox'); if (fileBox) { fileBox.innerHTML = ''; fileBox.style.display = 'none'; }
-  const imgBox = document.getElementById('teamImgPreviewImgBox'); if (imgBox) imgBox.style.display = 'inline-block';
-  document.getElementById('teamImgPreviewWrap').style.display = 'none';
-  document.getElementById('teamImgUpload').value = '';
+  currentTeamImgFiles = [];
+  renderAttachPreview('teamImgPreviewWrap', currentTeamImgFiles, 'removeTeamAttachment');
+  const inp = document.getElementById('teamImgUpload'); if (inp) inp.value = '';
 }
 
 async function uploadMsgImage(file, folder) {
@@ -4718,19 +4758,33 @@ async function loadMessages(clientId) {
 
 async function sendMessage(isInternal) {
   const body = document.getElementById('msgInput').value.trim();
-  if (!body && !currentImgFile) return;
+  if (!body && !currentImgFiles.length) return;
   if (!currentClientId) return;
   const author = document.getElementById('sidebarName').textContent;
   const client = allClients.find(c => c.id === currentClientId);
   const context = client ? client.name : 'a client';
 
-  let imageUrl = null;
-  if (currentImgFile) imageUrl = await uploadMsgImage(currentImgFile, `client-${currentClientId}`);
+  // Upload everything BEFORE posting anything, so a failed upload aborts
+  // cleanly with nothing half-sent.
+  const uploads = [];
+  for (const f of currentImgFiles) {
+    const u = await uploadMsgImage(f, `client-${currentClientId}`);
+    if (!u) { alert(`Couldn't upload "${f.name}" — nothing was posted, please try again.`); return; }
+    uploads.push({ url: u, file: f });
+  }
 
+  // messages has a single image_url column (and the Client Portal renders the
+  // same table), so multiple attachments post as: the text + first file in one
+  // message, then one follow-up message per extra file. Everything renders in
+  // Triple AND the portal with no schema change.
+  const firstUrl = uploads[0]?.url || null;
   try {
-    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || attachPlaceholderText(currentImgFile), image_url: imageUrl, is_team: true, is_internal: !!isInternal }), 'Send message');
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || attachPlaceholderText(currentImgFiles[0]), image_url: firstUrl, is_team: true, is_internal: !!isInternal }), 'Send message');
+    for (let i = 1; i < uploads.length; i++) {
+      await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: attachPlaceholderText(uploads[i].file), image_url: uploads[i].url, is_team: true, is_internal: !!isInternal }), 'Send attachment');
+    }
   } catch (err) {
-    alert("Couldn't send your message — " + (err.message || 'please try again.') + "\n\nIt was not posted, so your text is still here to retry.");
+    alert("Couldn't send your message — " + (err.message || 'please try again.') + "\n\nIt was not fully posted, so your text is still here to retry.");
     return;
   }
   document.getElementById('msgInput').value = '';
@@ -4739,7 +4793,7 @@ async function sendMessage(isInternal) {
   // Send mention emails
   const mentions = detectMentions(body);
   for (const name of mentions) {
-    if (name !== author) await sendMentionEmail(name, author, context, body, imageUrl);
+    if (name !== author) await sendMentionEmail(name, author, context, body, firstUrl);
   }
   await loadMessages(currentClientId);
   loadPortalBadge();
@@ -4753,8 +4807,7 @@ document.addEventListener('DOMContentLoaded', () => {
     msgCard.addEventListener('dragleave', () => { msgCard.style.outline = ''; });
     msgCard.addEventListener('drop', e => {
       e.preventDefault(); msgCard.style.outline = '';
-      const file = e.dataTransfer.files[0];
-      if (file) setClientAttachment(file);
+      addClientAttachments(e.dataTransfer.files); // all dropped files, not just the first
     });
   }
 });
@@ -4879,21 +4932,31 @@ function handleMsgKey(e) {
 
 async function sendTeamMessage() {
   const body = document.getElementById('teamMsgInput').value.trim();
-  if (!body && !currentTeamImgFile) return;
+  if (!body && !currentTeamImgFiles.length) return;
   const author = document.getElementById('sidebarName').textContent;
 
-  let imageUrl = null;
-  if (currentTeamImgFile) imageUrl = await uploadMsgImage(currentTeamImgFile, 'team');
+  // Upload everything before posting anything (see sendMessage).
+  const uploads = [];
+  for (const f of currentTeamImgFiles) {
+    const u = await uploadMsgImage(f, 'team');
+    if (!u) { alert(`Couldn't upload "${f.name}" — nothing was posted, please try again.`); return; }
+    uploads.push({ url: u, file: f });
+  }
+  const firstUrl = uploads[0]?.url || null;
 
-  const { error } = await sb.from('team_messages').insert({ author, body: body || attachPlaceholderText(currentTeamImgFile), image_url: imageUrl });
+  const { error } = await sb.from('team_messages').insert({ author, body: body || attachPlaceholderText(currentTeamImgFiles[0]), image_url: firstUrl });
   if (error) { console.error('Team message error:', error); alert('Could not post message: ' + error.message); return; }
+  for (let i = 1; i < uploads.length; i++) {
+    const { error: e2 } = await sb.from('team_messages').insert({ author, body: attachPlaceholderText(uploads[i].file), image_url: uploads[i].url });
+    if (e2) { console.error('Team attachment error:', e2); alert('Could not post attachment: ' + e2.message); break; }
+  }
   document.getElementById('teamMsgInput').value = '';
   clearTeamImg();
 
   if (body) {
     const mentions = detectMentions(body);
     for (const name of mentions) {
-      if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, imageUrl);
+      if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, firstUrl);
     }
   }
   await loadTeamMessages();
