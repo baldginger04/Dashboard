@@ -1526,6 +1526,24 @@ async function rollCloseDatesForward(clientId /* uuid or null */) {
     }
   }
 
+  // Close period label: the month whose books this close covers — the month
+  // BEFORE the one the close was started in (start in July -> closing June ->
+  // "06-2026"). Clients scheduled beyond this month (annual clients like
+  // Nickel City Management) keep their own period untouched.
+  const py = tmo === 1 ? ty - 1 : ty;
+  const pm = tmo === 1 ? 12 : tmo - 1;
+  const periodLabel = `${String(pm).padStart(2, '0')}-${py}`;
+  const lastDay = new Date(Date.UTC(ty, tmo, 0)).getUTCDate();
+  const monthEnd = `${ty}-${String(tmo).padStart(2, '0')}-${lastDay}`;
+  const periodIds = (cRows || [])
+    .filter(r => !r.close_due_date
+              || !/^\d{4}-\d{2}-\d{2}/.test(r.close_due_date)
+              || r.close_due_date <= monthEnd)
+    .map(r => r.id);
+  for (let i = 0; i < periodIds.length; i += 100) {
+    await sb.from('clients').update({ close_period: periodLabel }).in('id', periodIds.slice(i, i + 100));
+  }
+
   // Close tasks: next_due gets the same treatment; period stays in sync (YYYYMM).
   let tq = sb.from('tasks').select('id, next_due').in('category', CLOSE_CATS);
   if (clientId) tq = tq.eq('client_id', clientId);
@@ -3333,7 +3351,7 @@ async function openClient(id) {
     return;
   }
   document.getElementById('detailName').textContent = c.name;
-  document.getElementById('detailMeta').textContent = (c.close_period||'') + (c.close_due_date ? ' · Due ' + fmtCloseDue(c.close_due_date) : '');
+  renderDetailMeta(c);
   // Clickable status badge — cycles Not Started -> In Progress -> Done -> Not Started.
   // The cycleCloseStatus() function handles the warn-if-tasks-incomplete check
   // when moving to Done, and writes the new status to the DB.
@@ -5454,6 +5472,64 @@ function fmtCloseDue(v) {
   if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return v;
   return tzFormatDate(v, { month: 'short', day: 'numeric', year: 'numeric' });
 }
+
+// Client detail header: "06-2026 · Due Jul 12, 2026". Both parts are
+// click-to-edit — the period opens a month picker, the due date a date
+// picker — writing straight back to the clients row.
+function renderDetailMeta(c) {
+  const el = document.getElementById('detailMeta');
+  if (!el || !c) return;
+  el.innerHTML = '';
+
+  const linkStyle = 'cursor:pointer;text-decoration:underline dotted;text-underline-offset:3px;';
+
+  // --- Close period (MM-YYYY), edited via a hidden <input type="month"> ---
+  const periodSpan = document.createElement('span');
+  periodSpan.textContent = c.close_period || 'Set period';
+  periodSpan.title = 'Click to change the close period';
+  periodSpan.style.cssText = linkStyle;
+  const monthInput = document.createElement('input');
+  monthInput.type = 'month';
+  monthInput.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+  // MM-YYYY -> YYYY-MM for the input's value
+  if (/^\d{2}-\d{4}$/.test(c.close_period || '')) {
+    monthInput.value = c.close_period.slice(3) + '-' + c.close_period.slice(0, 2);
+  }
+  periodSpan.onclick = () => { try { monthInput.showPicker(); } catch { monthInput.click(); } };
+  monthInput.onchange = async () => {
+    if (!monthInput.value) return;                       // YYYY-MM
+    const label = monthInput.value.slice(5) + '-' + monthInput.value.slice(0, 4); // MM-YYYY
+    const { error } = await sb.from('clients').update({ close_period: label }).eq('id', c.id);
+    if (error) { alert("Couldn't save the period: " + error.message); return; }
+    c.close_period = label;
+    renderDetailMeta(c);
+  };
+
+  // --- Due date, edited via a hidden <input type="date"> ---
+  const dueSpan = document.createElement('span');
+  dueSpan.textContent = c.close_due_date ? 'Due ' + fmtCloseDue(c.close_due_date) : 'Set due date';
+  dueSpan.title = 'Click to change the close due date';
+  dueSpan.style.cssText = linkStyle;
+  const dateInput = document.createElement('input');
+  dateInput.type = 'date';
+  dateInput.style.cssText = 'position:absolute;opacity:0;width:0;height:0;pointer-events:none;';
+  if (/^\d{4}-\d{2}-\d{2}/.test(c.close_due_date || '')) dateInput.value = c.close_due_date.slice(0, 10);
+  dueSpan.onclick = () => { try { dateInput.showPicker(); } catch { dateInput.click(); } };
+  dateInput.onchange = async () => {
+    if (!dateInput.value) return;                        // YYYY-MM-DD
+    const { error } = await sb.from('clients').update({ close_due_date: dateInput.value }).eq('id', c.id);
+    if (error) { alert("Couldn't save the due date: " + error.message); return; }
+    c.close_due_date = dateInput.value;
+    renderDetailMeta(c);
+    if (typeof renderClientsTable === 'function') renderClientsTable(); // keep All Clients in sync
+  };
+
+  el.appendChild(periodSpan);
+  el.appendChild(monthInput);
+  el.appendChild(document.createTextNode(' · '));
+  el.appendChild(dueSpan);
+  el.appendChild(dateInput);
+}
 // "Now" but as an ISO string suitable for updated_at fields. Same as `new Date().toISOString()`
 // — we don't need timezone for stored timestamps (those are absolute moments in time),
 // only for "what date is today" decisions.
@@ -5547,6 +5623,15 @@ async function cycleCloseStatus(clientId) {
       if (c.close_due_date && c.close_due_date < monthStart) {
         const nd = rollDateToMonth(c.close_due_date, ty, tmo);
         if (nd) c.close_due_date = nd;
+      }
+      // Mirror the period label rollCloseDatesForward just wrote, unless this
+      // client is scheduled beyond the current month (annual clients).
+      const lastDay = new Date(Date.UTC(ty, tmo, 0)).getUTCDate();
+      const monthEnd = `${ty}-${String(tmo).padStart(2, '0')}-${lastDay}`;
+      if (!c.close_due_date || !/^\d{4}-\d{2}-\d{2}/.test(c.close_due_date) || c.close_due_date <= monthEnd) {
+        const py = tmo === 1 ? ty - 1 : ty;
+        const pm = tmo === 1 ? 12 : tmo - 1;
+        c.close_period = `${String(pm).padStart(2, '0')}-${py}`;
       }
     }
     // If we're viewing this client, reload so the checklist appears right away.
