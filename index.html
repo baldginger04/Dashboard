@@ -348,7 +348,7 @@
     /* The check + chevron live in a positioned wrapper so the popover anchors right. */
     .myday-status-grp{position:relative;display:flex;align-items:center;flex-shrink:0}
     .myday-title{flex:1;min-width:0;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
-    .myday-client-inline{font-size:12px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;flex-shrink:1}
+    .myday-client-inline{font-size:12px;color:var(--navy);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;flex-shrink:1}
     .myday-due{font-size:11px;white-space:nowrap;flex-shrink:0}
     @media (max-width: 900px){
       .myday-kanban{grid-template-columns:1fr}
@@ -372,7 +372,7 @@
     .week-card.overdue-item{border-color:var(--red-border);background:var(--red-bg)}
     .week-card-body{flex:1;min-width:0}
     .week-card-title{font-weight:500;color:var(--text);font-size:12px;line-height:1.3;overflow-wrap:normal;word-break:normal;hyphens:none}
-    .week-card-client{font-size:11px;color:var(--text);font-weight:500;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .week-card-client{font-size:11px;color:var(--navy);font-weight:500;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .week-card-meta{font-size:10px;color:var(--text3);margin-top:3px}
     .week-card-overdue{font-size:10px;color:var(--red);font-weight:600;margin-top:3px}
     .week-card .myday-check{width:16px;height:16px;font-size:10px}
@@ -777,7 +777,7 @@
         </div>
         <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
           <div>
-            <div style="font-family:'Hanken Grotesk',serif;font-size:26px" id="detailName"></div>
+            <div style="font-family:'Hanken Grotesk',serif;font-size:26px;color:var(--navy)" id="detailName"></div>
             <div style="font-size:13px;color:var(--text3);margin-top:4px" id="detailMeta"></div>
           </div>
           <div id="detailBadge"></div>
@@ -1976,7 +1976,7 @@ function renderClientsTable(clients) {
                    : '';
     return `
     <tr class="${rowClass}" onclick="openClient('${c.id}')">
-      <td style="font-weight:500">${c.name}${clientQBubble(c.id)}</td>
+      <td style="font-weight:600;color:var(--navy)">${c.name}${clientQBubble(c.id)}</td>
       <td>${avHtml(c.preparer)} <span style="font-size:13px;color:var(--text2);margin-left:6px">${c.preparer||'—'}</span></td>
       <td>${c.reviewer?avHtml(c.reviewer)+'<span style="font-size:13px;color:var(--text2);margin-left:6px">'+c.reviewer+'</span>':'<span style="color:var(--text3)">—</span>'}</td>
       <td style="font-size:12px;color:var(--text3)">${fmtCloseDue(c.close_due_date)}</td>
