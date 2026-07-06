@@ -1504,6 +1504,11 @@ function rollDateToMonth(dateStr, year, month /* 1-12 */) {
 // date instead of one per row. clientId null = all clients.
 async function rollCloseDatesForward(clientId /* uuid or null */) {
   const [ty, tmo] = tzToday().split('-').map(Number);
+  // Only dates BEFORE the current month get rolled. Dates already in this
+  // month are fine, and FUTURE dates are intentional (annual clients like
+  // Nickel City Management schedule their close months ahead) — rolling
+  // those back would wreck their schedule.
+  const monthStart = `${ty}-${String(tmo).padStart(2, '0')}-01`;
 
   // Clients: close_due_date keeps its day-of-month, moves to this month.
   let cq = sb.from('clients').select('id, close_due_date');
@@ -1511,6 +1516,7 @@ async function rollCloseDatesForward(clientId /* uuid or null */) {
   const { data: cRows } = await cq;
   const cGroups = {};
   (cRows || []).forEach(r => {
+    if (!r.close_due_date || r.close_due_date >= monthStart) return;
     const nd = rollDateToMonth(r.close_due_date, ty, tmo);
     if (nd && nd !== r.close_due_date) (cGroups[nd] = cGroups[nd] || []).push(r.id);
   });
@@ -1526,6 +1532,7 @@ async function rollCloseDatesForward(clientId /* uuid or null */) {
   const { data: tRows } = await tq;
   const tGroups = {};
   (tRows || []).forEach(r => {
+    if (!r.next_due || r.next_due >= monthStart) return; // past-due dates only
     const nd = rollDateToMonth(r.next_due, ty, tmo);
     if (nd && nd !== r.next_due) (tGroups[nd] = tGroups[nd] || []).push(r.id);
   });
@@ -5532,11 +5539,15 @@ async function cycleCloseStatus(clientId) {
     // month the close was started in (same day-of-month, new month).
     await rollCloseDatesForward(clientId);
     // Reflect the rolled date locally so the detail header + table are right
-    // without a full reload.
+    // without a full reload. Same rule as rollCloseDatesForward: only dates
+    // before this month roll; current/future dates are left alone.
     {
       const [ty, tmo] = tzToday().split('-').map(Number);
-      const nd = rollDateToMonth(c.close_due_date, ty, tmo);
-      if (nd) c.close_due_date = nd;
+      const monthStart = `${ty}-${String(tmo).padStart(2, '0')}-01`;
+      if (c.close_due_date && c.close_due_date < monthStart) {
+        const nd = rollDateToMonth(c.close_due_date, ty, tmo);
+        if (nd) c.close_due_date = nd;
+      }
     }
     // If we're viewing this client, reload so the checklist appears right away.
     if (currentClientId === clientId) await loadTasks(clientId);
