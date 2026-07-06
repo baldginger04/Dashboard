@@ -1483,6 +1483,58 @@ const CATS = ['General','Payroll','Tax','Account Reconciliation','Transaction Re
 const CLOSE_CATS = ['Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close'];
 const isCloseCat = (cat) => CLOSE_CATS.includes(cat);
 
+// Roll a YYYY-MM-DD date to the SAME day-of-month in a target month/year,
+// clamped to that month's length (May 14 rolled into July -> Jul 14; Jan 31
+// rolled into Feb -> Feb 28/29). Used when a close starts so due dates keep
+// each client's schedule but move forward to the month the close began in.
+function rollDateToMonth(dateStr, year, month /* 1-12 */) {
+  if (!dateStr || dateStr.length < 10) return null;
+  const day = parseInt(dateStr.slice(8, 10), 10) || 1;
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate(); // day 0 of next month = last day of this one
+  const d = Math.min(day, lastDay);
+  return `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+// Bump every close date for one-or-all clients into the month the close was
+// started in: clients.close_due_date and each close task's next_due (+ period).
+// Rows are grouped by their current date so we issue one UPDATE per distinct
+// date instead of one per row. clientId null = all clients.
+async function rollCloseDatesForward(clientId /* uuid or null */) {
+  const [ty, tmo] = tzToday().split('-').map(Number);
+
+  // Clients: close_due_date keeps its day-of-month, moves to this month.
+  let cq = sb.from('clients').select('id, close_due_date');
+  if (clientId) cq = cq.eq('id', clientId);
+  const { data: cRows } = await cq;
+  const cGroups = {};
+  (cRows || []).forEach(r => {
+    const nd = rollDateToMonth(r.close_due_date, ty, tmo);
+    if (nd && nd !== r.close_due_date) (cGroups[nd] = cGroups[nd] || []).push(r.id);
+  });
+  for (const [nd, ids] of Object.entries(cGroups)) {
+    for (let i = 0; i < ids.length; i += 100) {
+      await sb.from('clients').update({ close_due_date: nd }).in('id', ids.slice(i, i + 100));
+    }
+  }
+
+  // Close tasks: next_due gets the same treatment; period stays in sync (YYYYMM).
+  let tq = sb.from('tasks').select('id, next_due').in('category', CLOSE_CATS);
+  if (clientId) tq = tq.eq('client_id', clientId);
+  const { data: tRows } = await tq;
+  const tGroups = {};
+  (tRows || []).forEach(r => {
+    const nd = rollDateToMonth(r.next_due, ty, tmo);
+    if (nd && nd !== r.next_due) (tGroups[nd] = tGroups[nd] || []).push(r.id);
+  });
+  for (const [nd, ids] of Object.entries(tGroups)) {
+    for (let i = 0; i < ids.length; i += 100) {
+      await sb.from('tasks')
+        .update({ next_due: nd, period: nd.slice(0, 7).replace('-', '') })
+        .in('id', ids.slice(i, i + 100));
+    }
+  }
+}
+
 // Friendly due-date label, e.g. "Jun 15" (adds the year only when it isn't the
 // current year). Input is a YYYY-MM-DD string.
 function fmtDue(ymd) {
@@ -1833,11 +1885,11 @@ async function startCloseForAllClients() {
   if (count === 0) return;
   const ok = confirm(
     `Start the month-end close for all ${count} clients?\n\n` +
-    `This sets everyone to "In Progress" and resets the close checklist ` +
+    `This sets everyone to "In Progress", resets the close checklist ` +
     `(Account Reconciliation, Transaction Review, Payee/Entity Review, ` +
-    `Final Review, Pre-Close) back to Not Started so it's fresh for the new ` +
-    `cycle. Recurring non-close tasks are NOT affected. Can't be undone from ` +
-    `this button.`
+    `Final Review, Pre-Close) back to Not Started, and rolls every close ` +
+    `due date forward to the same day in this month. Recurring non-close ` +
+    `tasks are NOT affected. Can't be undone from this button.`
   );
   if (!ok) return;
 
@@ -1864,6 +1916,10 @@ async function startCloseForAllClients() {
         .update({ status: 'Not Started', updated_at: stamp })
         .in('task_id', closeIds.slice(i, i + 100));
     }
+    // 4) Roll every due date forward into the month this close was started in,
+    //    keeping each date's day-of-month (May 14 -> Jul 14 when started in
+    //    July). Covers clients.close_due_date and close tasks' next_due.
+    await rollCloseDatesForward(null);
   } catch (error) {
     alert("Couldn't start the close: " + (error.message || 'please try again.'));
     if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Start Close for All Clients'; }
@@ -2420,6 +2476,17 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
     if (d) d.items.push(item);
   });
 
+  // Deterministic order within each day: most-overdue first, then client,
+  // title, id. Without this, items landed in arbitrary Postgres row order,
+  // which changes after any update — so the columns reshuffled every time
+  // something was marked done.
+  days.forEach(d => d.items.sort((a, b) =>
+    ((b.daysOverdue || 0) - (a.daysOverdue || 0)) ||
+    (a.client || '').localeCompare(b.client || '') ||
+    (a.title  || '').localeCompare(b.title  || '') ||
+    String(a.id).localeCompare(String(b.id))
+  ));
+
   // Check if completely empty
   const anyItems = days.some(d => d.items.length);
   if (!anyItems) {
@@ -2557,15 +2624,23 @@ function renderMyDay(tasks, subs, today) {
     }))
   ];
 
+  // Deterministic tie-breaker. Without this, items that share a due date sit
+  // in whatever arbitrary row order Postgres returned — and that order changes
+  // after any UPDATE, so the list reshuffled every time something was marked
+  // done. Client -> title -> id makes the order stable across reloads.
+  const tieBreak = (a, b) =>
+    (a.client || '').localeCompare(b.client || '') ||
+    (a.title  || '').localeCompare(b.title  || '') ||
+    String(a.id).localeCompare(String(b.id));
   all.sort((a,b) => {
     if (mydaySort === 'due') {
-      if (!a.due && !b.due) return 0;
+      if (!a.due && !b.due) return tieBreak(a, b);
       if (!a.due) return 1; if (!b.due) return -1;
-      return a.due < b.due ? -1 : a.due > b.due ? 1 : 0;
+      return a.due < b.due ? -1 : a.due > b.due ? 1 : tieBreak(a, b);
     }
-    if (mydaySort === 'client') return (a.client||'').localeCompare(b.client||'');
-    if (mydaySort === 'task') return (a.title||'').localeCompare(b.title||'');
-    return 0;
+    if (mydaySort === 'client') return (a.client||'').localeCompare(b.client||'') || (a.due||'').localeCompare(b.due||'') || tieBreak(a, b);
+    if (mydaySort === 'task') return (a.title||'').localeCompare(b.title||'') || tieBreak(a, b);
+    return tieBreak(a, b);
   });
 
   // Group into 4 Kanban columns by status. Done tasks disappear immediately
@@ -5429,6 +5504,16 @@ async function cycleCloseStatus(clientId) {
     const { data: ctRows } = await sb.from('tasks').select('id').eq('client_id', clientId).in('category', CLOSE_CATS);
     const ids = (ctRows || []).map(r => r.id);
     if (ids.length) await sb.from('subtasks').update({ status: 'Not Started', updated_at: stamp }).in('task_id', ids);
+    // Roll this client's close_due_date and close-task due dates into the
+    // month the close was started in (same day-of-month, new month).
+    await rollCloseDatesForward(clientId);
+    // Reflect the rolled date locally so the detail header + table are right
+    // without a full reload.
+    {
+      const [ty, tmo] = tzToday().split('-').map(Number);
+      const nd = rollDateToMonth(c.close_due_date, ty, tmo);
+      if (nd) c.close_due_date = nd;
+    }
     // If we're viewing this client, reload so the checklist appears right away.
     if (currentClientId === clientId) await loadTasks(clientId);
   }
