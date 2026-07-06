@@ -2298,8 +2298,12 @@ async function loadMyDay() {
     allSubs.forEach(s => { const p = progByTask[s.task_id] || (progByTask[s.task_id] = { done: 0, total: 0 }); p.total++; if (s.status === 'Done') p.done++; });
 
     const myTasks = (tasks || []).filter(t => {
-      // Close tasks ignore cadence — they appear only during an active close.
-      if (isCloseCat(t.category)) return closeActive(t.client_id);
+      // Close tasks show only during an active close — and only once actually
+      // due. Future-dated close work stays hidden until its due date arrives.
+      if (isCloseCat(t.category)) {
+        if (!closeActive(t.client_id)) return false;
+        return !t.next_due || t.next_due <= today;
+      }
       if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
       return t.next_due <= today;
     });
@@ -2311,8 +2315,13 @@ async function loadMyDay() {
       const blocker = allSubs.find(x => x.id === s.blocked_by);
       return !blocker || blocker.status === 'Done';
     }).filter(s => {
-      // Subtasks of a close task follow the close lifecycle, not the due date.
-      if (isCloseCat(s.tasks?.category)) return closeActive(s.tasks?.client_id);
+      // Subtasks of a close task follow the close lifecycle AND the parent's
+      // due date — hidden until the close is active and the parent is due.
+      if (isCloseCat(s.tasks?.category)) {
+        if (!closeActive(s.tasks?.client_id)) return false;
+        const pd = s.tasks?.next_due;
+        return !pd || pd <= today;
+      }
       const taskDue = s.tasks?.next_due;
       if (!taskDue) return true;
       return taskDue <= today;
@@ -3515,12 +3524,16 @@ function renderUpcomingTasks() {
   // Also hide the three review tasks (P&L, Balance Sheet, Cash Flows) when
   // "Ready for Review" hasn't been completed yet for this client.
   const parentIds = new Set(clientSubtasks.map(s => s.task_id));
+  // Future-dated close tasks are hidden from Current Tasks until they're due,
+  // so (only while the close is active) they surface here instead — that way
+  // they're always findable somewhere.
+  const closeActiveHere = (allClients.find(c => c.id === currentClientId) || {}).close_status === 'In Progress';
   const isUpcoming = t => {
     if (t.status === 'Done') return false;
     if (parentIds.has(t.id)) return false;
-    // Close tasks aren't cadence-driven, so they never show as "upcoming" —
-    // they surface in Current Tasks only while the close is In Progress.
-    if (isCloseCat(t.category)) return false;
+    // Close tasks aren't cadence-driven: they only count as "upcoming" while
+    // a close is actually in progress for this client.
+    if (isCloseCat(t.category) && !closeActiveHere) return false;
     if (isTaskBlockedByReview(t, clientTasks)) return false;
     return t.next_due && t.next_due > today;
   };
@@ -3667,9 +3680,10 @@ function renderTasks() {
     // for this client yet. clientTasks is the full per-client task list, so
     // the gate task is visible in the same array.
     if (isTaskBlockedByReview(t, clientTasks)) return false;
-    // Close tasks follow the close lifecycle, not a cadence: visible only while
-    // this client's close is In Progress.
-    if (isCloseCat(t.category)) return closeActive;
+    // Close tasks follow the close lifecycle AND their due date: visible only
+    // while this client's close is In Progress and once the date has arrived.
+    // Future-dated close work lives in the Upcoming tab until it's due.
+    if (isCloseCat(t.category)) return closeActive && (!t.next_due || t.next_due <= today);
     const startsOn = t.starts_on || t.next_due;
     const freq = t.frequency || 'monthly';
 
