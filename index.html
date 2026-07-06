@@ -2315,14 +2315,14 @@ async function loadMyDay() {
     // three review documents AND whose client has an incomplete gate.
     tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
-    // Parent tasks (those with steps) surface alongside their subtasks now,
-    // rendered status-only so they can't be force-completed. parentTaskIds tags
-    // them; progByTask drives the "x of y steps done" hint.
+    // Parent tasks (those with steps) are HIDDEN from My Day — showing them
+    // status-only next to their subtasks read as duplicates to the team
+    // (July 6 feedback). Only the actionable steps appear; the parent
+    // completes automatically when its last step is done.
     const parentTaskIds = new Set(allSubs.map(s => s.task_id));
-    const progByTask = {};
-    allSubs.forEach(s => { const p = progByTask[s.task_id] || (progByTask[s.task_id] = { done: 0, total: 0 }); p.total++; if (s.status === 'Done') p.done++; });
 
     const myTasks = (tasks || []).filter(t => {
+      if (parentTaskIds.has(t.id)) return false;
       // Close tasks show only during an active close — and only once actually
       // due. Future-dated close work stays hidden until its due date arrives.
       if (isCloseCat(t.category)) {
@@ -2332,8 +2332,6 @@ async function loadMyDay() {
       if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
       return t.next_due <= today;
     });
-    // Parents surface status-only; tag them + attach step progress for the renderer.
-    myTasks.forEach(t => { if (parentTaskIds.has(t.id)) { t._isParent = true; t._prog = progByTask[t.id] || { done: 0, total: 0 }; } });
 
     const mySubs = (subtasks || []).filter(s => {
       if (!s.blocked_by) return true;
@@ -2409,25 +2407,22 @@ async function loadMyWeek() {
     // Apply the Ready-for-Review gate
     tasks = tasks.filter((t) => !isTaskBlockedByReview(t, reviewGates));
 
-    // Parent tasks (those with steps) surface alongside their subtasks now,
-    // rendered status-only so they can't be force-completed. parentTaskIds tags
-    // them; progByTask drives the "x of y steps done" hint.
+    // Parent tasks (those with steps) are HIDDEN from My Week — showing them
+    // status-only next to their subtasks read as duplicates to the team
+    // (July 6 feedback). Only the actionable steps appear.
     const parentTaskIds = new Set(allSubs.map(s => s.task_id));
-    const progByTask = {};
-    allSubs.forEach(s => { const p = progByTask[s.task_id] || (progByTask[s.task_id] = { done: 0, total: 0 }); p.total++; if (s.status === 'Done') p.done++; });
 
     // Filter tasks: due in window OR daily-recurring (which fire every day)
     const dailyFreqs = ['daily','weekdays','every_other_weekday'];
 
     const weekTasks = (tasks || []).filter(t => {
+      if (parentTaskIds.has(t.id)) return false;
       // Close tasks ignore cadence — they appear only during an active close.
       if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (dailyFreqs.includes(t.frequency)) return true;
       // include overdue rolled-up to today, plus tasks due during the window
       return t.next_due && t.next_due <= weekEndStr;
     });
-    // Parents surface status-only; tag them + attach step progress for the renderer.
-    weekTasks.forEach(t => { if (parentTaskIds.has(t.id)) { t._isParent = true; t._prog = progByTask[t.id] || { done: 0, total: 0 }; } });
 
     const weekSubs = (subtasks || []).filter(s => {
       if (!s.blocked_by) return true;
