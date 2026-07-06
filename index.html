@@ -1488,7 +1488,10 @@ const isCloseCat = (cat) => CLOSE_CATS.includes(cat);
 // rolled into Feb -> Feb 28/29). Used when a close starts so due dates keep
 // each client's schedule but move forward to the month the close began in.
 function rollDateToMonth(dateStr, year, month /* 1-12 */) {
-  if (!dateStr || dateStr.length < 10) return null;
+  // Only roll real ISO dates. close_due_date historically held pretty text
+  // ("May 4, 2026") — a one-time SQL migration normalized it to YYYY-MM-DD,
+  // and this guard makes sure any straggler is left alone rather than mangled.
+  if (!/^\d{4}-\d{2}-\d{2}/.test(dateStr || '')) return null;
   const day = parseInt(dateStr.slice(8, 10), 10) || 1;
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate(); // day 0 of next month = last day of this one
   const d = Math.min(day, lastDay);
@@ -1951,7 +1954,7 @@ function renderClientsTable(clients) {
       <td style="font-weight:500">${c.name}${clientQBubble(c.id)}</td>
       <td>${avHtml(c.preparer)} <span style="font-size:13px;color:var(--text2);margin-left:6px">${c.preparer||'—'}</span></td>
       <td>${c.reviewer?avHtml(c.reviewer)+'<span style="font-size:13px;color:var(--text2);margin-left:6px">'+c.reviewer+'</span>':'<span style="color:var(--text3)">—</span>'}</td>
-      <td style="font-size:12px;color:var(--text3)">${c.close_due_date||'—'}</td>
+      <td style="font-size:12px;color:var(--text3)">${fmtCloseDue(c.close_due_date)}</td>
       <td>${statusBadge(c.close_status)}</td>
     </tr>`;
   }).join('');
@@ -3314,7 +3317,7 @@ async function openClient(id) {
     return;
   }
   document.getElementById('detailName').textContent = c.name;
-  document.getElementById('detailMeta').textContent = (c.close_period||'') + (c.close_due_date ? ' · Due ' + c.close_due_date : '');
+  document.getElementById('detailMeta').textContent = (c.close_period||'') + (c.close_due_date ? ' · Due ' + fmtCloseDue(c.close_due_date) : '');
   // Clickable status badge — cycles Not Started -> In Progress -> Done -> Not Started.
   // The cycleCloseStatus() function handles the warn-if-tasks-incomplete check
   // when moving to Done, and writes the new status to the DB.
@@ -5422,6 +5425,13 @@ function tzFormatDate(ymd, opts) {
   const [y, m, d] = ymd.split('-').map(Number);
   const utcNoon = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
   return utcNoon.toLocaleDateString('en-US', { timeZone: BG_TZ, ...opts });
+}
+// close_due_date is stored as ISO (YYYY-MM-DD) since the July 2026 migration,
+// but is shown to humans as "Jul 14, 2026". Non-ISO stragglers pass through raw.
+function fmtCloseDue(v) {
+  if (!v) return '—';
+  if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return v;
+  return tzFormatDate(v, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 // "Now" but as an ISO string suitable for updated_at fields. Same as `new Date().toISOString()`
 // — we don't need timezone for stored timestamps (those are absolute moments in time),
