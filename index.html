@@ -835,7 +835,7 @@
                 </div>
               </div>
             </div>
-            <div id="dropZoneHint" style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px">You can also drag and drop a file anywhere in this area</div>
+            <div id="dropZoneHint" style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px">You can also drag and drop files anywhere in this area</div>
           </div>
         </div>
       </div>
@@ -872,6 +872,7 @@
               <button class="btn btn-primary btn-sm" onclick="sendTeamMessage()">Post</button>
             </div>
           </div>
+          <div style="text-align:center;font-size:11px;color:var(--text3);margin-top:6px">You can also drag and drop files anywhere on this page</div>
         </div>
       </div>
 
@@ -4808,6 +4809,16 @@ document.addEventListener('DOMContentLoaded', () => {
     msgCard.addEventListener('drop', e => {
       e.preventDefault(); msgCard.style.outline = '';
       addClientAttachments(e.dataTransfer.files); // all dropped files, not just the first
+    });
+  }
+  // Same for Team Chat — drop anywhere on the page to attach.
+  const teamPage = document.getElementById('page-team');
+  if (teamPage) {
+    teamPage.addEventListener('dragover', e => { e.preventDefault(); teamPage.style.outline = '2px dashed var(--accent)'; teamPage.style.outlineOffset = '-2px'; });
+    teamPage.addEventListener('dragleave', () => { teamPage.style.outline = ''; });
+    teamPage.addEventListener('drop', e => {
+      e.preventDefault(); teamPage.style.outline = '';
+      addTeamAttachments(e.dataTransfer.files);
     });
   }
 });
