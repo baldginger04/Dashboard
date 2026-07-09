@@ -650,6 +650,7 @@
           <span>📅</span> My Week <span class="nav-badge" id="myweekBadge" style="display:none">0</span>
         </div>
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients <span class="nav-badge" id="clientsBadge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="openFirmSpace()" id="nav-firm"><span>🏢</span> Bald Ginger</div>
         <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
         <div class="nav-section">Team</div>
         <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat <span class="nav-badge" id="teamChatBadge" style="display:none">0</span></div>
@@ -1910,7 +1911,7 @@ async function loadClients() {
 // change — there's no undo button. Updates are server-side, so the local
 // allClients cache is refreshed from the DB after the write succeeds.
 async function startCloseForAllClients() {
-  const count = allClients.length;
+  const count = allClients.filter(c => !c.is_firm).length;
   if (count === 0) return;
   const ok = confirm(
     `Start the month-end close for all ${count} clients?\n\n` +
@@ -1930,7 +1931,7 @@ async function startCloseForAllClients() {
     // 1) Everyone -> In Progress, which is the state in which close tasks appear.
     //    .not('id','is',null) matches every row (id is the PK, never null).
     const { error: cErr } = await sb.from('clients')
-      .update({ close_status: 'In Progress' }).not('id', 'is', null);
+      .update({ close_status: 'In Progress' }).eq('is_firm', false);
     if (cErr) throw cErr;
     // 2) Reset every close-category task to Not Started for a fresh checklist.
     const { error: tErr } = await sb.from('tasks')
@@ -1962,7 +1963,7 @@ async function startCloseForAllClients() {
   if (btn) { btn.disabled = false; btn.innerHTML = '🔄 Start Close for All Clients'; }
 }
 function renderClientsTable(clients) {
-  const sorted = [...clients].sort((a,b) => {
+  const sorted = [...clients].filter(c => !c.is_firm).sort((a,b) => {
     const av = (a[clientSortKey]||'').toLowerCase();
     const bv = (b[clientSortKey]||'').toLowerCase();
     return av < bv ? -clientSortDir : av > bv ? clientSortDir : 0;
@@ -3338,6 +3339,12 @@ async function openInstanceExists(clientId, title) {
     return !!(data && data.length);
   } catch { return false; }
 }
+function openFirmSpace() {
+  const firm = allClients.find(c => c.is_firm);
+  if (!firm) { alert('The Bald Ginger firm space isn\'t set up yet. Run the is_firm migration and reload.'); return; }
+  openClient(firm.id);
+}
+
 async function openClient(id) {
   currentClientId = id;
   const c = allClients.find(x => x.id === id);
@@ -3351,8 +3358,16 @@ async function openClient(id) {
   // Clickable status badge — cycles Not Started -> In Progress -> Done -> Not Started.
   // The cycleCloseStatus() function handles the warn-if-tasks-incomplete check
   // when moving to Done, and writes the new status to the DB.
-  document.getElementById('detailBadge').innerHTML = statusBadge(c.close_status, true);
-  document.getElementById('detailBadge').onclick = () => cycleCloseStatus(c.id);
+  if (c.is_firm) {
+    // Firm space has no close lifecycle — hide the status badge and show a
+    // simple meta line instead of a close period.
+    document.getElementById('detailBadge').innerHTML = '';
+    document.getElementById('detailBadge').onclick = null;
+    document.getElementById('detailMeta').textContent = 'Ongoing firm tasks';
+  } else {
+    document.getElementById('detailBadge').innerHTML = statusBadge(c.close_status, true);
+    document.getElementById('detailBadge').onclick = () => cycleCloseStatus(c.id);
+  }
   populateClientSwitcher(id);
   // Reset content panels so we don't show stale data from previous client while loading
   document.getElementById('taskContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -4030,6 +4045,12 @@ function openTaskModal(clientId, category, taskId) {
   document.getElementById('tmNextDue').value = tzToday();
   document.getElementById('tmClientId').value = clientId || currentClientId || '';
   document.getElementById('tmTaskId').value = taskId || '';
+  // Firm space uses only non-close categories (close-lifecycle categories don't
+  // apply and would get gated out of My Day). Regular clients get the full set.
+  const _fcid = clientId || currentClientId || '';
+  const _isFirm = (allClients.find(c => c.id === _fcid) || {}).is_firm;
+  const _cats = _isFirm ? CATS.filter(c => !CLOSE_CATS.includes(c)) : CATS;
+  document.getElementById('tmCategory').innerHTML = _cats.map(c => `<option>${c}</option>`).join('');
   // Default the Sequential toggle ON for new tasks. In edit mode this is
   // overridden below to reflect the task's REAL chain. Previously it was never
   // set here, so the checkbox kept its state from the prior modal open —
