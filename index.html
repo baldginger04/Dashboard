@@ -2331,6 +2331,9 @@ async function loadMyDay() {
         if (!closeActive(t.client_id)) return false;
         return !t.next_due || t.next_due <= today;
       }
+      // One-time tasks are deadline to-dos — show as soon as they exist, even
+      // if the due date is still in the future.
+      if (t.frequency === 'one_time') return true;
       if (!t.next_due) return t.frequency === 'daily' || t.frequency === 'weekdays' || t.frequency === 'every_other_weekday';
       return t.next_due <= today;
     });
@@ -3571,6 +3574,9 @@ function renderUpcomingTasks() {
     // a close is actually in progress for this client.
     if (isCloseCat(t.category) && !closeActiveHere) return false;
     if (isTaskBlockedByReview(t, clientTasks)) return false;
+    // One-time tasks live in Current Tasks from the start, so they don't
+    // appear here even when the due date is in the future.
+    if (t.frequency === 'one_time') return false;
     return t.next_due && t.next_due > today;
   };
 
@@ -3720,6 +3726,9 @@ function renderTasks() {
     // while this client's close is In Progress and once the date has arrived.
     // Future-dated close work lives in the Upcoming tab until it's due.
     if (isCloseCat(t.category)) return closeActive && (!t.next_due || t.next_due <= today);
+    // One-time tasks are deadline to-dos: show in Current from creation until
+    // done, even when the due date is in the future.
+    if (t.frequency === 'one_time') return true;
     const startsOn = t.starts_on || t.next_due;
     const freq = t.frequency || 'monthly';
 
