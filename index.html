@@ -1167,7 +1167,7 @@
                 </span>
               </div>
               <div class="freq-row">
-                <label class="freq-lbl">Starts on:</label>
+                <label class="freq-lbl" id="tmDateLbl">Starts on:</label>
                 <input type="date" class="form-input freq-date" id="tmStartsOn" oninput="renderFreqPreview()" />
               </div>
             </div>
@@ -4113,6 +4113,7 @@ function openTaskModal(clientId, category, taskId) {
 function onFreqTypeChange() {
   const freq = document.getElementById('freqType').value;
   const isOneTime = freq === 'one_time';
+  document.getElementById('tmDateLbl').textContent = isOneTime ? 'Due date:' : 'Starts on:';
   const unitMap = { daily: 'days', weekdays: 'weekdays', weekly: 'weeks', monthly: 'months', quarterly: 'quarters', annually: 'years' };
   document.getElementById('freqUnitLabel').textContent = unitMap[freq] || '';
   // One-time tasks have no interval/day controls — hide the whole "Every…" row.
@@ -4131,7 +4132,8 @@ function renderFreqPreview() {
   const startsOn = document.getElementById('tmStartsOn').value;
   const el = document.getElementById('freqPreview');
   if (!startsOn) {
-    el.innerHTML = '<div class="freq-preview-empty">Pick a start date to preview</div>';
+    const oneTime = document.getElementById('freqType').value === 'one_time';
+    el.innerHTML = `<div class="freq-preview-empty">Pick a ${oneTime ? 'due' : 'start'} date to preview</div>`;
     return;
   }
   const freq = document.getElementById('freqType').value;
