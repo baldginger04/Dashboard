@@ -651,6 +651,7 @@
         </div>
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients <span class="nav-badge" id="clientsBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="openFirmSpace()" id="nav-firm"><span>🏢</span> Bald Ginger</div>
+        <div class="nav-item" onclick="showPage('analyses')" id="nav-analyses"><span>📋</span> Analyses <span class="nav-badge" id="analysesBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
         <div class="nav-section">Team</div>
         <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat <span class="nav-badge" id="teamChatBadge" style="display:none">0</span></div>
@@ -842,6 +843,19 @@
       </div>
 
       <!-- TEAM CHAT -->
+      <div class="page" id="page-analyses">
+        <div class="page-header"><div><div class="page-title">Client Analyses</div><div class="page-sub">Month-end analyses from the team, for review</div></div></div>
+        <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.25rem">
+          <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+            <select id="anClient" style="padding:.5rem .6rem;border:1px solid var(--border);border-radius:8px;min-width:190px"><option value="">Select client…</option></select>
+            <input type="month" id="anPeriod" style="padding:.5rem .6rem;border:1px solid var(--border);border-radius:8px">
+            <input type="file" id="anFile" style="flex:1;min-width:180px">
+            <button id="anUploadBtn" onclick="uploadAnalysis()" style="background:#1B2A4B;color:#fff;border:0;border-radius:8px;padding:.55rem 1.1rem;font-weight:700;cursor:pointer">Upload analysis</button>
+          </div>
+          <div id="anMsg" style="font-size:.8rem;color:var(--muted,#888);margin-top:.5rem"></div>
+        </div>
+        <div id="analysesList"><div class="empty">Loading…</div></div>
+      </div>
       <div class="page" id="page-team">
         <div class="page-header">
           <div><div class="page-title">Team Chat</div><div class="page-sub">Internal communication for the Bald Ginger team</div></div>
@@ -1795,7 +1809,7 @@ async function showApp() {
   if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; }
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
-  await Promise.all([loadClients(), loadMyDay(), loadMyWeek()]);
+  await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
   // Open realtime subscriptions for My Day / My Week. Initially scoped to the
   // logged-in user; setViewingAs() re-targets when Ed uses the view-as dropdown.
   subscribeMyRealtime(name);
@@ -5223,12 +5237,133 @@ function showPage(name) {
   // is already marked active above, so this both recounts and re-renders.
   if (name === 'clients') refreshClientBubblesIfVisible();
   if (name === 'invoices') InvLoad();
+  if (name === 'analyses') loadAnalyses();
 }
 function showTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   document.getElementById('tab-' + name)?.classList.add('active');
   document.querySelectorAll('.tab').forEach(t => { if (t.getAttribute('onclick') === `showTab('${name}')`) t.classList.add('active'); });
+}
+
+// ══════════════════════════════════════════════════════════
+// CLIENT ANALYSES — month-end review queue (team upload -> owner review)
+// ══════════════════════════════════════════════════════════
+async function loadAnalysesBadge() {
+  try {
+    const { count } = await sb.from('client_analyses').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+    const b = document.getElementById('analysesBadge');
+    if (b) { if (count > 0) { b.textContent = count; b.style.display = 'inline'; } else b.style.display = 'none'; }
+  } catch (e) { /* non-fatal */ }
+}
+function fmtAnalysisPeriod(p) {
+  if (!/^\d{4}-\d{2}$/.test(p || '')) return p || '';
+  const [y, m] = p.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+async function loadAnalyses() {
+  const sel = document.getElementById('anClient');
+  if (sel && sel.options.length <= 1) {
+    (allClients || []).filter(c => !c.is_firm).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      .forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); });
+  }
+  const list = document.getElementById('analysesList');
+  list.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const { data, error } = await sb.from('client_analyses')
+      .select('*, clients(name)')
+      .order('period', { ascending: false })
+      .order('uploaded_at', { ascending: false });
+    if (error) throw error;
+    renderAnalyses(data || []);
+    loadAnalysesBadge();
+  } catch (e) {
+    list.innerHTML = `<div class="empty" style="color:var(--red)">Couldn't load analyses: ${esc(e.message || e)}</div>`;
+  }
+}
+function renderAnalyses(rows) {
+  const list = document.getElementById('analysesList');
+  if (!rows.length) { list.innerHTML = '<div class="empty">No analyses uploaded yet. Use the form above to add one.</div>'; return; }
+  const byPeriod = {};
+  rows.forEach(r => { (byPeriod[r.period] = byPeriod[r.period] || []).push(r); });
+  const periods = Object.keys(byPeriod).sort().reverse();
+  list.innerHTML = periods.map(p => {
+    const items = byPeriod[p].slice().sort((a, b) => (a.clients?.name || '').localeCompare(b.clients?.name || ''));
+    const pending = items.filter(i => i.status !== 'reviewed').length;
+    return `<div style="margin-bottom:1.5rem">
+      <div style="font-weight:800;font-size:1rem;color:#1B2A4B;margin-bottom:.5rem">${fmtAnalysisPeriod(p)}${pending ? ` <span style="font-weight:600;font-size:.75rem;color:#b93232">· ${pending} pending</span>` : ''}</div>
+      ${items.map(renderAnalysisItem).join('')}
+    </div>`;
+  }).join('');
+}
+function renderAnalysisItem(r) {
+  const reviewed = r.status === 'reviewed';
+  const badge = reviewed
+    ? `<span style="font-size:.72rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Reviewed</span>`
+    : `<span style="font-size:.72rem;font-weight:700;color:#b26a00;background:#fbf0dd;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Pending review</span>`;
+  const meta = reviewed
+    ? `Reviewed by ${esc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + new Date(r.reviewed_at).toLocaleDateString() : ''}`
+    : `Uploaded by ${esc(r.uploaded_by_name || '—')}${r.uploaded_at ? ' · ' + new Date(r.uploaded_at).toLocaleDateString() : ''}`;
+  const note = r.review_note ? `<div style="font-size:.8rem;color:#444;margin-top:.35rem;padding:.4rem .6rem;background:#f6f5ef;border-radius:6px">📝 ${esc(r.review_note)}</div>` : '';
+  return `<div style="border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;background:white">
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <div style="flex:1;min-width:180px">
+        <div style="font-weight:700">${esc(r.clients?.name || '(client)')}</div>
+        <div style="font-size:.78rem;color:var(--muted,#888)">${esc(r.file_name)} · ${meta}</div>
+      </div>
+      ${badge}
+      <button onclick="openAnalysis('${r.id}')" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer">Open</button>
+      ${reviewed ? '' : `<button onclick="markReviewed('${r.id}')" style="border:0;background:#D85B31;color:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Mark reviewed</button>`}
+    </div>${note}
+  </div>`;
+}
+async function uploadAnalysis() {
+  const clientId = document.getElementById('anClient').value;
+  const period = document.getElementById('anPeriod').value;
+  const fileEl = document.getElementById('anFile');
+  const file = fileEl.files[0];
+  const msg = document.getElementById('anMsg');
+  const bad = t => { msg.textContent = t; msg.style.color = '#b93232'; };
+  if (!clientId) return bad('Pick a client.');
+  if (!/^\d{4}-\d{2}$/.test(period)) return bad('Pick a month.');
+  if (!file) return bad('Choose a file.');
+  const btn = document.getElementById('anUploadBtn'); btn.disabled = true; const ot = btn.textContent; btn.textContent = 'Uploading…'; msg.textContent = '';
+  try {
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${clientId}/${period}/${Date.now()}_${safe}`;
+    const up = await sb.storage.from('client-analyses').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+    if (up.error) throw up.error;
+    const ins = await sb.from('client_analyses').insert({
+      client_id: clientId, period, file_name: file.name, file_path: path,
+      uploaded_by: currentUser?.id || null, uploaded_by_name: getViewingUserName(), status: 'pending',
+    });
+    if (ins.error) throw ins.error;
+    msg.textContent = 'Uploaded.'; msg.style.color = '#1e7a45';
+    fileEl.value = '';
+    loadAnalyses();
+  } catch (e) { bad('Error: ' + (e.message || e)); }
+  finally { btn.disabled = false; btn.textContent = ot; }
+}
+async function openAnalysis(id) {
+  try {
+    const { data: row } = await sb.from('client_analyses').select('file_path').eq('id', id).maybeSingle();
+    if (!row) return;
+    const { data, error } = await sb.storage.from('client-analyses').createSignedUrl(row.file_path, 3600);
+    if (error) throw error;
+    window.open(data.signedUrl, '_blank');
+  } catch (e) { alert("Couldn't open the file: " + (e.message || e)); }
+}
+async function markReviewed(id) {
+  const note = prompt('Optional note back to the team (leave blank to skip):', '');
+  if (note === null) return;
+  try {
+    const { error } = await sb.from('client_analyses').update({
+      status: 'reviewed', reviewed_by: currentUser?.id || null, reviewed_by_name: getViewingUserName(),
+      reviewed_at: new Date().toISOString(), review_note: note.trim() || null,
+    }).eq('id', id);
+    if (error) throw error;
+    loadAnalyses();
+  } catch (e) { alert('Error: ' + (e.message || e)); }
 }
 
 // ══════════════════════════════════════════════════════════
