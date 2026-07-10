@@ -2296,7 +2296,7 @@ async function loadMyDay() {
         .neq('status', 'Done')
         .order('next_due'),
       sb.from('subtasks')
-        .select('*, tasks(title,next_due,client_id,category), clients(name)')
+        .select('*, tasks(title,next_due,client_id,category,frequency), clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done'),
       sb.from('subtasks').select('id,task_id,status,blocked_by'),
@@ -2350,6 +2350,9 @@ async function loadMyDay() {
         const pd = s.tasks?.next_due;
         return !pd || pd <= today;
       }
+      // One-time parent tasks are deadline to-dos — their steps show now, even
+      // if the parent's due date is in the future.
+      if (s.tasks?.frequency === 'one_time') return true;
       const taskDue = s.tasks?.next_due;
       if (!taskDue) return true;
       return taskDue <= today;
@@ -2392,7 +2395,7 @@ async function loadMyWeek() {
         .neq('status', 'Done')
         .order('next_due'),
       sb.from('subtasks')
-        .select('*, tasks(title,next_due,client_id,category), clients(name)')
+        .select('*, tasks(title,next_due,client_id,category,frequency), clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done'),
       sb.from('subtasks').select('id,task_id,status,blocked_by'),
