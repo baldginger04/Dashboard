@@ -5278,7 +5278,7 @@ function showTab(name) {
 // ══════════════════════════════════════════════════════════
 // State for the review queue: status tab + client/period filters + which card
 // has its inline note editor open (and whether it's a review or send-back).
-const An = { rows: [], status: 'pending', client: '', period: '', noteFor: null, noteMode: null };
+const An = { rows: [], status: 'pending', client: '', period: '', noteFor: null, noteMode: null, monthFor: null };
 // HTML-escape helper local to this section. The app's only other escape
 // helper is private to the ADMIN-TAB IIFE and is not reachable from here.
 function anEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
@@ -5333,16 +5333,16 @@ const AN_STATUSES = [
 function anSetFilter() {
   An.client = document.getElementById('anFilterClient').value;
   An.period = document.getElementById('anFilterPeriod').value;
-  An.noteFor = null;
+  An.noteFor = null; An.monthFor = null;
   renderAnalyses();
 }
 function anClearFilters() {
-  An.client = ''; An.period = ''; An.noteFor = null;
+  An.client = ''; An.period = ''; An.noteFor = null; An.monthFor = null;
   const c = document.getElementById('anFilterClient'); if (c) c.value = '';
   const p = document.getElementById('anFilterPeriod'); if (p) p.value = '';
   renderAnalyses();
 }
-function anSetStatus(k) { An.status = k; An.noteFor = null; renderAnalyses(); }
+function anSetStatus(k) { An.status = k; An.noteFor = null; An.monthFor = null; renderAnalyses(); }
 // Rows after client/period filters but before the status tab — the tab counts
 // come from this set so they always reflect the active client/month filters.
 function anBase() {
@@ -5391,6 +5391,8 @@ function renderAnalysisItem(r) {
   const note = r.review_note ? `<div style="font-size:.8rem;color:#444;margin-top:.35rem;padding:.4rem .6rem;background:${noteBg};border-radius:6px">📝 ${noteLabel}${anEsc(r.review_note)}</div>` : '';
   const btns = [];
   btns.push(`<button onclick="openAnalysis('${r.id}')" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer">Open</button>`);
+  btns.push(`<button onclick="anMonth('${r.id}')" style="border:1px solid var(--border);background:white;color:#555;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer">Edit month</button>`);
+  btns.push(`<button onclick="deleteAnalysis('${r.id}')" style="border:1px solid var(--border);background:white;color:#b93232;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer">Delete</button>`);
   if (isAdmin() && r.status !== 'reviewed') {
     btns.push(`<button onclick="anNote('${r.id}','changes')" style="border:1px solid #b93232;color:#b93232;background:white;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Request changes</button>`);
     btns.push(`<button onclick="anNote('${r.id}','reviewed')" style="border:0;background:#D85B31;color:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Mark reviewed</button>`);
@@ -5398,7 +5400,7 @@ function renderAnalysisItem(r) {
   if (r.status === 'needs_changes') {
     btns.push(`<button onclick="resubmitAnalysis('${r.id}')" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Resubmit file</button>`);
   }
-  const noteEditor = An.noteFor === r.id ? anNoteEditor(r) : '';
+  const noteEditor = An.noteFor === r.id ? anNoteEditor(r) : (An.monthFor === r.id ? anMonthEditor(r) : '');
   return `<div style="border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;background:white">
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
       <div style="flex:1;min-width:180px">
@@ -5411,7 +5413,7 @@ function renderAnalysisItem(r) {
   </div>`;
 }
 function anNote(id, mode) {
-  An.noteFor = id; An.noteMode = mode;
+  An.noteFor = id; An.noteMode = mode; An.monthFor = null;
   renderAnalyses();
   setTimeout(() => { document.getElementById('anNoteBox')?.focus(); }, 0);
 }
@@ -5437,6 +5439,43 @@ async function anNoteConfirm(id) {
     }).eq('id', id);
     if (error) throw error;
     An.noteFor = null; An.noteMode = null;
+    loadAnalyses();
+  } catch (e) { alert('Error: ' + (e.message || e)); }
+}
+function anMonth(id) {
+  An.monthFor = id; An.noteFor = null; An.noteMode = null;
+  renderAnalyses();
+  setTimeout(() => { document.getElementById('anMonthBox')?.focus(); }, 0);
+}
+function anMonthCancel() { An.monthFor = null; renderAnalyses(); }
+function anMonthEditor(r) {
+  return `<div style="margin-top:.6rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+    <span style="font-size:.82rem;color:#555">Move this analysis to:</span>
+    <input type="month" id="anMonthBox" value="${anEsc(r.period)}" style="border:1px solid var(--border);border-radius:8px;padding:.45rem .6rem;font-size:.85rem">
+    <button onclick="anMonthConfirm('${r.id}')" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.45rem .9rem;font-size:.8rem;font-weight:700;cursor:pointer">Save month</button>
+    <button onclick="anMonthCancel()" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.45rem .9rem;font-size:.8rem;cursor:pointer">Cancel</button>
+  </div>`;
+}
+async function anMonthConfirm(id) {
+  const box = document.getElementById('anMonthBox');
+  const period = (box?.value || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(period)) { if (box) box.style.borderColor = '#b93232'; return; }
+  try {
+    const { error } = await sb.from('client_analyses').update({ period }).eq('id', id);
+    if (error) throw error;
+    An.monthFor = null;
+    loadAnalyses();
+  } catch (e) { alert('Error: ' + (e.message || e)); }
+}
+// Delete an analysis row (duplicates / mistaken uploads). Best-effort removes
+// the stored file too; an orphaned storage file is harmless if that part fails.
+async function deleteAnalysis(id) {
+  const r = An.rows.find(x => x.id === id); if (!r) return;
+  if (!confirm(`Delete "${r.file_name}" (${r.clients?.name || 'client'}, ${fmtAnalysisPeriod(r.period)})? This can't be undone.`)) return;
+  try {
+    const { error } = await sb.from('client_analyses').delete().eq('id', id);
+    if (error) throw error;
+    try { if (r.file_path) await sb.storage.from('client-analyses').remove([r.file_path]); } catch (_) { /* orphan is fine */ }
     loadAnalyses();
   } catch (e) { alert('Error: ' + (e.message || e)); }
 }
