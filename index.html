@@ -5279,6 +5279,9 @@ function showTab(name) {
 // State for the review queue: status tab + client/period filters + which card
 // has its inline note editor open (and whether it's a review or send-back).
 const An = { rows: [], status: 'pending', client: '', period: '', noteFor: null, noteMode: null };
+// HTML-escape helper local to this section. The app's only other escape
+// helper is private to the ADMIN-TAB IIFE and is not reachable from here.
+function anEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
 
 // Sidebar badge. Ed sees how many analyses await his review; team members see
 // how many of THEIR uploads were sent back for changes.
@@ -5318,7 +5321,7 @@ async function loadAnalyses() {
     renderAnalyses();
     loadAnalysesBadge();
   } catch (e) {
-    list.innerHTML = `<div class="empty" style="color:var(--red)">Couldn't load analyses: ${esc(e.message || e)}</div>`;
+    list.innerHTML = `<div class="empty" style="color:var(--red)">Couldn't load analyses: ${anEsc(e.message || e)}</div>`;
   }
 }
 const AN_STATUSES = [
@@ -5380,12 +5383,12 @@ function anChip(status) {
 function renderAnalysisItem(r) {
   const d = s => s ? new Date(s).toLocaleDateString() : '';
   let meta;
-  if (r.status === 'reviewed') meta = `Reviewed by ${esc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + d(r.reviewed_at) : ''}`;
-  else if (r.status === 'needs_changes') meta = `Sent back by ${esc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + d(r.reviewed_at) : ''} · uploaded by ${esc(r.uploaded_by_name || '—')}`;
-  else meta = `Uploaded by ${esc(r.uploaded_by_name || '—')}${r.uploaded_at ? ' · ' + d(r.uploaded_at) : ''}`;
+  if (r.status === 'reviewed') meta = `Reviewed by ${anEsc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + d(r.reviewed_at) : ''}`;
+  else if (r.status === 'needs_changes') meta = `Sent back by ${anEsc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + d(r.reviewed_at) : ''} · uploaded by ${anEsc(r.uploaded_by_name || '—')}`;
+  else meta = `Uploaded by ${anEsc(r.uploaded_by_name || '—')}${r.uploaded_at ? ' · ' + d(r.uploaded_at) : ''}`;
   const noteBg = r.status === 'needs_changes' ? '#fbe4e4' : '#f6f5ef';
   const noteLabel = (r.status === 'pending' && r.review_note) ? 'Earlier request: ' : '';
-  const note = r.review_note ? `<div style="font-size:.8rem;color:#444;margin-top:.35rem;padding:.4rem .6rem;background:${noteBg};border-radius:6px">📝 ${noteLabel}${esc(r.review_note)}</div>` : '';
+  const note = r.review_note ? `<div style="font-size:.8rem;color:#444;margin-top:.35rem;padding:.4rem .6rem;background:${noteBg};border-radius:6px">📝 ${noteLabel}${anEsc(r.review_note)}</div>` : '';
   const btns = [];
   btns.push(`<button onclick="openAnalysis('${r.id}')" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer">Open</button>`);
   if (isAdmin() && r.status !== 'reviewed') {
@@ -5399,8 +5402,8 @@ function renderAnalysisItem(r) {
   return `<div style="border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;background:white">
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
       <div style="flex:1;min-width:180px">
-        <div style="font-weight:700">${esc(r.clients?.name || '(client)')}</div>
-        <div style="font-size:.78rem;color:var(--muted,#888)">${esc(r.file_name)} · ${meta}</div>
+        <div style="font-weight:700">${anEsc(r.clients?.name || '(client)')}</div>
+        <div style="font-size:.78rem;color:var(--muted,#888)">${anEsc(r.file_name)} · ${meta}</div>
       </div>
       ${anChip(r.status)}
       ${btns.join('')}
