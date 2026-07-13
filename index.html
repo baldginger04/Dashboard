@@ -6131,7 +6131,6 @@ init();
 <script>
 /* Statement Reconciler - talks to the Supabase Edge Functions */
 (function(){
-  const FN = 'https://evfemokwtofbarjeezhu.supabase.co/functions/v1';
   let companies = [], cur = null, extracted = null, vendors = [];
   const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
   const fmt  = n => (n==null||isNaN(n)) ? '\u2014' : Number(n).toLocaleString('en-US',{style:'currency',currency:'USD'});
@@ -6183,7 +6182,94 @@ init();
       loadHistory();
     }
   }
-  function connect(){ window.location.href = FN + '/qbo-auth'; }
+  // ── Connect flow (unified store): client picker -> qbo-oauth popup -> poll.
+  // Same pattern the portal uses; the grant lands in qbo_connections and is
+  // immediately shared by every QBO function in both apps.
+  const escA = s => String(s==null?'':s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  let pollTimer = null;
+
+  async function clientChoices(){
+    let list = (window.allClients && allClients.length) ? allClients : null;
+    if(!list){
+      const { data } = await sb.from('clients').select('id,name,is_firm').order('name');
+      list = data || [];
+    }
+    const connected = new Set(companies.map(c=>String(c.company_name||'')));
+    return list.filter(c=>!c.is_firm).map(c=>({ id:c.id, name:c.name, connected: connected.has(c.name) }))
+      .sort((a,b)=> (a.connected===b.connected ? a.name.localeCompare(b.name) : (a.connected?1:-1)));
+  }
+
+  async function connect(){
+    let wrap = document.getElementById('rcPickWrap');
+    if(!wrap){
+      wrap = document.createElement('div'); wrap.id='rcPickWrap';
+      wrap.style.cssText='position:fixed;inset:0;background:rgba(20,25,40,.45);z-index:9998;display:flex;align-items:center;justify-content:center';
+      wrap.innerHTML = '<div style="background:#fff;border-radius:12px;padding:1.25rem 1.4rem;min-width:320px;max-width:92vw;box-shadow:0 10px 40px rgba(0,0,0,.25)">'+
+        '<div style="font-weight:800;font-size:1.05rem;margin-bottom:.75rem">Connect a client to QuickBooks</div>'+
+        '<select id="rcPickSel" class="form-select" style="width:100%;margin-bottom:1rem"></select>'+
+        '<div id="rcPickMsg" style="font-size:.82rem;color:#666;min-height:1.1em;margin-bottom:.75rem"></div>'+
+        '<div style="display:flex;gap:.5rem;justify-content:flex-end">'+
+          '<button class="btn btn-secondary" onclick="ReconConnectCancel()">Cancel</button>'+
+          '<button class="btn btn-primary" id="rcPickGo" onclick="ReconConnectGo()">Open QuickBooks</button>'+
+        '</div></div>';
+      wrap.addEventListener('click', e=>{ if(e.target===wrap) cancelConnect(); });
+      document.body.appendChild(wrap);
+    }
+    wrap.style.display='flex';
+    const sel = document.getElementById('rcPickSel');
+    sel.innerHTML = '<option>Loading clients\u2026</option>'; sel.disabled = true;
+    document.getElementById('rcPickMsg').textContent='';
+    document.getElementById('rcPickGo').disabled = false;
+    try {
+      const choices = await clientChoices();
+      sel.innerHTML = choices.map(c=>'<option value="'+c.id+'">'+escA(c.name)+(c.connected?' (connected)':'')+'</option>').join('');
+      sel.disabled = false;
+      if(cur){
+        const i=[...sel.options].findIndex(o=>o.text.replace(' (connected)','')===String(cur.company_name));
+        if(i>=0) sel.selectedIndex=i;
+      }
+    } catch(e){ sel.innerHTML='<option>Could not load clients</option>'; }
+  }
+  function cancelConnect(){
+    if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+    const w=document.getElementById('rcPickWrap'); if(w) w.style.display='none';
+  }
+  async function startConnect(){
+    const sel = document.getElementById('rcPickSel');
+    const clientId = sel && sel.value; if(!clientId) return;
+    const msg = document.getElementById('rcPickMsg');
+    const go = document.getElementById('rcPickGo');
+    go.disabled = true; msg.textContent = 'Opening QuickBooks\u2026';
+    try {
+      const base = await invoke('qbo-oauth', { action:'status', client_id: clientId });
+      const { url } = await invoke('qbo-oauth', { action:'start', client_id: clientId });
+      const pop = window.open(url, 'qboconnect', 'width=680,height=760');
+      msg.textContent = 'Waiting for QuickBooks\u2026 finish the connection in the popup.';
+      let tries = 0, graceLeft = 2;
+      if(pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async ()=>{
+        tries++;
+        try {
+          const st = await invoke('qbo-oauth', { action:'status', client_id: clientId });
+          const fresh = st.connected && (!base.connected || st.updated_at !== base.updated_at);
+          if(fresh){
+            clearInterval(pollTimer); pollTimer=null;
+            cancelConnect(); toast('Connected \u2713','ok'); loadCompanies();
+            return;
+          }
+        } catch(_){}
+        if(pop && pop.closed && --graceLeft < 0){
+          clearInterval(pollTimer); pollTimer=null;
+          msg.textContent = 'Connection window closed \u2014 nothing was connected.';
+          go.disabled = false;
+        } else if(tries > 96){
+          clearInterval(pollTimer); pollTimer=null;
+          msg.textContent = 'Timed out waiting for QuickBooks. Try again.';
+          go.disabled = false;
+        }
+      }, 2500);
+    } catch(e){ msg.textContent = 'Error: '+e.message; go.disabled = false; }
+  }
 
   async function processFile(f){
     if(!f) return;
@@ -6285,6 +6371,7 @@ init();
   }
 
   window.ReconPick=pick; window.ReconConnect=connect; window.ReconRun=run;
+  window.ReconConnectGo=startConnect; window.ReconConnectCancel=cancelConnect;
   window.ReconFile=function(input){ const f=input.files&&input.files[0]; processFile(f); input.value=''; };
 
   const _sp = window.showPage;
@@ -6296,21 +6383,7 @@ init();
     z.addEventListener('drop',e=>{ const f=e.dataTransfer.files&&e.dataTransfer.files[0]; processFile(f); });
   }
 
-  function handleReturn(){
-    const p = new URLSearchParams(location.search);
-    if(p.get('qbo')==='connected'){
-      const co = p.get('company')||''; toast('Connected'+(co?' '+co:'')+' \u2713','ok');
-      history.replaceState({},'',location.origin+location.pathname);
-      let tries=0; const land=()=>{ if(window.showPage) window.showPage('reconciler'); if(++tries<3) setTimeout(land,700); };
-      setTimeout(land,500);
-    } else if(p.get('qbo_error')){
-      toast('QuickBooks connection failed: '+p.get('qbo_error'),'warn');
-      history.replaceState({},'',location.origin+location.pathname);
-    }
-  }
-  (document.readyState==='loading')
-    ? document.addEventListener('DOMContentLoaded',()=>setTimeout(handleReturn,400))
-    : setTimeout(handleReturn,400);
+
 })();
 </script>
 
