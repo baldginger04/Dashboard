@@ -1358,6 +1358,22 @@ function updateAppBadge(n) {
   } catch (_) {}
 }
 
+// Fire a push to whoever a task was just assigned to (send-push checks the JWT
+// and skips the assigner's own devices, so assigning yourself notifies no one).
+async function pushTaskAssigned(assigneeName, title, clientName) {
+  try {
+    if (!assigneeName) return;
+    const { data } = await sb.auth.getSession();
+    const token = data?.session?.access_token;
+    if (!token) return;
+    await fetch('https://evfemokwtofbarjeezhu.supabase.co/functions/v1/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ type: 'task_assigned', assignee_name: assigneeName, title: title || '', client: clientName || '' }),
+    });
+  } catch (e) { /* non-fatal */ }
+}
+
 // Subscribe this device to push. Must be triggered by a user gesture (iOS).
 async function enableTriplePush() {
   const btn = document.getElementById('enableNotifBtn');
@@ -4272,6 +4288,10 @@ async function saveTask() {
     taskData.status = 'Not Started';
     const { data } = await sb.from('tasks').insert(taskData).select().single();
     savedId = data?.id;
+    if (taskData.assigned_to) {
+      const _cn = (allClients.find(c => c.id === clientId) || {}).name || '';
+      pushTaskAssigned(taskData.assigned_to, taskData.title, _cn);
+    }
   }
 
   const validSubs = subRows.filter(r => r && r.title.trim());
