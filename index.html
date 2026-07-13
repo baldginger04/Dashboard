@@ -845,7 +845,7 @@
       <!-- TEAM CHAT -->
       <div class="page" id="page-analyses">
         <div class="page-header"><div><div class="page-title">Client Analyses</div><div class="page-sub">Month-end analyses from the team, for review</div></div></div>
-        <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1.25rem">
+        <div style="background:white;border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem">
           <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
             <select id="anClient" style="padding:.5rem .6rem;border:1px solid var(--border);border-radius:8px;min-width:190px"><option value="">Select client…</option></select>
             <input type="month" id="anPeriod" style="padding:.5rem .6rem;border:1px solid var(--border);border-radius:8px">
@@ -853,6 +853,13 @@
             <button id="anUploadBtn" onclick="uploadAnalysis()" style="background:#1B2A4B;color:#fff;border:0;border-radius:8px;padding:.55rem 1.1rem;font-weight:700;cursor:pointer">Upload analysis</button>
           </div>
           <div id="anMsg" style="font-size:.8rem;color:var(--muted,#888);margin-top:.5rem"></div>
+        </div>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem">
+          <div id="anTabs" style="display:flex;gap:.35rem;flex-wrap:wrap"></div>
+          <div style="flex:1"></div>
+          <select id="anFilterClient" onchange="anSetFilter()" style="padding:.4rem .55rem;border:1px solid var(--border);border-radius:8px;font-size:.82rem;max-width:200px"><option value="">All clients</option></select>
+          <input type="month" id="anFilterPeriod" onchange="anSetFilter()" style="padding:.4rem .55rem;border:1px solid var(--border);border-radius:8px;font-size:.82rem">
+          <button onclick="anClearFilters()" style="border:1px solid var(--border);background:white;border-radius:8px;padding:.4rem .8rem;font-size:.8rem;cursor:pointer">Clear</button>
         </div>
         <div id="analysesList"><div class="empty">Loading…</div></div>
       </div>
@@ -5269,9 +5276,18 @@ function showTab(name) {
 // ══════════════════════════════════════════════════════════
 // CLIENT ANALYSES — month-end review queue (team upload -> owner review)
 // ══════════════════════════════════════════════════════════
+// State for the review queue: status tab + client/period filters + which card
+// has its inline note editor open (and whether it's a review or send-back).
+const An = { rows: [], status: 'pending', client: '', period: '', noteFor: null, noteMode: null };
+
+// Sidebar badge. Ed sees how many analyses await his review; team members see
+// how many of THEIR uploads were sent back for changes.
 async function loadAnalysesBadge() {
   try {
-    const { count } = await sb.from('client_analyses').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+    let q = sb.from('client_analyses').select('id', { count: 'exact', head: true });
+    q = isAdmin() ? q.eq('status', 'pending')
+                  : q.eq('status', 'needs_changes').eq('uploaded_by', currentUser?.id || '00000000-0000-0000-0000-000000000000');
+    const { count } = await q;
     const b = document.getElementById('analysesBadge');
     if (b) { if (count > 0) { b.textContent = count; b.style.display = 'inline'; } else b.style.display = 'none'; }
   } catch (e) { /* non-fatal */ }
@@ -5282,11 +5298,14 @@ function fmtAnalysisPeriod(p) {
   return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 }
 async function loadAnalyses() {
-  const sel = document.getElementById('anClient');
-  if (sel && sel.options.length <= 1) {
-    (allClients || []).filter(c => !c.is_firm).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-      .forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); });
-  }
+  const fill = (id) => {
+    const sel = document.getElementById(id);
+    if (sel && sel.options.length <= 1) {
+      (allClients || []).filter(c => !c.is_firm).slice().sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+        .forEach(c => { const o = document.createElement('option'); o.value = c.id; o.textContent = c.name; sel.appendChild(o); });
+    }
+  };
+  fill('anClient'); fill('anFilterClient');
   const list = document.getElementById('analysesList');
   list.innerHTML = '<div class="empty">Loading…</div>';
   try {
@@ -5295,47 +5314,128 @@ async function loadAnalyses() {
       .order('period', { ascending: false })
       .order('uploaded_at', { ascending: false });
     if (error) throw error;
-    renderAnalyses(data || []);
+    An.rows = data || [];
+    renderAnalyses();
     loadAnalysesBadge();
   } catch (e) {
     list.innerHTML = `<div class="empty" style="color:var(--red)">Couldn't load analyses: ${esc(e.message || e)}</div>`;
   }
 }
-function renderAnalyses(rows) {
+const AN_STATUSES = [
+  { key: 'pending',       label: 'Pending' },
+  { key: 'needs_changes', label: 'Needs changes' },
+  { key: 'reviewed',      label: 'Reviewed' },
+  { key: 'all',           label: 'All' },
+];
+function anSetFilter() {
+  An.client = document.getElementById('anFilterClient').value;
+  An.period = document.getElementById('anFilterPeriod').value;
+  An.noteFor = null;
+  renderAnalyses();
+}
+function anClearFilters() {
+  An.client = ''; An.period = ''; An.noteFor = null;
+  const c = document.getElementById('anFilterClient'); if (c) c.value = '';
+  const p = document.getElementById('anFilterPeriod'); if (p) p.value = '';
+  renderAnalyses();
+}
+function anSetStatus(k) { An.status = k; An.noteFor = null; renderAnalyses(); }
+// Rows after client/period filters but before the status tab — the tab counts
+// come from this set so they always reflect the active client/month filters.
+function anBase() {
+  return An.rows.filter(r => (!An.client || r.client_id === An.client) && (!An.period || r.period === An.period));
+}
+function renderAnalyses() {
   const list = document.getElementById('analysesList');
-  if (!rows.length) { list.innerHTML = '<div class="empty">No analyses uploaded yet. Use the form above to add one.</div>'; return; }
+  const base = anBase();
+  const counts = { pending: 0, needs_changes: 0, reviewed: 0 };
+  base.forEach(r => { if (counts[r.status] != null) counts[r.status]++; });
+  const tabs = document.getElementById('anTabs');
+  if (tabs) tabs.innerHTML = AN_STATUSES.map(t => {
+    const n = t.key === 'all' ? base.length : (counts[t.key] || 0);
+    const sel = An.status === t.key;
+    return `<button onclick="anSetStatus('${t.key}')" style="border:1px solid ${sel ? '#1B2A4B' : 'var(--border)'};background:${sel ? '#1B2A4B' : 'white'};color:${sel ? '#fff' : '#333'};border-radius:999px;padding:.35rem .85rem;font-size:.8rem;font-weight:700;cursor:pointer">${t.label}${n ? ` <span style="opacity:.7;font-weight:600">${n}</span>` : ''}</button>`;
+  }).join('');
+  const rows = An.status === 'all' ? base : base.filter(r => r.status === An.status);
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty">${An.status === 'pending' ? 'Nothing waiting for review.' : 'No analyses here.'}</div>`;
+    return;
+  }
   const byPeriod = {};
   rows.forEach(r => { (byPeriod[r.period] = byPeriod[r.period] || []).push(r); });
   const periods = Object.keys(byPeriod).sort().reverse();
   list.innerHTML = periods.map(p => {
     const items = byPeriod[p].slice().sort((a, b) => (a.clients?.name || '').localeCompare(b.clients?.name || ''));
-    const pending = items.filter(i => i.status !== 'reviewed').length;
     return `<div style="margin-bottom:1.5rem">
-      <div style="font-weight:800;font-size:1rem;color:#1B2A4B;margin-bottom:.5rem">${fmtAnalysisPeriod(p)}${pending ? ` <span style="font-weight:600;font-size:.75rem;color:#b93232">· ${pending} pending</span>` : ''}</div>
+      <div style="font-weight:800;font-size:1rem;color:#1B2A4B;margin-bottom:.5rem">${fmtAnalysisPeriod(p)}</div>
       ${items.map(renderAnalysisItem).join('')}
     </div>`;
   }).join('');
 }
+function anChip(status) {
+  if (status === 'reviewed') return `<span style="font-size:.72rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Reviewed</span>`;
+  if (status === 'needs_changes') return `<span style="font-size:.72rem;font-weight:700;color:#b93232;background:#fbe4e4;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Needs changes</span>`;
+  return `<span style="font-size:.72rem;font-weight:700;color:#b26a00;background:#fbf0dd;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Pending review</span>`;
+}
 function renderAnalysisItem(r) {
-  const reviewed = r.status === 'reviewed';
-  const badge = reviewed
-    ? `<span style="font-size:.72rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Reviewed</span>`
-    : `<span style="font-size:.72rem;font-weight:700;color:#b26a00;background:#fbf0dd;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Pending review</span>`;
-  const meta = reviewed
-    ? `Reviewed by ${esc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + new Date(r.reviewed_at).toLocaleDateString() : ''}`
-    : `Uploaded by ${esc(r.uploaded_by_name || '—')}${r.uploaded_at ? ' · ' + new Date(r.uploaded_at).toLocaleDateString() : ''}`;
-  const note = r.review_note ? `<div style="font-size:.8rem;color:#444;margin-top:.35rem;padding:.4rem .6rem;background:#f6f5ef;border-radius:6px">📝 ${esc(r.review_note)}</div>` : '';
+  const d = s => s ? new Date(s).toLocaleDateString() : '';
+  let meta;
+  if (r.status === 'reviewed') meta = `Reviewed by ${esc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + d(r.reviewed_at) : ''}`;
+  else if (r.status === 'needs_changes') meta = `Sent back by ${esc(r.reviewed_by_name || '—')}${r.reviewed_at ? ' · ' + d(r.reviewed_at) : ''} · uploaded by ${esc(r.uploaded_by_name || '—')}`;
+  else meta = `Uploaded by ${esc(r.uploaded_by_name || '—')}${r.uploaded_at ? ' · ' + d(r.uploaded_at) : ''}`;
+  const noteBg = r.status === 'needs_changes' ? '#fbe4e4' : '#f6f5ef';
+  const noteLabel = (r.status === 'pending' && r.review_note) ? 'Earlier request: ' : '';
+  const note = r.review_note ? `<div style="font-size:.8rem;color:#444;margin-top:.35rem;padding:.4rem .6rem;background:${noteBg};border-radius:6px">📝 ${noteLabel}${esc(r.review_note)}</div>` : '';
+  const btns = [];
+  btns.push(`<button onclick="openAnalysis('${r.id}')" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer">Open</button>`);
+  if (isAdmin() && r.status !== 'reviewed') {
+    btns.push(`<button onclick="anNote('${r.id}','changes')" style="border:1px solid #b93232;color:#b93232;background:white;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Request changes</button>`);
+    btns.push(`<button onclick="anNote('${r.id}','reviewed')" style="border:0;background:#D85B31;color:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Mark reviewed</button>`);
+  }
+  if (r.status === 'needs_changes') {
+    btns.push(`<button onclick="resubmitAnalysis('${r.id}')" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Resubmit file</button>`);
+  }
+  const noteEditor = An.noteFor === r.id ? anNoteEditor(r) : '';
   return `<div style="border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;background:white">
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
       <div style="flex:1;min-width:180px">
         <div style="font-weight:700">${esc(r.clients?.name || '(client)')}</div>
         <div style="font-size:.78rem;color:var(--muted,#888)">${esc(r.file_name)} · ${meta}</div>
       </div>
-      ${badge}
-      <button onclick="openAnalysis('${r.id}')" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;cursor:pointer">Open</button>
-      ${reviewed ? '' : `<button onclick="markReviewed('${r.id}')" style="border:0;background:#D85B31;color:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Mark reviewed</button>`}
-    </div>${note}
+      ${anChip(r.status)}
+      ${btns.join('')}
+    </div>${note}${noteEditor}
   </div>`;
+}
+function anNote(id, mode) {
+  An.noteFor = id; An.noteMode = mode;
+  renderAnalyses();
+  setTimeout(() => { document.getElementById('anNoteBox')?.focus(); }, 0);
+}
+function anNoteCancel() { An.noteFor = null; An.noteMode = null; renderAnalyses(); }
+function anNoteEditor(r) {
+  const changes = An.noteMode === 'changes';
+  return `<div style="margin-top:.6rem;display:flex;gap:.5rem;align-items:flex-start;flex-wrap:wrap">
+    <textarea id="anNoteBox" rows="2" placeholder="${changes ? 'What needs to change? (required)' : 'Optional note back to the team'}" style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;font:inherit;font-size:.85rem"></textarea>
+    <button onclick="anNoteConfirm('${r.id}')" style="border:0;background:${changes ? '#b93232' : '#1e7a45'};color:#fff;border-radius:7px;padding:.45rem .9rem;font-size:.8rem;font-weight:700;cursor:pointer">${changes ? 'Send back' : 'Confirm reviewed'}</button>
+    <button onclick="anNoteCancel()" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.45rem .9rem;font-size:.8rem;cursor:pointer">Cancel</button>
+  </div>`;
+}
+async function anNoteConfirm(id) {
+  const box = document.getElementById('anNoteBox');
+  const note = (box?.value || '').trim();
+  const mode = An.noteMode;
+  if (mode === 'changes' && !note) { if (box) box.style.borderColor = '#b93232'; return; }
+  try {
+    const { error } = await sb.from('client_analyses').update({
+      status: mode === 'changes' ? 'needs_changes' : 'reviewed',
+      reviewed_by: currentUser?.id || null, reviewed_by_name: getViewingUserName(),
+      reviewed_at: new Date().toISOString(), review_note: note || null,
+    }).eq('id', id);
+    if (error) throw error;
+    An.noteFor = null; An.noteMode = null;
+    loadAnalyses();
+  } catch (e) { alert('Error: ' + (e.message || e)); }
 }
 async function uploadAnalysis() {
   const clientId = document.getElementById('anClient').value;
@@ -5373,17 +5473,29 @@ async function openAnalysis(id) {
     window.open(data.signedUrl, '_blank');
   } catch (e) { alert("Couldn't open the file: " + (e.message || e)); }
 }
-async function markReviewed(id) {
-  const note = prompt('Optional note back to the team (leave blank to skip):', '');
-  if (note === null) return;
-  try {
-    const { error } = await sb.from('client_analyses').update({
-      status: 'reviewed', reviewed_by: currentUser?.id || null, reviewed_by_name: getViewingUserName(),
-      reviewed_at: new Date().toISOString(), review_note: note.trim() || null,
-    }).eq('id', id);
-    if (error) throw error;
-    loadAnalyses();
-  } catch (e) { alert('Error: ' + (e.message || e)); }
+// Team member fixes a sent-back analysis: pick a new file, it replaces the row's
+// file and flips status back to pending (the earlier request note stays visible
+// on the pending card so the reviewer remembers what was asked).
+function resubmitAnalysis(id) {
+  const inp = document.createElement('input'); inp.type = 'file';
+  inp.onchange = async () => {
+    const file = inp.files[0]; if (!file) return;
+    try {
+      const row = An.rows.find(x => x.id === id); if (!row) return;
+      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const path = `${row.client_id}/${row.period}/${Date.now()}_${safe}`;
+      const up = await sb.storage.from('client-analyses').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+      if (up.error) throw up.error;
+      const { error } = await sb.from('client_analyses').update({
+        file_name: file.name, file_path: path, status: 'pending',
+        uploaded_by: currentUser?.id || null, uploaded_by_name: getViewingUserName(),
+        uploaded_at: new Date().toISOString(),
+      }).eq('id', id);
+      if (error) throw error;
+      loadAnalyses();
+    } catch (e) { alert('Error: ' + (e.message || e)); }
+  };
+  inp.click();
 }
 
 // ══════════════════════════════════════════════════════════
