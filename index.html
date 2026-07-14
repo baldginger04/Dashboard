@@ -1367,7 +1367,7 @@ function updateAppBadge(n) {
 
 // Fire a push to whoever a task was just assigned to (send-push checks the JWT
 // and skips the assigner's own devices, so assigning yourself notifies no one).
-async function pushTaskAssigned(assigneeName, title, clientName) {
+async function pushTaskAssigned(assigneeName, title, clientName, clientId, taskId) {
   try {
     if (!assigneeName) return;
     const { data } = await sb.auth.getSession();
@@ -1376,7 +1376,7 @@ async function pushTaskAssigned(assigneeName, title, clientName) {
     await fetch('https://evfemokwtofbarjeezhu.supabase.co/functions/v1/send-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-      body: JSON.stringify({ type: 'task_assigned', assignee_name: assigneeName, title: title || '', client: clientName || '' }),
+      body: JSON.stringify({ type: 'task_assigned', assignee_name: assigneeName, title: title || '', client: clientName || '', client_id: clientId || null, task_id: taskId || null }),
     });
   } catch (e) { /* non-fatal */ }
 }
@@ -1653,6 +1653,12 @@ function startAllCaughtUpRotator() {
 }
 
 let currentUser = null;
+// Push-notification deep link (?go=analysis|task&client=...&id=...) — captured
+// at boot, consumed by handlePushDeepLink() after showApp() finishes, then
+// scrubbed from the URL so refreshes behave normally.
+const __dlq = new URLSearchParams(location.search);
+window.__dl = __dlq.get('go') ? { go: __dlq.get('go'), client: __dlq.get('client'), id: __dlq.get('id') } : null;
+if (__dlq.get('go')) history.replaceState(null, '', location.pathname);
 // When Ed (admin) impersonates another team member from the "View as" dropdown,
 // this holds their display name (e.g. "Lydia Hattrup"). null means "view as self".
 // Read-only mode is in effect while this is non-null; reverted on logout/refresh.
@@ -1841,6 +1847,35 @@ async function showApp() {
   loadTeamChatBadge();
   loadTaggableUsers();
   subscribePortalBadge();
+  handlePushDeepLink();
+}
+
+// Consume a push-notification deep link captured at boot.
+async function handlePushDeepLink() {
+  const dl = window.__dl;
+  if (!dl) return;
+  window.__dl = null;
+  if (dl.go === 'analysis' && dl.id) {
+    window.__dlAnalysisId = dl.id;
+    showPage('analyses');           // triggers loadAnalyses -> renderAnalyses consumes the id
+  } else if (dl.go === 'task' && dl.client && dl.id) {
+    await openClient(dl.client);
+    dlScrollToTask(dl.id, 0);
+  }
+}
+// Find the task row once the client's list renders; if it isn't in the default
+// Current view, flip to Upcoming once, and keep polling briefly either way.
+function dlScrollToTask(taskId, tries) {
+  const el = document.querySelector(`[data-tid="${taskId}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'box-shadow .4s ease';
+    el.style.boxShadow = 'inset 0 0 0 3px #D85B31';
+    setTimeout(() => { el.style.boxShadow = ''; }, 2600);
+    return;
+  }
+  if (tries === 6 && taskView !== 'upcoming') showTaskView('upcoming');
+  if (tries < 16) setTimeout(() => dlScrollToTask(taskId, tries + 1), 300);
 }
 
 // ── CLIENTS ──────────────────────────────────────────────
@@ -4297,7 +4332,7 @@ async function saveTask() {
     savedId = data?.id;
     if (taskData.assigned_to) {
       const _cn = (allClients.find(c => c.id === clientId) || {}).name || '';
-      pushTaskAssigned(taskData.assigned_to, taskData.title, _cn);
+      pushTaskAssigned(taskData.assigned_to, taskData.title, _cn, clientId, savedId);
     }
   }
 
@@ -5350,6 +5385,11 @@ function anBase() {
 }
 function renderAnalyses() {
   const list = document.getElementById('analysesList');
+  // Push deep link: make sure the linked analysis is visible under the active tab.
+  if (window.__dlAnalysisId) {
+    const t = An.rows.find(x => x.id === window.__dlAnalysisId);
+    if (t && An.status !== 'all' && t.status !== An.status) An.status = 'all';
+  }
   const base = anBase();
   const counts = { pending: 0, needs_changes: 0, reviewed: 0 };
   base.forEach(r => { if (counts[r.status] != null) counts[r.status]++; });
@@ -5374,6 +5414,16 @@ function renderAnalyses() {
       ${items.map(renderAnalysisItem).join('')}
     </div>`;
   }).join('');
+  if (window.__dlAnalysisId) {
+    const dEl = list.querySelector(`[data-aid="${window.__dlAnalysisId}"]`);
+    window.__dlAnalysisId = null;
+    if (dEl) {
+      dEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      dEl.style.transition = 'box-shadow .4s ease';
+      dEl.style.boxShadow = '0 0 0 3px #D85B31';
+      setTimeout(() => { dEl.style.boxShadow = ''; }, 2600);
+    }
+  }
 }
 function anChip(status) {
   if (status === 'reviewed') return `<span style="font-size:.72rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.2rem .6rem;white-space:nowrap">Reviewed</span>`;
@@ -5401,7 +5451,7 @@ function renderAnalysisItem(r) {
     btns.push(`<button onclick="resubmitAnalysis('${r.id}')" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.8rem;font-weight:700;cursor:pointer">Resubmit file</button>`);
   }
   const noteEditor = An.noteFor === r.id ? anNoteEditor(r) : (An.monthFor === r.id ? anMonthEditor(r) : '');
-  return `<div style="border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;background:white">
+  return `<div data-aid="${r.id}" style="border:1px solid var(--border);border-radius:10px;padding:.75rem 1rem;margin-bottom:.5rem;background:white">
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
       <div style="flex:1;min-width:180px;cursor:pointer" title="Open file" onclick="openAnalysis('${r.id}')">
         <div style="font-weight:700">${anEsc(r.clients?.name || '(client)')}</div>

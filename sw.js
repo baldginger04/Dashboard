@@ -78,6 +78,12 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = (event.notification.data && event.notification.data.url) || '/';
   event.waitUntil((async () => {
+    // Cross-origin destinations (portal deep links) can't reuse an existing
+    // Triple window — open them directly in a new one.
+    if (/^https?:\/\//i.test(target)) {
+      if (self.clients.openWindow) await self.clients.openWindow(target);
+      return;
+    }
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of all) {
       if ('focus' in c) {
