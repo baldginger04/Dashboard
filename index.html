@@ -1861,7 +1861,27 @@ async function handlePushDeepLink() {
   } else if (dl.go === 'task' && dl.client && dl.id) {
     await openClient(dl.client);
     dlScrollToTask(dl.id, 0);
+  } else if (dl.go === 'cmsg' && dl.client) {
+    await openClient(dl.client);
+    showTab('messages');
+    loadMessages(dl.client);
+    if (dl.id) dlScrollToEl('cmsg_' + dl.id, 0);
+  } else if (dl.go === 'team') {
+    showPage('team');
+    if (dl.id) dlScrollToEl('tmsg_' + dl.id, 0);
   }
+}
+// Poll briefly for an element by id (message cards render async), then flash it.
+function dlScrollToEl(elId, tries) {
+  const el = document.getElementById(elId);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'box-shadow .4s ease';
+    el.style.boxShadow = '0 0 0 3px #D85B31';
+    setTimeout(() => { el.style.boxShadow = ''; }, 2600);
+    return;
+  }
+  if (tries < 16) setTimeout(() => dlScrollToEl(elId, tries + 1), 300);
 }
 // Find the task row once the client's list renders; if it isn't in the default
 // Current view, flip to Upcoming once, and keep polling briefly either way.
@@ -4660,7 +4680,7 @@ function mentionKeydown(e) {
   return false;
 }
 
-async function sendMentionEmail(mentionedName, author, context, body, imageUrl) {
+async function sendMentionEmail(mentionedName, author, context, body, imageUrl, link) {
   const u = taggableUsers.find(x => x.name === mentionedName);
   const toEmail = (u && u.email) || TEAM_EMAILS[mentionedName];
   if (!toEmail) return;
@@ -4674,7 +4694,7 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl) 
       <div style="border:1px solid #e2e5ea;border-top:none;border-radius:0 0 8px 8px;padding:20px">
         <p style="color:#666;font-size:13px;margin:0 0 12px"><strong>${author}</strong> mentioned you in <strong>${context}</strong></p>
         <div style="background:#f8f8f8;border-left:3px solid #D85B31;padding:12px 16px;border-radius:0 6px 6px 0;font-size:14px;color:#1a1c1e">${body}${imgHtml}</div>
-        <p style="margin:16px 0 0;font-size:13px"><a href="https://triple.baldginger.com" style="color:#1a5fa8;text-decoration:underline">View in Triple →</a></p>
+        <p style="margin:16px 0 0;font-size:13px"><a href="${link || 'https://triple.baldginger.com'}" style="color:#1a5fa8;text-decoration:underline">View in Triple →</a></p>
       </div>
     </div>`;
   try {
@@ -4798,7 +4818,7 @@ async function sendMsgReply(rootId) {
   }
   ta.value = '';
   clearReplyAttach(rootId);
-  if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, context, body, imageUrl); } }
+  if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, context, body, imageUrl, 'https://triple.baldginger.com/?go=cmsg&client=' + currentClientId); } }
   await loadMessages(currentClientId);
   loadPortalBadge();
 }
@@ -4905,7 +4925,7 @@ async function sendMessage(isInternal) {
   // Send mention emails
   const mentions = detectMentions(body);
   for (const name of mentions) {
-    if (name !== author) await sendMentionEmail(name, author, context, body, firstUrl);
+    if (name !== author) await sendMentionEmail(name, author, context, body, firstUrl, 'https://triple.baldginger.com/?go=cmsg&client=' + currentClientId);
   }
   await loadMessages(currentClientId);
   loadPortalBadge();
@@ -5007,7 +5027,7 @@ async function sendTeamReply(rootId) {
   if (error) { alert('Could not post reply: ' + error.message); return; }
   ta.value = '';
   clearReplyAttach(rootId);
-  if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, imageUrl); } }
+  if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, imageUrl, 'https://triple.baldginger.com/?go=team'); } }
   await loadTeamMessages();
 }
 function teamReplyKey(e, rootId) {
@@ -5078,7 +5098,7 @@ async function sendTeamMessage() {
   if (body) {
     const mentions = detectMentions(body);
     for (const name of mentions) {
-      if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, firstUrl);
+      if (name !== author) await sendMentionEmail(name, author, 'Team Chat', body, firstUrl, 'https://triple.baldginger.com/?go=team');
     }
   }
   await loadTeamMessages();
