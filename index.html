@@ -4444,8 +4444,9 @@ async function loadKPI(clientId) {
 }
 
 // ── MESSAGES ─────────────────────────────────────────────
-const RESEND_KEY = 're_hxzfDSMm_F6h84EHkG7S7QBwGLsqVw1Vj';
-const FROM_EMAIL = 'triple@baldginger.com';
+// (Resend key removed 7/14 — it was unused dead code from before smooth-endpoint
+// handled all sending, and had been exposed in this public repo. Never put API
+// keys in front-end files; the server-side key lives in Supabase secrets.)
 const TEAM_EMAILS = {
   'Ed Hattrup':     'ed@baldginger.com',
   'Jennifer Mills': 'jennifer@baldginger.com',
