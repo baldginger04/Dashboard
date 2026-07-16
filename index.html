@@ -650,7 +650,7 @@
           <span>📅</span> My Week <span class="nav-badge" id="myweekBadge" style="display:none">0</span>
         </div>
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients <span class="nav-badge" id="clientsBadge" style="display:none">0</span></div>
-        <div class="nav-item" onclick="openFirmSpace()" id="nav-firm"><span>🏢</span> Bald Ginger</div>
+        <div class="nav-item" onclick="openFirmSpace()" id="nav-firm"><span>🏢</span> Bald Ginger <span class="nav-badge" id="firmBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('analyses')" id="nav-analyses"><span>📋</span> Analyses <span class="nav-badge" id="analysesBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
         <div class="nav-section">Team</div>
@@ -2288,10 +2288,22 @@ function unsubscribeMyRealtime() {
 // "Unanswered" = an open (cleared=false) question thread whose most recent
 // message was posted by a non-team author. Team RLS lets us see every client's
 // messages, so this is a firm-wide count across all clients.
+// The firm's own client row(s), cached — its internal notes badge on the
+// Bald Ginger nav item, separate from the Clients badge.
+let __firmIds = null;
+async function getFirmClientIds() {
+  if (__firmIds) return __firmIds;
+  try {
+    const { data } = await sb.from('clients').select('id').eq('is_firm', true);
+    __firmIds = new Set((data || []).map((c) => c.id));
+  } catch (_) { return new Set(); }
+  return __firmIds;
+}
 async function loadPortalBadge() {
   const portalB = document.getElementById('portalBadge');
   const clientsB = document.getElementById('clientsBadge');
-  if (!portalB && !clientsB) return;
+  const firmB = document.getElementById('firmBadge');
+  if (!portalB && !clientsB && !firmB) return;
   try {
     const { data, error } = await sb
       .from('messages')
@@ -2301,19 +2313,31 @@ async function loadPortalBadge() {
 
     const me = getViewingUserName();
     const owned = myClientIdSet();
-    const sumOwned = (rows) => {
+    const firmIds = await getFirmClientIds();
+    const sumOwned = (rows, scope) => {
+      // scope: 'clients' = non-firm rows only (owned filter applies);
+      //        'firm'    = firm rows only (everyone sees the firm's notes);
+      //        'all'     = legacy behavior (portal badge; firm has no client-facing threads anyway)
       const { perClient } = bubbleCounts(rows, me);
       let c = 0;
-      Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) c += perClient[cid]; });
+      Object.keys(perClient).forEach((cid) => {
+        const isFirm = firmIds.has(cid);
+        if (scope === 'clients' && isFirm) return;
+        if (scope === 'firm' && !isFirm) return;
+        if (scope !== 'firm' && owned && !owned.has(cid)) return;
+        c += perClient[cid];
+      });
       return c;
     };
-    // Clients badge: ONLY internal team notes (is_internal=true). Client-facing
-    // conversations belong to the Client Portal badge, not here — the Clients
-    // area is for internal communication only.
+    // Clients badge: internal team notes on real clients. Firm-entity notes get
+    // their own badge on the Bald Ginger nav item, so the Clients number always
+    // matches the bubbles visible in the client list.
     // Client Portal badge: ONLY client-facing threads — internal team-only notes
     // never appear on the portal, so they must not bump that badge.
-    const clientsCount = sumOwned((data || []).filter(m => m.is_internal));
-    const portalCount  = sumOwned((data || []).filter(m => !m.is_internal));
+    const internal = (data || []).filter(m => m.is_internal);
+    const clientsCount = sumOwned(internal, 'clients');
+    const firmCount    = sumOwned(internal, 'firm');
+    const portalCount  = sumOwned((data || []).filter(m => !m.is_internal), 'all');
 
     const setBadge = (b, n) => {
       if (!b) return;
@@ -2321,8 +2345,9 @@ async function loadPortalBadge() {
       else b.style.display = 'none';
     };
     setBadge(clientsB, clientsCount);
+    setBadge(firmB, firmCount);
     setBadge(portalB, portalCount);
-    updateAppBadge(clientsCount + portalCount);
+    updateAppBadge(clientsCount + firmCount + portalCount);
   } catch (err) {
     console.error('loadPortalBadge error:', err);
     // Non-critical — leave whatever the badges currently show.
