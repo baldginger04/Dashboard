@@ -5371,8 +5371,9 @@ function showTab(name) {
 // SALES TAX — TX Mixed Beverage + Sales & Use computed from QBO via qbo-tax
 // ══════════════════════════════════════════════════════════
 // State: selected month (Date), loaded configs, computed results per client.
+// State: selected month (Date), loaded configs, saved filings, live results.
 let taxMonth = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d; })();
-const Tax = { cfgs: [], results: {} };
+const Tax = { cfgs: [], saved: {} };
 const TAX_EXCLUDED_GL_TYPES = ['sales tax payment', 'payment', 'bill payment', 'check', 'expense', 'transfer'];
 
 function taxKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
@@ -5381,6 +5382,11 @@ function taxQuarter(d) {
   const q = Math.floor(d.getMonth() / 3);
   const s = new Date(d.getFullYear(), q * 3, 1), e = new Date(d.getFullYear(), q * 3 + 3, 0);
   return { s, e, label: 'Q' + (q + 1) + ' ' + d.getFullYear() };
+}
+function taxPeriodKey(cfg) {
+  if (cfg.cadence !== 'quarterly') return taxKey(taxMonth);
+  const q = taxQuarter(taxMonth);
+  return taxKey(new Date(q.e.getFullYear(), q.e.getMonth(), 1));
 }
 function taxFmt(v) { return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function taxWhole(v) { return Math.round(v).toLocaleString('en-US'); }
@@ -5395,29 +5401,39 @@ async function loadTaxPage() {
     if (error) { list.innerHTML = '<div class="empty" style="color:var(--red)">Couldn\u2019t load tax configs \u2014 has tax-config-seed.sql been run?</div>'; return; }
     Tax.cfgs = (data || []).sort((a, b) => (a.clients?.name || '').localeCompare(b.clients?.name || ''));
   }
+  // Saved filings for every period visible under the selected month
+  Tax.saved = {};
+  const periods = [...new Set(Tax.cfgs.map(taxPeriodKey))];
+  try {
+    const { data: rows } = await sb.from('tax_filings').select('*').in('period', periods);
+    (rows || []).forEach(f => { Tax.saved[f.client_id + '|' + f.period] = f; });
+  } catch (_) { /* table may not exist yet */ }
   renderTaxList();
 }
-function taxShiftMonth(d) { taxMonth = new Date(taxMonth.getFullYear(), taxMonth.getMonth() + d, 1); Tax.results = {}; loadTaxPage(); }
+function taxShiftMonth(d) { taxMonth = new Date(taxMonth.getFullYear(), taxMonth.getMonth() + d, 1); loadTaxPage(); }
 
 function renderTaxList() {
   const list = document.getElementById('taxList');
   list.innerHTML = Tax.cfgs.map(cfg => {
     const name = cfg.clients?.name || '(client)';
-    const res = Tax.results[cfg.client_id];
+    const filing = Tax.saved[cfg.client_id + '|' + taxPeriodKey(cfg)];
     const quarterly = cfg.cadence === 'quarterly';
     const period = quarterly ? taxQuarter(taxMonth).label : taxLabel(taxMonth);
     const chips = [
       quarterly ? '<span style="font-size:.7rem;font-weight:700;color:#1B2A4B;background:#e8ecf5;border-radius:999px;padding:.15rem .55rem">Quarterly</span>' : '',
       cfg.mb_enabled ? '<span style="font-size:.7rem;font-weight:700;color:#6a4a8a;background:#efe8f7;border-radius:999px;padding:.15rem .55rem">MB</span>' : '',
       cfg.needs_review ? '<span title="' + taxEsc(cfg.notes || '') + '" style="font-size:.7rem;font-weight:700;color:#b26a00;background:#fbf0dd;border-radius:999px;padding:.15rem .55rem;cursor:help">Needs review</span>' : '',
+      filing ? (filing.status === 'filed'
+        ? '<span style="font-size:.7rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.15rem .55rem">Filed \u2713</span>'
+        : '<span style="font-size:.7rem;font-weight:700;color:#555;background:#eee;border-radius:999px;padding:.15rem .55rem">Computed</span>') : '',
     ].join(' ');
     return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:.6rem;background:white">'
       + '<div style="display:flex;align-items:center;gap:.6rem;padding:.7rem 1rem;flex-wrap:wrap">'
       + '<div style="font-weight:700;flex:1;min-width:160px">' + taxEsc(name) + '</div>' + chips
       + '<span style="font-size:.75rem;color:var(--muted,#888)">' + taxEsc(period) + '</span>'
-      + '<button onclick="runTax(\'' + cfg.client_id + '\')" id="taxRun_' + cfg.client_id + '" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.4rem .9rem;font-size:.8rem;font-weight:700;cursor:pointer">' + (res ? 'Re-run' : 'Run') + '</button>'
+      + '<button onclick="runTax(\'' + cfg.client_id + '\')" id="taxRun_' + cfg.client_id + '" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.4rem .9rem;font-size:.8rem;font-weight:700;cursor:pointer">' + (filing ? 'Re-run' : 'Run') + '</button>'
       + '</div>'
-      + '<div id="taxCard_' + cfg.client_id + '">' + (res ? renderTaxCard(cfg, res) : '') + '</div>'
+      + '<div id="taxCard_' + cfg.client_id + '">' + (filing ? renderTaxCard(cfg, filing.data.results, filing) : '') + '</div>'
       + '</div>';
   }).join('') || '<div class="empty">No tax clients configured.</div>';
 }
@@ -5438,24 +5454,23 @@ function computeTax(cfg, income, gl) {
   const grossAlc = liq + beer + wine;
   const ti = income.reduce((s, a) => s + a.amount, 0);
   const exempt = sum(R.exempt);
+  const alcOut = cfg.alcohol_subtraction === 'net' ? grossAlc - comps : grossAlc;
   let stBase;
   if (R.taxable_only && R.taxable_only.length) stBase = sum(R.taxable_only);
-  else stBase = ti - (cfg.alcohol_subtraction === 'net' ? grossAlc - comps : grossAlc) - exempt;
-  // MB return figures (whole dollars, as WebFile takes them)
+  else stBase = ti - (cfg.mb_enabled ? alcOut : 0) - exempt;
+  const totalTexas = cfg.mb_enabled ? ti - alcOut : ti;
   const mbTotal = Math.round(liq) + Math.round(wine) + Math.round(beer);
   const mbGrTax = mbTotal * 0.067;
   const mbStTax = mbTotal * 0.0825;
-  // Sales & Use
   const stTax = Math.round(stBase) * 0.0825;
   const disc = Number(cfg.timely_discount || 0.005);
   const stPayable = stTax * (1 - disc);
-  // Reconciliation: month's liability activity, payment-type lines excluded
   const counted = gl.filter(l => !TAX_EXCLUDED_GL_TYPES.includes((l.type || '').toLowerCase()));
   const excluded = gl.filter(l => TAX_EXCLUDED_GL_TYPES.includes((l.type || '').toLowerCase()));
   const collected = counted.reduce((s, l) => s + l.amount, 0);
   const collectedLessMb = cfg.mb_enabled ? collected - mbStTax : collected;
   const expense = stPayable - collectedLessMb;
-  return { liq, beer, wine, comps, grossAlc, ti, exempt, stBase, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense };
+  return { liq, beer, wine, comps, grossAlc, ti, exempt, alcOut, stBase, totalTexas, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense };
 }
 
 async function runTax(clientId) {
@@ -5482,51 +5497,110 @@ async function runTax(clientId) {
     if (data && data.error === 'not_connected') { card.innerHTML = '<div style="padding:.6rem 1rem;font-size:.82rem;color:#b26a00">QuickBooks isn\u2019t connected for this client yet.</div>'; return; }
     if (data && data.error === 'reauth_needed') { card.innerHTML = '<div style="padding:.6rem 1rem;font-size:.82rem;color:#b93232">QuickBooks needs to be reconnected.</div>'; return; }
     if (!data || !data.ok) throw new Error((data && (data.message || data.error)) || 'no result');
-    Tax.results[clientId] = computeTax(cfg, data.income || [], data.gl || []);
-    card.innerHTML = renderTaxCard(cfg, Tax.results[clientId]);
+    const results = computeTax(cfg, data.income || [], data.gl || []);
+    const period = taxPeriodKey(cfg);
+    const filing = {
+      client_id: clientId, period, cadence: cfg.cadence,
+      data: {
+        income: data.income || [], gl: data.gl || [], results,
+        config: { rules: cfg.rules, alcohol_subtraction: cfg.alcohol_subtraction, mb_enabled: cfg.mb_enabled, timely_discount: cfg.timely_discount, liability_accounts: cfg.liability_accounts },
+        range: { from, to },
+      },
+      status: 'computed', computed_at: new Date().toISOString(), computed_by: getViewingUserName(),
+      filed_at: null, filed_by: null,
+    };
+    const up = await sb.from('tax_filings').upsert(filing, { onConflict: 'client_id,period' });
+    if (up.error) throw new Error('computed, but saving failed: ' + up.error.message);
+    Tax.saved[clientId + '|' + period] = filing;
+    renderTaxList();
   } catch (e) {
     card.innerHTML = '<div style="padding:.6rem 1rem;font-size:.82rem;color:#b93232">Error: ' + taxEsc(e.message || e) + '</div>';
-  } finally { btn.disabled = false; btn.textContent = 'Re-run'; }
+    btn.disabled = false; btn.textContent = 'Re-run';
+  }
 }
 
 async function runAllTax() {
   for (const cfg of Tax.cfgs) {
-    // quarterly clients only run when the selected month closes their quarter
     if (cfg.cadence === 'quarterly' && (taxMonth.getMonth() % 3) !== 2) continue;
     await runTax(cfg.client_id);
   }
 }
 
-function renderTaxCard(cfg, r) {
-  const th = 'style="text-align:right;padding:4px 10px;font-size:.68rem;color:#888;text-transform:uppercase"';
-  const td = 'style="text-align:right;padding:4px 10px;font-weight:700"';
+async function markTaxFiled(clientId) {
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const period = taxPeriodKey(cfg);
+  const f = Tax.saved[clientId + '|' + period]; if (!f) return;
+  const filed = f.status !== 'filed';
+  const patch = filed
+    ? { status: 'filed', filed_at: new Date().toISOString(), filed_by: getViewingUserName() }
+    : { status: 'computed', filed_at: null, filed_by: null };
+  const { error } = await sb.from('tax_filings').update(patch).eq('client_id', clientId).eq('period', period);
+  if (error) { alert('Error: ' + error.message); return; }
+  Object.assign(f, patch);
+  renderTaxList();
+}
+
+// ── WebFile-replica rendering ──────────────────────────────────────────
+const WF_TH = 'style="background:#b8c8da;border:1px solid #8ba2ba;padding:6px 10px;font-size:.72rem;font-weight:700;color:#1a2b3c;text-align:center;vertical-align:bottom"';
+const WF_TD = 'style="border:1px solid #8ba2ba;padding:6px 10px;text-align:right;font-size:.85rem;background:#f4f7fa"';
+const WF_TDL = 'style="border:1px solid #8ba2ba;padding:6px 10px;text-align:left;font-size:.78rem;background:#f4f7fa"';
+function wfBlock(rows) {
+  return '<div style="text-align:right;font-size:.85rem;line-height:1.9;max-width:420px;margin-left:auto">'
+    + rows.map(([l, v, strong]) => '<div>' + taxEsc(l) + ' <span style="display:inline-block;min-width:110px;' + (strong ? 'font-weight:800;border-top:1px solid #333;border-bottom:3px double #333' : 'font-weight:700') + '">' + v + '</span></div>').join('')
+    + '</div>';
+}
+function renderTaxCard(cfg, r, filing) {
+  const name = cfg.clients?.name || '';
   let mb = '';
   if (cfg.mb_enabled) {
-    mb = '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.6rem 0 .25rem">Mixed Beverage Gross Receipts Tax</div>'
-      + '<table style="border-collapse:collapse"><tr><th ' + th + '>Complimentary</th><th ' + th + '>Liquor</th><th ' + th + '>Wine</th><th ' + th + '>Beer &amp; Malt</th><th ' + th + '>Total</th><th ' + th + '>Tax (6.7%)</th></tr>'
-      + '<tr><td ' + td + '>' + taxWhole(r.comps) + '</td><td ' + td + '>' + taxWhole(r.liq) + '</td><td ' + td + '>' + taxWhole(r.wine) + '</td><td ' + td + '>' + taxWhole(r.beer) + '</td><td ' + td + '>' + taxWhole(r.mbTotal) + '</td><td ' + td + ';color:#1B2A4B>' + taxFmt(r.mbGrTax) + '</td></tr></table>'
-      + '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.6rem 0 .25rem">Mixed Beverage Sales Tax</div>'
-      + '<div style="font-size:.85rem">Total / taxable sales <b>' + taxWhole(r.mbTotal) + '</b> \u00d7 8.25% = <b>' + taxFmt(r.mbStTax) + '</b></div>';
+    mb = '<div style="font-weight:800;font-size:.9rem;margin:.7rem 0 .3rem;font-family:Georgia,serif;color:#333">Mixed Beverage Gross Receipts Tax</div>'
+      + '<table style="border-collapse:collapse;width:100%"><tr>'
+      + '<th ' + WF_TH + '>Location</th><th ' + WF_TH + '>Complimentary Drinks</th><th ' + WF_TH + '>Gross Sales of Liquor</th><th ' + WF_TH + '>Gross Sales of Wine</th><th ' + WF_TH + '>Gross Sales of Beer and Malt Liquor</th><th ' + WF_TH + '>Cover Charges Subject to Gross Receipts</th><th ' + WF_TH + '>Total Gross Taxable</th></tr>'
+      + '<tr><td ' + WF_TDL + '>' + taxEsc(name) + '</td>'
+      + '<td ' + WF_TD + '>' + taxWhole(r.comps) + '</td><td ' + WF_TD + '>' + taxWhole(r.liq) + '</td><td ' + WF_TD + '>' + taxWhole(r.wine) + '</td><td ' + WF_TD + '>' + taxWhole(r.beer) + '</td><td ' + WF_TD + '>0</td>'
+      + '<td ' + WF_TD + ';font-weight:800>' + taxWhole(r.mbTotal) + '</td></tr></table>'
+      + '<div style="margin:.4rem 0 .2rem">' + wfBlock([
+        ['Total Taxable Amount:', taxFmt(r.mbTotal)],
+        ['Tax Rate:', 'x .0670'],
+        ['Total Tax Due:', '= ' + taxFmt(r.mbGrTax), true],
+      ]) + '</div>'
+      + '<div style="font-weight:800;font-size:.9rem;margin:.8rem 0 .3rem;font-family:Georgia,serif;color:#333">Mixed Beverage Sales Tax</div>'
+      + '<table style="border-collapse:collapse"><tr><th ' + WF_TH + '>Location</th><th ' + WF_TH + '>Total Sales</th><th ' + WF_TH + '>Taxable Sales</th></tr>'
+      + '<tr><td ' + WF_TDL + '>' + taxEsc(name) + '</td><td ' + WF_TD + '>' + taxWhole(r.mbTotal) + '</td><td ' + WF_TD + '>' + taxWhole(r.mbTotal) + '</td></tr></table>'
+      + '<div style="margin:.4rem 0 .2rem">' + wfBlock([
+        ['Tax Rate:', 'x .0825'],
+        ['Total Tax Due:', '= ' + taxFmt(r.mbStTax), true],
+      ]) + '</div>';
   }
-  const st = '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.6rem 0 .25rem">Sales &amp; Use Tax</div>'
+  const su = '<div style="font-weight:800;font-size:.9rem;margin:.8rem 0 .3rem;font-family:Georgia,serif;color:#333">Sales and Use Tax</div>'
+    + '<table style="border-collapse:collapse"><tr><th ' + WF_TH + '>Location</th><th ' + WF_TH + '>Total Texas Sales</th><th ' + WF_TH + '>Taxable Sales</th><th ' + WF_TH + '>Taxable Purchases</th></tr>'
+    + '<tr><td ' + WF_TDL + '>' + taxEsc(name) + '</td><td ' + WF_TD + '>' + taxWhole(r.totalTexas) + '</td><td ' + WF_TD + '>' + taxWhole(r.stBase) + '</td><td ' + WF_TD + '>0</td></tr></table>'
+    + '<div style="margin:.4rem 0 .2rem">' + wfBlock([
+      ['Tax (x .0825):', taxFmt(r.stTax)],
+      ['Timely filing discount (' + (r.disc * 100).toFixed(1) + '%):', '\u2212 ' + taxFmt(r.stTax - r.stPayable)],
+      ['Total Amount Due and Payable:', '= ' + taxFmt(r.stPayable), true],
+    ]) + '</div>';
+  const glRows = (r.counted || []).map(l => '<tr style="border-top:1px solid #f0f0f0"><td style="padding:3px 8px;white-space:nowrap">' + taxEsc(l.date) + '</td><td style="padding:3px 8px">' + taxEsc(l.type) + '</td><td style="padding:3px 8px">' + taxEsc(l.name) + '</td><td style="padding:3px 8px;color:#666">' + taxEsc(l.memo) + '</td><td style="padding:3px 8px;text-align:right">' + taxFmt(l.amount) + '</td></tr>').join('');
+  const exNote = (r.excluded || []).length ? '<div style="font-size:.72rem;color:#888;margin-top:2px">' + r.excluded.length + ' payment-type line(s) excluded from Collected</div>' : '';
+  const recon = '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.8rem 0 .25rem">Reconciliation</div>'
     + '<div style="font-size:.85rem;line-height:1.7">'
-    + 'Total income ' + taxFmt(r.ti)
-    + (cfg.mb_enabled ? ' \u2212 alcohol ' + taxFmt(cfg.alcohol_subtraction === 'net' ? r.grossAlc - r.comps : r.grossAlc) : '')
-    + (Math.abs(r.exempt) > 0.005 ? ' \u2212 exempt ' + taxFmt(r.exempt) : '')
-    + '<br>Taxable sales <b>' + taxWhole(r.stBase) + '</b> \u00d7 8.25% = ' + taxFmt(r.stTax)
-    + ' \u00b7 less ' + (r.disc * 100).toFixed(1) + '% timely discount \u2192 <b>Payable ' + taxFmt(r.stPayable) + '</b></div>';
-  const glRows = r.counted.map(l => '<tr style="border-top:1px solid #f0f0f0"><td style="padding:3px 8px;white-space:nowrap">' + taxEsc(l.date) + '</td><td style="padding:3px 8px">' + taxEsc(l.type) + '</td><td style="padding:3px 8px">' + taxEsc(l.name) + '</td><td style="padding:3px 8px;color:#666">' + taxEsc(l.memo) + '</td><td style="padding:3px 8px;text-align:right">' + taxFmt(l.amount) + '</td></tr>').join('');
-  const exNote = r.excluded.length ? '<div style="font-size:.72rem;color:#888;margin-top:2px">' + r.excluded.length + ' payment-type line(s) excluded from Collected</div>' : '';
-  const recon = '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.6rem 0 .25rem">Reconciliation</div>'
-    + '<div style="font-size:.85rem;line-height:1.7">'
-    + '<details><summary style="cursor:pointer">Sales tax collected (liability activity): <b>' + taxFmt(r.collected) + '</b> \u00b7 ' + r.counted.length + ' lines</summary>'
+    + '<details><summary style="cursor:pointer">Sales tax collected (liability activity): <b>' + taxFmt(r.collected) + '</b> \u00b7 ' + (r.counted || []).length + ' lines</summary>'
     + '<table style="border-collapse:collapse;font-size:.78rem;margin:.3rem 0">' + glRows + '</table>' + exNote + '</details>'
     + (cfg.mb_enabled ? 'Less MB sales tax ' + taxFmt(r.mbStTax) + ' \u2192 ' + taxFmt(r.collectedLessMb) + '<br>' : '')
     + 'vs payable ' + taxFmt(r.stPayable) + ' \u2192 <b style="color:' + (Math.abs(r.expense) < 1 ? '#1e7a45' : (r.expense > 0 ? '#b26a00' : '#b93232')) + '">Sales tax expense ' + taxFmt(r.expense) + '</b></div>';
+  let stamp = '';
+  if (filing) {
+    const d = s => s ? new Date(s).toLocaleDateString() : '';
+    stamp = '<div style="display:flex;align-items:center;gap:.6rem;margin-top:.7rem;flex-wrap:wrap">'
+      + '<span style="font-size:.75rem;color:var(--muted,#888)">Computed ' + d(filing.computed_at) + (filing.computed_by ? ' by ' + taxEsc(filing.computed_by) : '') + (filing.status === 'filed' ? ' \u00b7 Filed ' + d(filing.filed_at) + (filing.filed_by ? ' by ' + taxEsc(filing.filed_by) : '') : '') + '</span>'
+      + '<div style="flex:1"></div>'
+      + '<button onclick="markTaxFiled(\'' + cfg.client_id + '\')" style="border:1px solid ' + (filing.status === 'filed' ? 'var(--border);color:#555;background:white' : '#1e7a45;color:#1e7a45;background:white') + ';border-radius:7px;padding:.35rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">' + (filing.status === 'filed' ? 'Unmark filed' : 'Mark filed \u2713') + '</button>'
+      + '</div>';
+  }
   const note = cfg.notes ? '<div style="font-size:.75rem;color:#8a5a00;background:#fbf0dd;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u26a0\ufe0f ' + taxEsc(cfg.notes) + '</div>' : '';
-  return '<div style="padding:.2rem 1rem .9rem;border-top:1px solid var(--border)">' + mb + st + recon + note + '</div>';
+  return '<div style="padding:.2rem 1rem .9rem;border-top:1px solid var(--border)">' + mb + su + recon + stamp + note + '</div>';
 }
-window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth;
+window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth; window.markTaxFiled = markTaxFiled;
 
 // ══════════════════════════════════════════════════════════
 // CLIENT ANALYSES — month-end review queue (team upload -> owner review)
