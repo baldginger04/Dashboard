@@ -5458,7 +5458,11 @@ function computeTax(cfg, income, gl) {
   let stBase;
   if (R.taxable_only && R.taxable_only.length) stBase = sum(R.taxable_only);
   else stBase = ti - (cfg.mb_enabled ? alcOut : 0) - exempt;
-  const totalTexas = cfg.mb_enabled ? ti - alcOut : ti;
+  // Total Texas Sales mirrors what actually gets keyed into WebFile: the
+  // taxable composition (food + N/A bev + merch + client specials, net of ALL
+  // discounts incl. alcohol comps) — identical to the taxable base. Exception:
+  // taxable_only clients (e.g. parts vs services) report full income as Total.
+  const totalTexas = (R.taxable_only && R.taxable_only.length) ? ti : stBase;
   const mbTotal = Math.round(liq) + Math.round(wine) + Math.round(beer);
   const mbGrTax = mbTotal * 0.067;
   const mbStTax = mbTotal * 0.0825;
