@@ -5448,11 +5448,14 @@ function taxMatch(rulesList, acct) {
 
 function computeTax(cfg, income, gl) {
   const R = cfg.rules || {};
-  const sum = (list) => income.filter(a => taxMatch(list, a)).reduce((s, a) => s + a.amount, 0);
+  // Other Income rows (tagged by qbo-tax) count ONLY when this client's
+  // include_other rule names them — interest income etc. stays below the line.
+  const inc = (income || []).filter(a => !a.other || taxMatch(R.include_other, a));
+  const sum = (list) => inc.filter(a => taxMatch(list, a)).reduce((s, a) => s + a.amount, 0);
   const liq = sum(R.mb_liquor), beer = sum(R.mb_beer), wine = sum(R.mb_wine);
   const comps = Math.abs(sum(R.mb_comps));
   const grossAlc = liq + beer + wine;
-  const ti = income.reduce((s, a) => s + a.amount, 0);
+  const ti = inc.reduce((s, a) => s + a.amount, 0);
   const exempt = sum(R.exempt);
   const alcOut = cfg.alcohol_subtraction === 'net' ? grossAlc - comps : grossAlc;
   let stBase;
