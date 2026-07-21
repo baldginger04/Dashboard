@@ -319,7 +319,7 @@
     .myday-col-body{display:flex;flex-direction:column;gap:6px}
     .myday-col-empty{font-size:12px;color:var(--text3);text-align:center;padding:1rem 0;font-style:italic}
     /* Tighter row: title and client name on the same line */
-    .myday-item{background:white;border:1px solid var(--border);border-radius:7px;padding:.5rem .75rem;display:flex;align-items:center;gap:10px;transition:all .15s;font-size:13px}
+    .myday-item{background:white;border:1px solid var(--border);border-radius:7px;padding:.5rem .75rem;display:flex;align-items:flex-start;gap:10px;transition:all .15s;font-size:13px}
     .myday-item:hover{border-color:var(--accent);box-shadow:0 1px 4px rgba(200,81,26,.08)}
     .myday-item.overdue-item{border-color:var(--red-border);background:var(--red-bg)}
     .myday-item.warning-item{border-color:var(--yellow-border);background:var(--yellow-bg)}
@@ -347,8 +347,11 @@
     .myday-item.is-stuck{border-color:var(--red-border);background:var(--red-bg)}
     /* The check + chevron live in a positioned wrapper so the popover anchors right. */
     .myday-status-grp{position:relative;display:flex;align-items:center;flex-shrink:0}
-    .myday-title{flex:1;min-width:0;font-weight:500;color:var(--text);white-space:normal;word-break:break-word;line-height:1.35;font-size:13px}
-    .myday-client-inline{font-size:12px;color:var(--navy);font-weight:500;white-space:normal;word-break:break-word;max-width:40%;flex-shrink:0;text-align:right}
+    .myday-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+    .myday-title{font-weight:500;color:var(--text);white-space:normal;overflow-wrap:break-word;line-height:1.35;font-size:13px}
+    .myday-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+    .myday-meta > :last-child{margin-left:auto}
+    .myday-client-inline{font-size:12px;color:var(--navy);font-weight:500;white-space:normal;overflow-wrap:break-word}
     .myday-due{font-size:11px;white-space:nowrap;flex-shrink:0}
     @media (max-width: 900px){
       .myday-kanban{grid-template-columns:1fr}
@@ -2951,12 +2954,16 @@ function mydayItem(t, today) {
       ${chevron}
       ${statusMenu}
     </div>
-    <div class="myday-title">${t.title}</div>
-    ${statusPill}
-    ${clientLabel}
-    ${t.isParent && t.prog ? `<span class="myday-client-inline" style="color:var(--text3)">${t.prog.done} of ${t.prog.total} steps done</span>` : ''}
-    ${dueLabel}
-    ${editBtn}
+    <div class="myday-main">
+      <div class="myday-title">${t.title}</div>
+      <div class="myday-meta">
+        ${statusPill}
+        ${clientLabel}
+        ${t.isParent && t.prog ? `<span class="myday-client-inline" style="color:var(--text3)">${t.prog.done} of ${t.prog.total} steps done</span>` : ''}
+        ${dueLabel}
+        ${editBtn}
+      </div>
+    </div>
   </div>`;
 }
 
