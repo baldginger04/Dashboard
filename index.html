@@ -6974,15 +6974,15 @@ init();
   const fmtMoney = n => '$' + Math.round(n).toLocaleString('en-US');
   const setStatus = (m, err) => { const s = $('txsStatus'); if (s) { s.textContent = m; s.className = err ? 'err' : ''; } };
   const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
-  const escRx = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-  // Build exclusion regexes from the live clients list each load, so new
-  // clients are excluded automatically with no code changes.
-  function clientRegexes(){
+  // Punctuation-insensitive matching: the comptroller's data usually drops
+  // apostrophes and periods ("MURRAYS" for "Murray's"), so both sides are
+  // normalized to bare A-Z/0-9 before comparing.
+  const normName = s => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  function clientNorms(){
     try {
       const names = (typeof allClients !== 'undefined' && Array.isArray(allClients))
         ? allClients.map(c => c && c.name).filter(Boolean) : [];
-      return names.map(n => new RegExp(escRx(n).replace(/\s+/g, '\\s*'), 'i'));
+      return names.map(normName).filter(n => n.length >= 4); // skip tiny names that would over-match
     } catch (e) { return []; }
   }
 
@@ -7038,7 +7038,7 @@ init();
       if (!data.length) throw new Error('Query returned no rows for that window.');
 
       periods = [...new Set(data.map(r => r.obligation_end_date_yyyymmdd))].sort();
-      const CLIENT_RX = clientRegexes();
+      const CLIENT_NORMS = clientNorms();
       const map = new Map();
       for (const r of data) {
         const key = r.tabc_permit_number || ((r.location_name || '') + '|' + (r.location_address || ''));
@@ -7071,7 +7071,8 @@ init();
         }
         return { ...e, months: ps.length, gaps, avg, t12: total, trend, isNew: first > periods[0],
           pulllocs: pullByTp.get(e.tpn) || 1,
-          isClient: CLIENT_RX.some(rx => rx.test(e.name) || rx.test(e.taxpayer)) };
+          isClient: (() => { const a = normName(e.name), t = normName(e.taxpayer);
+            return CLIENT_NORMS.some(c => a.includes(c) || t.includes(c)); })() };
       });
       txCounts = null;
       $('txsCheck').disabled = false; $('txsCsv').disabled = false; $('txsSummary').hidden = false;
