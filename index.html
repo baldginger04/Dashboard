@@ -609,7 +609,7 @@
     #page-prospects .txs-stat b{font-size:20px;font-weight:700;display:block;line-height:1.15;color:var(--text)}
     #page-prospects .txs-stat span{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3)}
     #page-prospects .txs-tblwrap{overflow-x:auto;background:var(--bg2);border:1px solid var(--border);border-radius:10px}
-    #page-prospects table.txs-tbl{border-collapse:collapse;width:100%;min-width:1120px;font-size:12.5px}
+    #page-prospects table.txs-tbl{border-collapse:collapse;width:100%;min-width:1190px;font-size:12.5px}
     #page-prospects .txs-tbl th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:.55rem .65rem;background:var(--bg3);color:var(--text2);border-bottom:1px solid var(--border2);cursor:pointer;white-space:nowrap;position:sticky;top:0}
     #page-prospects .txs-tbl th .dir{color:var(--accent)}
     #page-prospects .txs-tbl td{padding:.5rem .65rem;border-bottom:1px solid var(--border);vertical-align:top;white-space:nowrap}
@@ -963,6 +963,7 @@
             <thead><tr>
               <th data-k="name">Location</th><th data-k="addr">Address</th><th data-k="city">City</th>
               <th data-k="zip">Zip</th><th data-k="avg" class="num">Avg receipts / mo</th>
+              <th data-k="t12" class="num">T12 receipts</th>
               <th data-k="est" class="num">Est. annual rev</th>
               <th data-k="months" class="num">Periods filed</th>
               <th data-k="trend" class="num">Trend</th>
@@ -970,16 +971,19 @@
               <th data-k="txlocs" class="num">TX locs</th>
               <th data-k="flags">Flags</th><th data-k="taxpayer">Taxpayer</th>
             </tr></thead>
-            <tbody id="txsRows"><tr><td colspan="12" style="text-align:center;color:var(--text3);padding:1.8rem">
+            <tbody id="txsRows"><tr><td colspan="13" style="text-align:center;color:var(--text3);padding:1.8rem">
               Enter zip code(s) and press “Load zip data” to pull the trailing 12 filing periods.</td></tr></tbody>
           </table>
         </div>
-        <p class="txs-note"><b>Reading the numbers.</b> Receipts are alcohol (+cover) sales only. Est. annual revenue
+        <p class="txs-note"><b>Reading the numbers.</b> Receipts are alcohol (+cover) sales only. <b>T12 receipts</b> is the actual
+          sum reported over the trailing 12 filing periods; <b>Avg receipts / mo</b> is that total divided by
+          periods filed (for a clean 12/12 filer, avg &times; 12 = T12). Est. annual revenue
           = avg monthly receipts &times; 12 &divide; alcohol share — type any % or use a preset. Beer/wine-only and
           no-alcohol spots hold no mixed-bev permit and won’t appear. <b>Gaps</b> = fewer filings than periods since
           the location’s first filing in the window (possible late/erratic filer — hot lead). <b>New</b> = first
           filing inside the window. Current Bald Ginger clients are struck through automatically. “TX locs” fills
-          in after the statewide check.</p>
+          in after the statewide check, which scans the full trailing 12 months so a location that filed late
+          still counts.</p>
       </div>
 
       <div class="page" id="page-team">
@@ -7065,7 +7069,7 @@ init();
                 b = vals.slice(-6, -3).reduce((x, y) => x + y, 0) / 3;
           if (b > 0) trend = (a - b) / b;
         }
-        return { ...e, months: ps.length, gaps, avg, trend, isNew: first > periods[0],
+        return { ...e, months: ps.length, gaps, avg, t12: total, trend, isNew: first > periods[0],
           pulllocs: pullByTp.get(e.tpn) || 1,
           isClient: CLIENT_RX.some(rx => rx.test(e.name) || rx.test(e.taxpayer)) };
       });
@@ -7086,10 +7090,11 @@ init();
       $('txsCheck').disabled = true;
       txCounts = txCounts || new Map();
       const latest = periods[periods.length - 1];
+      const earliest = periods[0];
       for (let i = 0; i < tps.length; i += 40) {
         const batch = tps.slice(i, i + 40).map(t => "'" + t.replace(/'/g, "''") + "'").join(',');
         const res = await soda({ '$select': 'taxpayer_number,tabc_permit_number',
-          '$where': "taxpayer_number in(" + batch + ") AND obligation_end_date_yyyymmdd='" + latest + "'",
+          '$where': "taxpayer_number in(" + batch + ") AND obligation_end_date_yyyymmdd between '" + earliest + "' and '" + latest + "'",
           '$limit': 50000 });
         const seen = new Map();
         for (const r of res) {
@@ -7140,21 +7145,22 @@ init();
         '<td class="nm">' + escHtml(r.name) + '</td><td class="ad">' + escHtml(r.addr) + '</td>' +
         '<td>' + escHtml(r.city) + '</td><td>' + r.zip + '</td>' +
         '<td class="num avg">' + fmtMoney(r.avg) + '</td>' +
+        '<td class="num">' + fmtMoney(r.t12) + '</td>' +
         '<td class="num">' + fmtMoney(r.est) + '</td>' +
         '<td class="num">' + r.months + '/' + periods.length + '</td>' +
         '<td class="num">' + tr + '</td><td class="num">' + r.pulllocs + '</td>' +
         '<td class="num">' + (r.txlocs == null ? '&ndash;' : r.txlocs) + '</td>' +
         '<td>' + flags.join('') + '</td><td class="tp">' + escHtml(r.taxpayer) + '</td></tr>';
-    }).join('') || '<tr><td colspan="12" style="text-align:center;padding:1.5rem;color:var(--text3)">No rows match the current filters.</td></tr>';
+    }).join('') || '<tr><td colspan="13" style="text-align:center;padding:1.5rem;color:var(--text3)">No rows match the current filters.</td></tr>';
   }
 
   function exportCSV(){
     const list = currentRows();
     const q = s => '"' + String(s).replace(/"/g, '""') + '"';
-    const head = ['location','address','city','zip','avg_monthly_receipts','est_annual_revenue',
+    const head = ['location','address','city','zip','avg_monthly_receipts','t12_receipts','est_annual_revenue',
       'periods_filed','of_periods','gaps','trend_pct','locs_in_pull','tx_locations','in_band','taxpayer','taxpayer_number'];
     const lines = [head.join(',')].concat(list.map(r => [
-      q(r.name), q(r.addr), q(r.city), r.zip, Math.round(r.avg), Math.round(r.est), r.months,
+      q(r.name), q(r.addr), q(r.city), r.zip, Math.round(r.avg), Math.round(r.t12), Math.round(r.est), r.months,
       periods.length, r.gaps, r.trend == null ? '' : Math.round(r.trend * 100), r.pulllocs,
       r.txlocs == null ? '' : r.txlocs, r.inBand ? 'Y' : 'N', q(r.taxpayer), q(r.tpn)].join(',')));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
