@@ -1066,6 +1066,7 @@
               <div class="txs-field"><label for="plSearch">Search</label>
                 <input type="text" id="plSearch" placeholder="name / owner / address" style="width:200px"></div>
               <button class="txs-ghost" id="plRefresh" style="margin-top:14px">Refresh</button>
+              <button class="txs-ghost" id="plCsv" style="margin-top:14px">Download CSV</button>
               <span id="plStatus" style="font-size:12px;color:var(--text3);margin-top:14px"></span>
             </div>
           </div>
@@ -7721,6 +7722,24 @@ init();
   });
   $('plSearch').addEventListener('input', render);
   $('plRefresh').addEventListener('click', () => loadRows());
+  $('plCsv').addEventListener('click', () => {
+    const q = s => '"' + String(s ?? '').replace(/"/g, '""') + '"';
+    const head = ['starred','status','name','address','city','zip','phone','issued','source',
+      'type_or_naics','owner_taxpayer','taxpayer_number','legal_name','mailing_address',
+      'sos_file_number','registered_agent','next_follow_up','notes','first_seen'];
+    const lines = [head.join(',')].concat(visible().map(r => [
+      r.starred ? 'Y' : '', q(r.status || 'new'), q(r.name), q(r.address), q(r.city), q(r.zip),
+      q(r.phone), String(r.issued || '').slice(0, 10), q(r.source), q(r.detail),
+      q(r.owner_taxpayer), q(r.taxpayer_number), q(r.legal_name), q(r.mailing_address),
+      q(r.sos_file_number), q(r.registered_agent), String(r.next_follow_up || '').slice(0, 10),
+      q(r.notes), String(r.first_seen || '').slice(0, 10)].join(',')));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'permit-pipeline-' + new Date().toISOString().slice(0, 10) + '.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
 })();
 </script>
 </body>
