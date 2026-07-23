@@ -629,6 +629,8 @@
     #page-prospects .txs-note{font-size:12px;color:var(--text3);margin-top:.8rem;max-width:880px;line-height:1.55}
 
     #page-prospects .txs-views{display:flex;gap:6px;margin-bottom:1rem}
+    #page-prospects #plTbl td input,#page-prospects #plTbl td select{font:inherit;font-size:12px;padding:.3rem .45rem;border:1px solid var(--border2);border-radius:5px;background:var(--bg);color:var(--text)}
+    #page-prospects .pl-star{user-select:none}
   </style>
 </head>
 <body>
@@ -930,6 +932,7 @@
         <div class="txs-views">
           <button class="txs-chip" id="txsViewBtnScreener" aria-pressed="true">Mixed Beverage Gross Receipts Search</button>
           <button class="txs-chip" id="txsViewBtnPermits" aria-pressed="false">New Permits</button>
+          <button class="txs-chip" id="txsViewBtnPipeline" aria-pressed="false">Pipeline</button>
         </div>
         <div id="txsViewScreener">
         <div class="txs-panel">
@@ -1016,17 +1019,15 @@
           </div>
           <div class="txs-panel">
             <div class="txs-controls" style="align-items:center">
-              <div class="txs-field"><label for="txpWatchZips">Alert zips (checked at every login)</label>
+              <div class="txs-field"><label for="txpWatchZips">Watched zips (daily collection + login badge)</label>
                 <input type="text" id="txpWatchZips" placeholder="76104, 76102" style="width:260px"></div>
-              <div class="txs-field"><label for="txpEmail">Alert email</label>
-                <input type="text" id="txpEmail" placeholder="ed@baldginger.com" style="width:220px"></div>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer;margin-top:14px">
-                <input type="checkbox" id="txpAlerts"> Alert me on new permits</label>
+                <input type="checkbox" id="txpAlerts"> Watch these zips</label>
               <span id="txpWatchStatus" style="font-size:12px;color:var(--text3);margin-top:14px"></span>
             </div>
-            <div class="txs-note" style="margin-top:.5rem">When enabled, you get two alert channels: a daily email digest (sent each morning if your watched zips
-              have new permits, with entity details pulled from state records) and a count badge on the 🎯 Prospects
-              nav item each time you open Triple. Opening this view clears the badge.</div>
+            <div class="txs-note" style="margin-top:.5rem">When enabled, new permits in your watched zips are collected into the Pipeline every morning
+              (enriched with state entity records), and a count badge appears on the 🎯 Prospects nav item at
+              login for anything new since you last looked. Opening this view clears the badge.</div>
           </div>
           <div class="txs-tblwrap">
             <table class="txs-tbl" id="txpTbl" style="min-width:1000px">
@@ -1045,6 +1046,43 @@
             search can’t see. TABC rows come from the state license file; the Type column shows the license class.
             A brand-new permit with no sales history yet usually means the place is still in build-out — the single
             best moment to introduce a bookkeeper. Current clients are struck through.</p>
+        </div>
+
+        <div id="txsViewPipeline" style="display:none">
+          <div class="txs-panel">
+            <div class="txs-controls" style="align-items:center">
+              <div class="txs-field"><label>Status</label>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="txs-chip pl-filter" data-status="all" aria-pressed="true">All</button>
+                  <button class="txs-chip pl-filter" data-status="new" aria-pressed="false">New</button>
+                  <button class="txs-chip pl-filter" data-status="contacted" aria-pressed="false">Contacted</button>
+                  <button class="txs-chip pl-filter" data-status="meeting" aria-pressed="false">Meeting</button>
+                  <button class="txs-chip pl-filter" data-status="proposal" aria-pressed="false">Proposal</button>
+                  <button class="txs-chip pl-filter" data-status="won" aria-pressed="false">Won</button>
+                  <button class="txs-chip pl-filter" data-status="lost" aria-pressed="false">Lost</button>
+                  <button class="txs-chip pl-filter" data-status="ignore" aria-pressed="false">Ignore</button>
+                </div></div>
+              <button class="txs-chip" id="plStarOnly" aria-pressed="false" style="margin-top:14px">★ Starred only</button>
+              <div class="txs-field"><label for="plSearch">Search</label>
+                <input type="text" id="plSearch" placeholder="name / owner / address" style="width:200px"></div>
+              <button class="txs-ghost" id="plRefresh" style="margin-top:14px">Refresh</button>
+              <span id="plStatus" style="font-size:12px;color:var(--text3);margin-top:14px"></span>
+            </div>
+          </div>
+          <div class="txs-tblwrap">
+            <table class="txs-tbl" id="plTbl" style="min-width:1080px">
+              <thead><tr>
+                <th style="width:30px">★</th><th>Lead</th><th>Address</th><th>Phone</th>
+                <th>Status</th><th>Follow-up</th><th>Notes</th><th>First seen</th>
+              </tr></thead>
+              <tbody id="plRows"><tr><td colspan="8" style="text-align:center;color:var(--text3);padding:1.8rem">
+                Loading pipeline…</td></tr></tbody>
+            </table>
+          </div>
+          <p class="txs-note"><b>How this works.</b> The pipeline fills itself: every morning, new restaurant and bar
+            permits in your watched zips are added automatically (showing <span id="plCount">–</span> matching
+            leads). Star the promising ones, set a status and follow-up date, and leave notes — changes save
+            instantly and both of you see the same board. Filter to a status to build a call list.</p>
         </div>
       </div>
 
@@ -2020,7 +2058,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); }
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); }
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -7237,7 +7275,7 @@ init();
   // Called from showPage('prospects'). Wires listeners once; the tab itself is
   // only reachable by Ed because nav-prospects stays display:none for the team.
   window.TxProspectsOpen = function(){
-    if (typeof isAdmin === 'function' && !isAdmin()) return;
+    if (window.canSeeProspects && !window.canSeeProspects()) return;
     if (wired) return;
     wired = true;
     document.querySelectorAll('#page-prospects .txs-chip[data-share]').forEach(c => c.addEventListener('click', () => {
@@ -7289,6 +7327,14 @@ init();
   const SALES_BASE = 'https://data.texas.gov/resource/jrea-zgmq.json';
   const TABC_BASE  = 'https://data.texas.gov/resource/7hf9-qc9f.json';
   const APP_TOKEN  = 'lpwML3rQ0D4fdeuDQSZgMtNYt';
+
+  // Prospects tab access: Ed + Lydia
+  window.canSeeProspects = function(){
+    try {
+      const e = ((typeof currentUser !== 'undefined' && currentUser && currentUser.email) || '').toLowerCase();
+      return e === 'ed@baldginger.com' || e === 'lydia@baldginger.com';
+    } catch (err) { return false; }
+  };
   let rows = [], sortK = 'date', sortDir = -1, settingsLoaded = false;
 
   const $ = id => document.getElementById(id);
@@ -7508,7 +7554,6 @@ init();
       if (data) {
         $('txpWatchZips').value = data.watched_zips || '';
         $('txpAlerts').checked = !!data.alerts_enabled;
-        $('txpEmail').value = data.alert_email || '';
       }
     } catch (e) { /* table may not exist yet; saving will surface the error */ }
   }
@@ -7518,8 +7563,7 @@ init();
       const { error } = await sb.from('prospect_watch').upsert({
         id: 1,
         watched_zips: $('txpWatchZips').value.trim(),
-        alerts_enabled: $('txpAlerts').checked,
-        alert_email: $('txpEmail').value.trim()
+        alerts_enabled: $('txpAlerts').checked
       });
       $('txpWatchStatus').textContent = error ? ('Save failed: ' + error.message) : 'Saved \u2713';
     } catch (e) { $('txpWatchStatus').textContent = 'Save failed'; }
@@ -7536,7 +7580,7 @@ init();
   // Runs once per login from showApp()'s isAdmin() block.
   window.TxPermitsBootCheck = async function(){
     try {
-      if (typeof isAdmin === 'function' && !isAdmin()) return;
+      if (window.canSeeProspects && !window.canSeeProspects()) return;
       if (typeof sb === 'undefined') return;
       const { data } = await sb.from('prospect_watch').select('*').eq('id', 1).maybeSingle();
       if (!data || !data.alerts_enabled) return;
@@ -7557,12 +7601,17 @@ init();
   function setView(which){
     $('txsViewScreener').style.display = which === 's' ? '' : 'none';
     $('txsViewPermits').style.display = which === 'p' ? '' : 'none';
+    $('txsViewPipeline').style.display = which === 'pl' ? '' : 'none';
     $('txsViewBtnScreener').setAttribute('aria-pressed', which === 's' ? 'true' : 'false');
     $('txsViewBtnPermits').setAttribute('aria-pressed', which === 'p' ? 'true' : 'false');
-    if (which === 'p' && (typeof isAdmin !== 'function' || isAdmin())) { loadSettings(); markSeen(); }
+    $('txsViewBtnPipeline').setAttribute('aria-pressed', which === 'pl' ? 'true' : 'false');
+    if (!window.canSeeProspects || !window.canSeeProspects()) return;
+    if (which === 'p') { loadSettings(); markSeen(); }
+    if (which === 'pl' && window.TxPipelineOpen) { window.TxPipelineOpen(); markSeen(); }
   }
   $('txsViewBtnScreener').addEventListener('click', () => setView('s'));
   $('txsViewBtnPermits').addEventListener('click', () => setView('p'));
+  $('txsViewBtnPipeline').addEventListener('click', () => setView('pl'));
   [$('txpSrcSales'), $('txpSrcTabc'), $('txpSrcPending')].forEach(c => c.addEventListener('click', () =>
     c.setAttribute('aria-pressed', c.getAttribute('aria-pressed') === 'true' ? 'false' : 'true')));
   $('txpZips').addEventListener('keydown', e => { if (e.key === 'Enter') loadPermits(); });
@@ -7571,12 +7620,107 @@ init();
   $('txpSearch').addEventListener('input', render);
   $('txpWatchZips').addEventListener('change', saveSettings);
   $('txpAlerts').addEventListener('change', saveSettings);
-  $('txpEmail').addEventListener('change', saveSettings);
   document.querySelectorAll('#txpTbl th[data-pk]').forEach(th => th.addEventListener('click', () => {
     const k = th.dataset.pk;
     if (sortK === k) sortDir *= -1; else { sortK = k; sortDir = (k === 'date') ? -1 : 1; }
     render();
   }));
+})();
+
+/* ============================================================
+   PIPELINE VIEW — shared prospect board (Ed + Lydia)
+   Reads/writes the prospect_permits table, which the daily
+   permit-alerts collector fills. Star / status / follow-up /
+   notes save on change via Supabase.
+   ============================================================ */
+(function(){
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+  const STATUSES = ['new','contacted','meeting','proposal','won','lost','ignore'];
+  let rows = [], statusFilter = 'all', starOnly = false, loaded = false;
+
+  window.TxPipelineOpen = async function(force){
+    if (window.canSeeProspects && !window.canSeeProspects()) return;
+    if (!loaded || force) await loadRows();
+  };
+
+  async function loadRows(){
+    try {
+      $('plStatus').textContent = 'Loading…';
+      const { data, error } = await sb.from('prospect_permits').select('*')
+        .order('issued', { ascending: false }).limit(2000);
+      if (error) throw error;
+      rows = data || []; loaded = true;
+      $('plStatus').textContent = rows.length + ' leads in pipeline.';
+      render();
+    } catch (e) {
+      $('plStatus').textContent = 'Load failed: ' + (e.message || e) + ' — has pipeline-upgrade.sql been run?';
+    }
+  }
+
+  function visible(){
+    const q = ($('plSearch').value || '').trim().toUpperCase();
+    return rows.filter(r => {
+      if (statusFilter !== 'all' && (r.status || 'new') !== statusFilter) return false;
+      if (starOnly && !r.starred) return false;
+      if (q && !((r.name || '').toUpperCase().includes(q) || (r.owner_taxpayer || '').toUpperCase().includes(q)
+        || (r.address || '').toUpperCase().includes(q))) return false;
+      return true;
+    });
+  }
+
+  async function save(id, patch, cell){
+    try {
+      const { error } = await sb.from('prospect_permits').update(patch).eq('id', id);
+      if (error) throw error;
+      const r = rows.find(x => x.id === id);
+      if (r) Object.assign(r, patch);
+      if (cell) { cell.style.outline = '2px solid var(--green)'; setTimeout(() => { cell.style.outline = ''; }, 600); }
+    } catch (e) { alert('Save failed: ' + (e.message || e)); }
+  }
+
+  function render(){
+    const list = visible();
+    $('plCount').textContent = list.length;
+    $('plRows').innerHTML = list.map(r => {
+      const sel = '<select class="pl-status" data-id="' + r.id + '">' +
+        STATUSES.map(s => '<option value="' + s + '"' + (((r.status || 'new') === s) ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>';
+      return '<tr>' +
+        '<td class="pl-star" data-id="' + r.id + '" style="cursor:pointer;font-size:16px;color:var(--amber)">' + (r.starred ? '\u2605' : '\u2606') + '</td>' +
+        '<td class="nm">' + esc(r.name) + '<div style="font-weight:400;font-size:11px;color:var(--text3)">' + esc(r.source) + ' \u00b7 issued ' + String(r.issued || '').slice(0, 10) + '</div></td>' +
+        '<td class="ad">' + esc(r.address) + ', ' + esc(r.city) + ' ' + esc(r.zip) + '</td>' +
+        '<td>' + esc(r.phone || '') + '</td>' +
+        '<td>' + sel + '</td>' +
+        '<td><input type="date" class="pl-fu" data-id="' + r.id + '" value="' + esc(r.next_follow_up || '') + '"></td>' +
+        '<td><input type="text" class="pl-notes" data-id="' + r.id + '" value="' + esc(r.notes || '') + '" placeholder="notes\u2026" style="width:200px"></td>' +
+        '<td style="font-size:11px;color:var(--text3)">' + String(r.first_seen || '').slice(0, 10) + '</td></tr>';
+    }).join('') || '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text3)">No leads match.</td></tr>';
+
+    document.querySelectorAll('#plTbl .pl-star').forEach(el => el.addEventListener('click', () => {
+      const r = rows.find(x => x.id === +el.dataset.id);
+      if (r) save(r.id, { starred: !r.starred }, el).then(render);
+    }));
+    document.querySelectorAll('#plTbl .pl-status').forEach(el => el.addEventListener('change', () =>
+      save(+el.dataset.id, { status: el.value }, el.parentElement)));
+    document.querySelectorAll('#plTbl .pl-fu').forEach(el => el.addEventListener('change', () =>
+      save(+el.dataset.id, { next_follow_up: el.value || null }, el.parentElement)));
+    document.querySelectorAll('#plTbl .pl-notes').forEach(el => el.addEventListener('change', () =>
+      save(+el.dataset.id, { notes: el.value }, el.parentElement)));
+  }
+
+  document.querySelectorAll('.pl-filter').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.pl-filter').forEach(x => x.setAttribute('aria-pressed', 'false'));
+    c.setAttribute('aria-pressed', 'true');
+    statusFilter = c.dataset.status;
+    render();
+  }));
+  $('plStarOnly').addEventListener('click', () => {
+    starOnly = !starOnly;
+    $('plStarOnly').setAttribute('aria-pressed', starOnly ? 'true' : 'false');
+    render();
+  });
+  $('plSearch').addEventListener('input', render);
+  $('plRefresh').addEventListener('click', () => loadRows());
 })();
 </script>
 </body>
