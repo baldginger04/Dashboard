@@ -7277,7 +7277,7 @@ init();
    NEW PERMITS PIPELINE (owner-only) — added 2026-07-22
    Pulls newly issued permits by zip from two data.texas.gov
    datasets: Active Sales Tax Permit Holders (jrea-zgmq, filtered
-   to NAICS 722xxx food service) and TABC licenses (kguh-7q9z).
+   to NAICS 722xxx food service) and TABC License Information (7hf9-qc9f).
    Field names are detected from a sample row at runtime so the
    queries survive schema drift. Watched zips + alert flag live
    in the prospect_watch table (see prospect-watch.sql); on every
@@ -7286,7 +7286,7 @@ init();
    ============================================================ */
 (function(){
   const SALES_BASE = 'https://data.texas.gov/resource/jrea-zgmq.json';
-  const TABC_BASE  = 'https://data.texas.gov/resource/kguh-7q9z.json';
+  const TABC_BASE  = 'https://data.texas.gov/resource/7hf9-qc9f.json';
   const APP_TOKEN  = 'lpwML3rQ0D4fdeuDQSZgMtNYt';
   let rows = [], sortK = 'date', sortDir = -1, settingsLoaded = false;
 
