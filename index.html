@@ -928,7 +928,7 @@
       <div class="page" id="page-prospects">
         <div class="page-header"><div><div class="page-title">Prospect Screener</div><div class="page-sub">TX Comptroller data — find independent bars &amp; restaurants worth pitching</div></div></div>
         <div class="txs-views">
-          <button class="txs-chip" id="txsViewBtnScreener" aria-pressed="true">Receipts Screener</button>
+          <button class="txs-chip" id="txsViewBtnScreener" aria-pressed="true">Mixed Beverage Gross Receipts Search</button>
           <button class="txs-chip" id="txsViewBtnPermits" aria-pressed="false">New Permits</button>
         </div>
         <div id="txsViewScreener">
@@ -1003,6 +1003,7 @@
                 <div style="display:flex;gap:6px">
                   <button class="txs-chip" id="txpSrcSales" aria-pressed="true">Sales tax &middot; NAICS 722</button>
                   <button class="txs-chip" id="txpSrcTabc" aria-pressed="true">TABC licenses</button>
+                  <button class="txs-chip" id="txpSrcPending" aria-pressed="true">TABC pending apps</button>
                 </div></div>
               <div class="txs-field"><label for="txpSearch">Search</label>
                 <input type="text" id="txpSearch" placeholder="name / owner" style="width:150px"></div>
@@ -1040,8 +1041,8 @@
           </div>
           <p class="txs-note"><b>What this pulls.</b> Sales-tax rows come from the Comptroller’s Active Sales Tax
             Permit Holders file, filtered to food-service NAICS codes (722xxx) — every new restaurant, bar, coffee
-            shop, or food counter shows up here the week it registers, including no-alcohol spots the receipts
-            screener can’t see. TABC rows come from the state license file; the Type column shows the license class.
+            shop, or food counter shows up here the week it registers, including no-alcohol spots the Mixed Beverage
+            search can’t see. TABC rows come from the state license file; the Type column shows the license class.
             A brand-new permit with no sales history yet usually means the place is still in build-out — the single
             best moment to introduce a bookkeeper. Current clients are struck through.</p>
         </div>
@@ -7376,6 +7377,52 @@ init();
     return out;
   }
 
+  // TABC Pending Original Applications (mxm5-tdpj): businesses that have
+  // APPLIED but aren't licensed yet — the earliest public opening signal.
+  // The dataset is mirrored on two Socrata hosts; try each.
+  const PENDING_BASES = [
+    'https://data.texas.gov/resource/mxm5-tdpj.json',
+    'https://data.austintexas.gov/resource/mxm5-tdpj.json'
+  ];
+  let PENDING_BASE = null;
+  async function resolvePendingBase(){
+    if (PENDING_BASE) return PENDING_BASE;
+    let last = null;
+    for (const b of PENDING_BASES) {
+      try { await soda(b, { '$limit': 1 }); PENDING_BASE = b; return b; }
+      catch (e) { last = e; }
+    }
+    throw new Error('pending-applications dataset unreachable: ' + (last && last.message));
+  }
+  async function fetchPending(zips, since){
+    const base = await resolvePendingBase();
+    const sample = (await soda(base, { '$limit': 1 }))[0];
+    if (!sample) return [];
+    const zipK = pickKey(sample, [/zip/]);
+    const dateK = pickKey(sample, [/submit/, /receiv/, /application.*date/, /created/, /date/]);
+    const nameK = pickKey(sample, [/trade.*name/, /business.*name/, /dba/, /location.*name/, /name/]);
+    const addrK = pickKey(sample, [/address/]);
+    const cityK = pickKey(sample, [/city/]);
+    const ownerK = pickKey(sample, [/owner/, /applicant/, /entity/, /taxpayer/]);
+    const detailK = pickKey(sample, [/license.*type/, /type.*desc/, /description/, /type/, /status/]);
+    if (!zipK || !dateK)
+      throw new Error('pending-apps dataset: could not detect zip/date fields; saw: ' + Object.keys(sample).join(', ').slice(0, 160));
+    const zipWhere = '(' + zips.map(z => zipK + " like '" + z + "%'").join(' OR ') + ')';
+    const params = { '$limit': 20000, '$where': zipWhere };
+    if (isoLike(sample[dateK])) params['$where'] += ' AND ' + dateK + " >= '" + since.toISOString().slice(0, 10) + "'";
+    const data = await soda(base, params);
+    const out = [];
+    for (const r of data) {
+      const d = new Date(r[dateK]);
+      if (isNaN(d) || d < since) continue;
+      out.push({ src: 'TABC Pending', name: (nameK && r[nameK]) || '(unnamed)',
+        addr: (addrK && r[addrK]) || '', city: (cityK && r[cityK]) || '',
+        zip: String(r[zipK] || '').slice(0, 5), date: d,
+        detail: String((detailK && r[detailK]) ?? ''), owner: (ownerK && r[ownerK]) || '' });
+    }
+    return out;
+  }
+
   async function loadPermits(){
     try {
       const zips = parseZips($('txpZips'));
@@ -7385,6 +7432,7 @@ init();
       $('txpLoad').disabled = true; setStatus('Pulling new permits\u2026');
       const wantSales = $('txpSrcSales').getAttribute('aria-pressed') === 'true';
       const wantTabc  = $('txpSrcTabc').getAttribute('aria-pressed') === 'true';
+      const wantPending = $('txpSrcPending').getAttribute('aria-pressed') === 'true';
       let all = []; const notes = [];
       if (wantSales) {
         try {
@@ -7396,6 +7444,10 @@ init();
       }
       if (wantTabc) {
         try { all = all.concat(await fetchSource(TABC_BASE, zips, since, 'tabc')); }
+        catch (e) { notes.push(e.message); }
+      }
+      if (wantPending) {
+        try { all = all.concat(await fetchPending(zips, since)); }
         catch (e) { notes.push(e.message); }
       }
       rows = all.sort((a, b) => b.date - a.date);
@@ -7493,6 +7545,7 @@ init();
       let n = 0;
       try { n += (await fetchSource(SALES_BASE, zips, since, 'sales')).filter(r => r.detail.startsWith('722')).length; } catch (e) {}
       try { n += (await fetchSource(TABC_BASE, zips, since, 'tabc')).length; } catch (e) {}
+      try { n += (await fetchPending(zips, since)).length; } catch (e) {}
       if (n > 0) { const b = $('prospectsBadge'); if (b) { b.textContent = n > 99 ? '99+' : n; b.style.display = ''; } }
     } catch (e) { console.warn('Permit alert check failed:', e); }
   };
@@ -7507,7 +7560,7 @@ init();
   }
   $('txsViewBtnScreener').addEventListener('click', () => setView('s'));
   $('txsViewBtnPermits').addEventListener('click', () => setView('p'));
-  [$('txpSrcSales'), $('txpSrcTabc')].forEach(c => c.addEventListener('click', () =>
+  [$('txpSrcSales'), $('txpSrcTabc'), $('txpSrcPending')].forEach(c => c.addEventListener('click', () =>
     c.setAttribute('aria-pressed', c.getAttribute('aria-pressed') === 'true' ? 'false' : 'true')));
   $('txpZips').addEventListener('keydown', e => { if (e.key === 'Enter') loadPermits(); });
   $('txpLoad').addEventListener('click', loadPermits);
