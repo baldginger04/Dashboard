@@ -1017,13 +1017,15 @@
             <div class="txs-controls" style="align-items:center">
               <div class="txs-field"><label for="txpWatchZips">Alert zips (checked at every login)</label>
                 <input type="text" id="txpWatchZips" placeholder="76104, 76102" style="width:260px"></div>
+              <div class="txs-field"><label for="txpEmail">Alert email</label>
+                <input type="text" id="txpEmail" placeholder="ed@baldginger.com" style="width:220px"></div>
               <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer;margin-top:14px">
                 <input type="checkbox" id="txpAlerts"> Alert me on new permits</label>
               <span id="txpWatchStatus" style="font-size:12px;color:var(--text3);margin-top:14px"></span>
             </div>
-            <div class="txs-note" style="margin-top:.5rem">When enabled, Triple checks your watched zips each time you
-              open the app and shows a count on the 🎯 Prospects nav item for permits issued since you last opened
-              this view. Opening this view marks them as seen.</div>
+            <div class="txs-note" style="margin-top:.5rem">When enabled, you get two alert channels: a daily email digest (sent each morning if your watched zips
+              have new permits, with entity details pulled from state records) and a count badge on the 🎯 Prospects
+              nav item each time you open Triple. Opening this view clears the badge.</div>
           </div>
           <div class="txs-tblwrap">
             <table class="txs-tbl" id="txpTbl" style="min-width:1000px">
@@ -7451,6 +7453,7 @@ init();
       if (data) {
         $('txpWatchZips').value = data.watched_zips || '';
         $('txpAlerts').checked = !!data.alerts_enabled;
+        $('txpEmail').value = data.alert_email || '';
       }
     } catch (e) { /* table may not exist yet; saving will surface the error */ }
   }
@@ -7460,7 +7463,8 @@ init();
       const { error } = await sb.from('prospect_watch').upsert({
         id: 1,
         watched_zips: $('txpWatchZips').value.trim(),
-        alerts_enabled: $('txpAlerts').checked
+        alerts_enabled: $('txpAlerts').checked,
+        alert_email: $('txpEmail').value.trim()
       });
       $('txpWatchStatus').textContent = error ? ('Save failed: ' + error.message) : 'Saved \u2713';
     } catch (e) { $('txpWatchStatus').textContent = 'Save failed'; }
@@ -7511,6 +7515,7 @@ init();
   $('txpSearch').addEventListener('input', render);
   $('txpWatchZips').addEventListener('change', saveSettings);
   $('txpAlerts').addEventListener('change', saveSettings);
+  $('txpEmail').addEventListener('change', saveSettings);
   document.querySelectorAll('#txpTbl th[data-pk]').forEach(th => th.addEventListener('click', () => {
     const k = th.dataset.pk;
     if (sortK === k) sortDir *= -1; else { sortK = k; sortDir = (k === 'date') ? -1 : 1; }
