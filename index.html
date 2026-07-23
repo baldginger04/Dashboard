@@ -1033,9 +1033,9 @@
               <thead><tr>
                 <th data-pk="src">Source</th><th data-pk="name">Name</th><th data-pk="addr">Address</th>
                 <th data-pk="city">City</th><th data-pk="zip">Zip</th><th data-pk="date">Issued</th>
-                <th data-pk="detail">Type / NAICS</th><th data-pk="owner">Owner / Taxpayer</th><th>Flags</th>
+                <th data-pk="detail">Type / NAICS</th><th data-pk="phone">Phone</th><th data-pk="owner">Owner / Taxpayer</th><th>Flags</th>
               </tr></thead>
-              <tbody id="txpRows"><tr><td colspan="9" style="text-align:center;color:var(--text3);padding:1.8rem">
+              <tbody id="txpRows"><tr><td colspan="10" style="text-align:center;color:var(--text3);padding:1.8rem">
                 Enter zip code(s) and press “Load new permits”.</td></tr></tbody>
             </table>
           </div>
@@ -7347,6 +7347,7 @@ init();
     const detailK = kind === 'sales'
       ? pickKey(sample, [/naics/])
       : pickKey(sample, [/license.*type/, /type.*desc/, /description/, /permit.*type/, /type/]);
+    const phoneK = pickKey(sample, [/phone/]);
     if (!zipK || !dateK)
       throw new Error((kind === 'sales' ? 'Sales-tax' : 'TABC') +
         ' dataset: could not detect zip/date fields. Fields seen: ' + Object.keys(sample).join(', ').slice(0, 160));
@@ -7365,11 +7366,12 @@ init();
       if (isNaN(d) || d < sinceDate) continue;
       out.push({
         src: kind === 'sales' ? 'Sales Tax' : 'TABC',
-        name: (nameK && r[nameK]) || '(unnamed)',
+        name: (nameK && r[nameK]) || (ownerK && r[ownerK]) || '(unnamed)',
         addr: (addrK && r[addrK]) || '',
         city: (cityK && r[cityK]) || '',
         zip: String(r[zipK] || '').slice(0, 5),
         date: d,
+        phone: (phoneK && r[phoneK]) || '',
         detail: String((detailK && r[detailK]) ?? ''),
         owner: (ownerK && r[ownerK]) || ''
       });
@@ -7405,6 +7407,7 @@ init();
     const cityK = pickKey(sample, [/city/]);
     const ownerK = pickKey(sample, [/owner/, /applicant/, /entity/, /taxpayer/]);
     const detailK = pickKey(sample, [/license.*type/, /type.*desc/, /description/, /type/, /status/]);
+    const phoneK = pickKey(sample, [/phone/]);
     if (!zipK || !dateK)
       throw new Error('pending-apps dataset: could not detect zip/date fields; saw: ' + Object.keys(sample).join(', ').slice(0, 160));
     const zipWhere = '(' + zips.map(z => zipK + " like '" + z + "%'").join(' OR ') + ')';
@@ -7415,9 +7418,9 @@ init();
     for (const r of data) {
       const d = new Date(r[dateK]);
       if (isNaN(d) || d < since) continue;
-      out.push({ src: 'TABC Pending', name: (nameK && r[nameK]) || '(unnamed)',
+      out.push({ src: 'TABC Pending', name: (nameK && r[nameK]) || (ownerK && r[ownerK]) || '(unnamed)',
         addr: (addrK && r[addrK]) || '', city: (cityK && r[cityK]) || '',
-        zip: String(r[zipK] || '').slice(0, 5), date: d,
+        zip: String(r[zipK] || '').slice(0, 5), date: d, phone: (phoneK && r[phoneK]) || '',
         detail: String((detailK && r[detailK]) ?? ''), owner: (ownerK && r[ownerK]) || '' });
     }
     return out;
@@ -7480,16 +7483,16 @@ init();
         '<td>' + r.src + '</td><td class="nm">' + escHtml(r.name) + '</td>' +
         '<td class="ad">' + escHtml(r.addr) + '</td><td>' + escHtml(r.city) + '</td>' +
         '<td>' + r.zip + '</td><td>' + r.date.toLocaleDateString('en-US') + '</td>' +
-        '<td>' + escHtml(r.detail) + '</td><td class="tp">' + escHtml(r.owner) + '</td>' +
+        '<td>' + escHtml(r.detail) + '</td><td>' + escHtml(r.phone || '') + '</td><td class="tp">' + escHtml(r.owner) + '</td>' +
         '<td>' + (isClient ? '<span class="txs-flag cl">CLIENT</span>' : '') + '</td></tr>';
-    }).join('') || '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No new permits match.</td></tr>';
+    }).join('') || '<tr><td colspan="10" style="text-align:center;padding:1.5rem;color:var(--text3)">No new permits match.</td></tr>';
   }
 
   function exportCSV(){
     const q = s => '"' + String(s).replace(/"/g, '""') + '"';
-    const head = ['source','name','address','city','zip','issued','type_or_naics','owner_taxpayer'];
+    const head = ['source','name','address','city','zip','issued','type_or_naics','phone','owner_taxpayer'];
     const lines = [head.join(',')].concat(currentRows().map(r =>
-      [r.src, q(r.name), q(r.addr), q(r.city), r.zip, r.date.toISOString().slice(0, 10), q(r.detail), q(r.owner)].join(',')));
+      [r.src, q(r.name), q(r.addr), q(r.city), r.zip, r.date.toISOString().slice(0, 10), q(r.detail), q(r.phone || ''), q(r.owner)].join(',')));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob); a.download = 'tx-new-permits.csv'; a.click();
