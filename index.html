@@ -628,6 +628,7 @@
     #page-prospects .t-dn{color:var(--red);font-weight:600}
     #page-prospects .txs-note{font-size:12px;color:var(--text3);margin-top:.8rem;max-width:880px;line-height:1.55}
 
+    #page-prospects .txs-views{display:flex;gap:6px;margin-bottom:1rem}
   </style>
 </head>
 <body>
@@ -709,7 +710,7 @@
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
-        <div class="nav-item" onclick="showPage('prospects')" id="nav-prospects" style="display:none"><span>🎯</span> Prospects</div>
+        <div class="nav-item" onclick="showPage('prospects')" id="nav-prospects" style="display:none"><span>🎯</span> Prospects <span class="nav-badge" id="prospectsBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
         <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
         <div class="nav-item" onclick="showPage('admin')" id="nav-admin" style="display:none"><span>⚙️</span> Admin</div>
@@ -925,7 +926,12 @@
       </div>
       <!-- PROSPECT SCREENER (owner only) -->
       <div class="page" id="page-prospects">
-        <div class="page-header"><div><div class="page-title">Prospect Screener</div><div class="page-sub">TX Comptroller mixed-beverage receipts — independent bars &amp; restaurants by revenue band</div></div></div>
+        <div class="page-header"><div><div class="page-title">Prospect Screener</div><div class="page-sub">TX Comptroller data — find independent bars &amp; restaurants worth pitching</div></div></div>
+        <div class="txs-views">
+          <button class="txs-chip" id="txsViewBtnScreener" aria-pressed="true">Receipts Screener</button>
+          <button class="txs-chip" id="txsViewBtnPermits" aria-pressed="false">New Permits</button>
+        </div>
+        <div id="txsViewScreener">
         <div class="txs-panel">
           <div class="txs-controls">
             <div class="txs-field"><label for="txsZips">Zip code(s) — comma-separated, anywhere in Texas</label>
@@ -984,6 +990,59 @@
           filing inside the window. Current Bald Ginger clients are struck through automatically. “TX locs” fills
           in after the statewide check, which scans the full trailing 12 months so a location that filed late
           still counts.</p>
+        </div>
+
+        <div id="txsViewPermits" style="display:none">
+          <div class="txs-panel">
+            <div class="txs-controls">
+              <div class="txs-field"><label for="txpZips">Zip code(s) — comma-separated</label>
+                <input type="text" id="txpZips" value="76104, 76102, 76111" placeholder="e.g. 78704 or 76104, 76102" style="width:280px"></div>
+              <div class="txs-field"><label for="txpDays">Issued within (days)</label>
+                <input type="number" id="txpDays" value="90" min="7" max="365" step="1" style="width:90px"></div>
+              <div class="txs-field"><label>Sources</label>
+                <div style="display:flex;gap:6px">
+                  <button class="txs-chip" id="txpSrcSales" aria-pressed="true">Sales tax &middot; NAICS 722</button>
+                  <button class="txs-chip" id="txpSrcTabc" aria-pressed="true">TABC licenses</button>
+                </div></div>
+              <div class="txs-field"><label for="txpSearch">Search</label>
+                <input type="text" id="txpSearch" placeholder="name / owner" style="width:150px"></div>
+            </div>
+            <div class="txs-actions">
+              <button class="txs-btn" id="txpLoad">Load new permits</button>
+              <button class="txs-ghost" id="txpCsv" disabled>Export CSV</button>
+              <span id="txpStatus">Pulls newly issued permits straight from data.texas.gov.</span>
+            </div>
+          </div>
+          <div class="txs-panel">
+            <div class="txs-controls" style="align-items:center">
+              <div class="txs-field"><label for="txpWatchZips">Alert zips (checked at every login)</label>
+                <input type="text" id="txpWatchZips" placeholder="76104, 76102" style="width:260px"></div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);cursor:pointer;margin-top:14px">
+                <input type="checkbox" id="txpAlerts"> Alert me on new permits</label>
+              <span id="txpWatchStatus" style="font-size:12px;color:var(--text3);margin-top:14px"></span>
+            </div>
+            <div class="txs-note" style="margin-top:.5rem">When enabled, Triple checks your watched zips each time you
+              open the app and shows a count on the 🎯 Prospects nav item for permits issued since you last opened
+              this view. Opening this view marks them as seen.</div>
+          </div>
+          <div class="txs-tblwrap">
+            <table class="txs-tbl" id="txpTbl" style="min-width:1000px">
+              <thead><tr>
+                <th data-pk="src">Source</th><th data-pk="name">Name</th><th data-pk="addr">Address</th>
+                <th data-pk="city">City</th><th data-pk="zip">Zip</th><th data-pk="date">Issued</th>
+                <th data-pk="detail">Type / NAICS</th><th data-pk="owner">Owner / Taxpayer</th><th>Flags</th>
+              </tr></thead>
+              <tbody id="txpRows"><tr><td colspan="9" style="text-align:center;color:var(--text3);padding:1.8rem">
+                Enter zip code(s) and press “Load new permits”.</td></tr></tbody>
+            </table>
+          </div>
+          <p class="txs-note"><b>What this pulls.</b> Sales-tax rows come from the Comptroller’s Active Sales Tax
+            Permit Holders file, filtered to food-service NAICS codes (722xxx) — every new restaurant, bar, coffee
+            shop, or food counter shows up here the week it registers, including no-alcohol spots the receipts
+            screener can’t see. TABC rows come from the state license file; the Type column shows the license class.
+            A brand-new permit with no sales history yet usually means the place is still in build-out — the single
+            best moment to introduce a bookkeeper. Current clients are struck through.</p>
+        </div>
       </div>
 
       <div class="page" id="page-team">
@@ -1958,7 +2017,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; }
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); }
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -7208,6 +7267,255 @@ init();
     }));
     paintBand();
   };
+})();
+</script>
+
+<script>
+/* ============================================================
+   NEW PERMITS PIPELINE (owner-only) — added 2026-07-22
+   Pulls newly issued permits by zip from two data.texas.gov
+   datasets: Active Sales Tax Permit Holders (jrea-zgmq, filtered
+   to NAICS 722xxx food service) and TABC licenses (kguh-7q9z).
+   Field names are detected from a sample row at runtime so the
+   queries survive schema drift. Watched zips + alert flag live
+   in the prospect_watch table (see prospect-watch.sql); on every
+   login TxPermitsBootCheck() counts permits issued since
+   last_checked and badges the Prospects nav item.
+   ============================================================ */
+(function(){
+  const SALES_BASE = 'https://data.texas.gov/resource/jrea-zgmq.json';
+  const TABC_BASE  = 'https://data.texas.gov/resource/kguh-7q9z.json';
+  const APP_TOKEN  = 'lpwML3rQ0D4fdeuDQSZgMtNYt';
+  let rows = [], sortK = 'date', sortDir = -1, settingsLoaded = false;
+
+  const $ = id => document.getElementById(id);
+  const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+  const normName = s => String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const setStatus = (m, err) => { const s = $('txpStatus'); if (s) { s.textContent = m; s.className = err ? 'err' : ''; } };
+  const parseZips = el => [...new Set((el.value.match(/\d{5}/g) || []))];
+
+  function clientNorms(){
+    try {
+      const names = (typeof allClients !== 'undefined' && Array.isArray(allClients))
+        ? allClients.map(c => c && c.name).filter(Boolean) : [];
+      return names.map(normName).filter(n => n.length >= 4);
+    } catch (e) { return []; }
+  }
+
+  async function soda(base, params){
+    const url = base + '?' + new URLSearchParams(params).toString();
+    const headers = { Accept: 'application/json' };
+    if (APP_TOKEN) headers['X-App-Token'] = APP_TOKEN;
+    const r = await fetch(url, { headers });
+    if (!r.ok) throw new Error('API ' + r.status + ' — ' + (await r.text()).slice(0, 160));
+    return r.json();
+  }
+
+  // Detect a field name from a sample row by trying regexes in priority order.
+  function pickKey(sample, patterns){
+    const keys = Object.keys(sample || {});
+    for (const p of patterns) { const k = keys.find(k => p.test(k)); if (k) return k; }
+    return null;
+  }
+  const isoLike = v => /^\d{4}-\d{2}-\d{2}/.test(String(v || ''));
+
+  // Fetch newly issued permits from one dataset, normalized to a common shape.
+  async function fetchSource(base, zips, sinceDate, kind){
+    const sample = (await soda(base, { '$limit': 1 }))[0];
+    if (!sample) return [];
+    const zipK  = kind === 'sales'
+      ? pickKey(sample, [/outlet.*zip/, /zip/])
+      : pickKey(sample, [/location.*zip/, /premise.*zip/, /address.*zip/, /zip/]);
+    const dateK = kind === 'sales'
+      ? pickKey(sample, [/permit.*issue/, /issue.*date/, /first.*sales/])
+      : pickKey(sample, [/original.*issu/, /issu/, /effective/, /begin/, /start/]);
+    const nameK = kind === 'sales'
+      ? pickKey(sample, [/outlet.*name/, /taxpayer.*name/, /name/])
+      : pickKey(sample, [/trade.*name/, /location.*name/, /business.*name/, /doing.*business/, /name/]);
+    const addrK = kind === 'sales'
+      ? pickKey(sample, [/outlet.*address/, /address/])
+      : pickKey(sample, [/location.*address/, /premise.*address/, /address/]);
+    const cityK = kind === 'sales'
+      ? pickKey(sample, [/outlet.*city/, /city/])
+      : pickKey(sample, [/location.*city/, /city/]);
+    const ownerK = kind === 'sales'
+      ? pickKey(sample, [/taxpayer.*name/])
+      : pickKey(sample, [/owner/, /licensee/, /taxpayer/]);
+    const detailK = kind === 'sales'
+      ? pickKey(sample, [/naics/])
+      : pickKey(sample, [/license.*type/, /type.*desc/, /description/, /permit.*type/, /type/]);
+    if (!zipK || !dateK)
+      throw new Error((kind === 'sales' ? 'Sales-tax' : 'TABC') +
+        ' dataset: could not detect zip/date fields. Fields seen: ' + Object.keys(sample).join(', ').slice(0, 160));
+
+    const zipWhere = '(' + zips.map(z => zipK + " like '" + z + "%'").join(' OR ') + ')';
+    const params = { '$limit': 20000, '$where': zipWhere };
+    // Server-side date filter only when the sample value is ISO-formatted;
+    // otherwise pull by zip and filter client-side.
+    if (isoLike(sample[dateK]))
+      params['$where'] += ' AND ' + dateK + " >= '" + sinceDate.toISOString().slice(0, 10) + "'";
+
+    const data = await soda(base, params);
+    const out = [];
+    for (const r of data) {
+      const d = new Date(r[dateK]);
+      if (isNaN(d) || d < sinceDate) continue;
+      out.push({
+        src: kind === 'sales' ? 'Sales Tax' : 'TABC',
+        name: (nameK && r[nameK]) || '(unnamed)',
+        addr: (addrK && r[addrK]) || '',
+        city: (cityK && r[cityK]) || '',
+        zip: String(r[zipK] || '').slice(0, 5),
+        date: d,
+        detail: String((detailK && r[detailK]) ?? ''),
+        owner: (ownerK && r[ownerK]) || ''
+      });
+    }
+    return out;
+  }
+
+  async function loadPermits(){
+    try {
+      const zips = parseZips($('txpZips'));
+      if (!zips.length) { setStatus('Enter at least one 5-digit zip code.', true); return; }
+      const days = Math.min(365, Math.max(7, +$('txpDays').value || 90));
+      const since = new Date(Date.now() - days * 864e5);
+      $('txpLoad').disabled = true; setStatus('Pulling new permits\u2026');
+      const wantSales = $('txpSrcSales').getAttribute('aria-pressed') === 'true';
+      const wantTabc  = $('txpSrcTabc').getAttribute('aria-pressed') === 'true';
+      let all = []; const notes = [];
+      if (wantSales) {
+        try {
+          const s = await fetchSource(SALES_BASE, zips, since, 'sales');
+          const f = s.filter(r => r.detail.startsWith('722'));
+          all = all.concat(f);
+          if (!f.length && s.length) notes.push('sales tax: ' + s.length + ' new permits, none NAICS 722');
+        } catch (e) { notes.push(e.message); }
+      }
+      if (wantTabc) {
+        try { all = all.concat(await fetchSource(TABC_BASE, zips, since, 'tabc')); }
+        catch (e) { notes.push(e.message); }
+      }
+      rows = all.sort((a, b) => b.date - a.date);
+      $('txpCsv').disabled = !rows.length;
+      setStatus('Loaded ' + rows.length + ' new permits (last ' + days + ' days, zip ' + zips.join(', ') + ')' +
+        (notes.length ? ' \u2014 ' + notes.join(' \u00b7 ') : ''), false);
+      render();
+    } catch (err) { setStatus('Load failed: ' + err.message, true); }
+    finally { $('txpLoad').disabled = false; }
+  }
+
+  function currentRows(){
+    const q = $('txpSearch').value.trim().toUpperCase();
+    return rows.filter(r => !q || r.name.toUpperCase().includes(q) || r.owner.toUpperCase().includes(q));
+  }
+
+  function render(){
+    const NORMS = clientNorms();
+    let list = currentRows();
+    list.sort((a, x) => {
+      let va = a[sortK], vx = x[sortK];
+      if (va instanceof Date) { va = va.getTime(); vx = vx.getTime(); }
+      if (typeof va === 'string') return va.localeCompare(vx) * sortDir;
+      return ((va ?? -1) - (vx ?? -1)) * sortDir;
+    });
+    $('txpRows').innerHTML = list.map(r => {
+      const isClient = (() => { const a = normName(r.name), t = normName(r.owner);
+        return NORMS.some(c => a.includes(c) || t.includes(c)); })();
+      return '<tr class="' + (isClient ? 'client' : '') + '">' +
+        '<td>' + r.src + '</td><td class="nm">' + escHtml(r.name) + '</td>' +
+        '<td class="ad">' + escHtml(r.addr) + '</td><td>' + escHtml(r.city) + '</td>' +
+        '<td>' + r.zip + '</td><td>' + r.date.toLocaleDateString('en-US') + '</td>' +
+        '<td>' + escHtml(r.detail) + '</td><td class="tp">' + escHtml(r.owner) + '</td>' +
+        '<td>' + (isClient ? '<span class="txs-flag cl">CLIENT</span>' : '') + '</td></tr>';
+    }).join('') || '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No new permits match.</td></tr>';
+  }
+
+  function exportCSV(){
+    const q = s => '"' + String(s).replace(/"/g, '""') + '"';
+    const head = ['source','name','address','city','zip','issued','type_or_naics','owner_taxpayer'];
+    const lines = [head.join(',')].concat(currentRows().map(r =>
+      [r.src, q(r.name), q(r.addr), q(r.city), r.zip, r.date.toISOString().slice(0, 10), q(r.detail), q(r.owner)].join(',')));
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'tx-new-permits.csv'; a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /* ---------- watched zips + alerts (prospect_watch table) ---------- */
+  async function loadSettings(){
+    if (settingsLoaded) return;
+    settingsLoaded = true;
+    try {
+      const { data } = await sb.from('prospect_watch').select('*').eq('id', 1).maybeSingle();
+      if (data) {
+        $('txpWatchZips').value = data.watched_zips || '';
+        $('txpAlerts').checked = !!data.alerts_enabled;
+      }
+    } catch (e) { /* table may not exist yet; saving will surface the error */ }
+  }
+
+  async function saveSettings(){
+    try {
+      const { error } = await sb.from('prospect_watch').upsert({
+        id: 1,
+        watched_zips: $('txpWatchZips').value.trim(),
+        alerts_enabled: $('txpAlerts').checked
+      });
+      $('txpWatchStatus').textContent = error ? ('Save failed: ' + error.message) : 'Saved \u2713';
+    } catch (e) { $('txpWatchStatus').textContent = 'Save failed'; }
+    setTimeout(() => { $('txpWatchStatus').textContent = ''; }, 3000);
+  }
+
+  async function markSeen(){
+    try {
+      await sb.from('prospect_watch').upsert({ id: 1, last_checked: new Date().toISOString() });
+      const b = $('prospectsBadge'); if (b) b.style.display = 'none';
+    } catch (e) { /* non-fatal */ }
+  }
+
+  // Runs once per login from showApp()'s isAdmin() block.
+  window.TxPermitsBootCheck = async function(){
+    try {
+      if (typeof isAdmin === 'function' && !isAdmin()) return;
+      if (typeof sb === 'undefined') return;
+      const { data } = await sb.from('prospect_watch').select('*').eq('id', 1).maybeSingle();
+      if (!data || !data.alerts_enabled) return;
+      const zips = String(data.watched_zips || '').match(/\d{5}/g) || [];
+      if (!zips.length) return;
+      const floor = Date.now() - 30 * 864e5; // never scan more than 30 days back
+      const last = new Date(data.last_checked || 0).getTime() || floor;
+      const since = new Date(Math.max(last, floor));
+      let n = 0;
+      try { n += (await fetchSource(SALES_BASE, zips, since, 'sales')).filter(r => r.detail.startsWith('722')).length; } catch (e) {}
+      try { n += (await fetchSource(TABC_BASE, zips, since, 'tabc')).length; } catch (e) {}
+      if (n > 0) { const b = $('prospectsBadge'); if (b) { b.textContent = n > 99 ? '99+' : n; b.style.display = ''; } }
+    } catch (e) { console.warn('Permit alert check failed:', e); }
+  };
+
+  /* ---------- view switcher + wiring ---------- */
+  function setView(which){
+    $('txsViewScreener').style.display = which === 's' ? '' : 'none';
+    $('txsViewPermits').style.display = which === 'p' ? '' : 'none';
+    $('txsViewBtnScreener').setAttribute('aria-pressed', which === 's' ? 'true' : 'false');
+    $('txsViewBtnPermits').setAttribute('aria-pressed', which === 'p' ? 'true' : 'false');
+    if (which === 'p' && (typeof isAdmin !== 'function' || isAdmin())) { loadSettings(); markSeen(); }
+  }
+  $('txsViewBtnScreener').addEventListener('click', () => setView('s'));
+  $('txsViewBtnPermits').addEventListener('click', () => setView('p'));
+  [$('txpSrcSales'), $('txpSrcTabc')].forEach(c => c.addEventListener('click', () =>
+    c.setAttribute('aria-pressed', c.getAttribute('aria-pressed') === 'true' ? 'false' : 'true')));
+  $('txpZips').addEventListener('keydown', e => { if (e.key === 'Enter') loadPermits(); });
+  $('txpLoad').addEventListener('click', loadPermits);
+  $('txpCsv').addEventListener('click', exportCSV);
+  $('txpSearch').addEventListener('input', render);
+  $('txpWatchZips').addEventListener('change', saveSettings);
+  $('txpAlerts').addEventListener('change', saveSettings);
+  document.querySelectorAll('#txpTbl th[data-pk]').forEach(th => th.addEventListener('click', () => {
+    const k = th.dataset.pk;
+    if (sortK === k) sortDir *= -1; else { sortK = k; sortDir = (k === 'date') ? -1 : 1; }
+    render();
+  }));
 })();
 </script>
 </body>
