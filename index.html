@@ -7640,10 +7640,31 @@ init();
   const STATUSES = ['new','contacted','meeting','proposal','won','lost','ignore'];
   let rows = [], statusFilter = 'all', starOnly = false, loaded = false;
 
-  window.TxPipelineOpen = async function(force){
+  window.TxPipelineOpen = async function(){
     if (window.canSeeProspects && !window.canSeeProspects()) return;
-    if (!loaded || force) await loadRows();
+    await loadRows();
+    subscribe();
   };
+
+  // Live updates, matching Triple's other realtime lists: any change to
+  // prospect_permits (Lydia's edits, the morning collector's inserts)
+  // reloads the board. Debounced because the collector inserts in bursts,
+  // and skipped while a cell here has focus so it never yanks the table
+  // out from under someone mid-edit.
+  let plChannel = null, plReloadTimer = null;
+  function subscribe(){
+    if (plChannel) return;
+    plChannel = sb.channel('pipeline')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prospect_permits' }, () => {
+        clearTimeout(plReloadTimer);
+        plReloadTimer = setTimeout(() => {
+          const ae = document.activeElement;
+          if (ae && ae.closest && ae.closest('#plTbl')) return;
+          loadRows();
+        }, 800);
+      })
+      .subscribe();
+  }
 
   async function loadRows(){
     try {
