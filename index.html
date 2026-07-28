@@ -5070,19 +5070,6 @@ async function sendMsgReply(rootId) {
     alert("Couldn't post your reply — " + (err.message || 'please try again.'));
     return;
   }
-  // A new reply on a resolved thread reopens it. Without this the reply lives
-  // under a cleared root: hidden from the default (unresolved) view on both
-  // sides, while still counting toward the badges. Reopening keeps the thread
-  // and the badge telling the same story.
-  if (root && root.cleared) {
-    try {
-      await writeOrThrow(sb.from('messages')
-        .update({ cleared: false })
-        .or('id.eq.' + rootId + ',parent_message_id.eq.' + rootId), 'Reopen thread');
-    } catch (err) {
-      console.error('reopen thread on reply failed:', err);
-    }
-  }
   ta.value = '';
   clearReplyAttach(rootId);
   if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, context, body, imageUrl, 'https://triple.baldginger.com/?go=cmsg&client=' + currentClientId); } }
@@ -5094,18 +5081,11 @@ function msgReplyKey(e, rootId) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsgReply(rootId); }
 }
 
-// Flip the cleared boolean on a message AND its replies. Called from the
-// per-message Clear/Unmark button. The cascade matters: clearing only the root
-// used to strand its replies at cleared = false, which left the portal badge
-// counting a thread whose root no longer rendered. Mirrors the cascade that
-// clearTeamNote/reopenTeamNote already use on team_messages.
-//
-// When `id` is itself a reply the OR clause simply matches that one row —
-// replies have no children — so clearing a single reply still works.
+// Flip the cleared boolean on a single message row. Called from the per-message
+// Clear/Unmark button. After the update, reload the list so the new state (and
+// visibility, if "Show resolved" is off) renders correctly.
 async function toggleMsgCleared(id, currentlyCleared) {
-  const { error } = await sb.from('messages')
-    .update({ cleared: !currentlyCleared })
-    .or('id.eq.' + id + ',parent_message_id.eq.' + id);
+  const { error } = await sb.from('messages').update({ cleared: !currentlyCleared }).eq('id', id);
   if (error) { alert("Couldn't update message: " + error.message); return; }
   await loadMessages(currentClientId);
   loadPortalBadge();
@@ -7598,24 +7578,24 @@ init();
     } catch (e) { /* non-fatal */ }
   }
 
-  // Runs once per login from showApp()'s isAdmin() block.
+  // Runs once per login. Badges the nav item with pipeline rows added since
+  // you last opened the New Permits / Pipeline views — counted from our own
+  // prospect_permits table, so the badge always matches what the board shows
+  // (the old version re-queried the state datasets by permit date, which
+  // missed late-published records the same way the collector used to).
   window.TxPermitsBootCheck = async function(){
     try {
       if (window.canSeeProspects && !window.canSeeProspects()) return;
       if (typeof sb === 'undefined') return;
-      const { data } = await sb.from('prospect_watch').select('*').eq('id', 1).maybeSingle();
-      if (!data || !data.alerts_enabled) return;
-      const zips = String(data.watched_zips || '').match(/\d{5}/g) || [];
-      if (!zips.length) return;
-      const floor = Date.now() - 30 * 864e5; // never scan more than 30 days back
-      const last = new Date(data.last_checked || 0).getTime() || floor;
-      const since = new Date(Math.max(last, floor));
-      let n = 0;
-      try { n += (await fetchSource(SALES_BASE, zips, since, 'sales')).filter(r => r.detail.startsWith('722')).length; } catch (e) {}
-      try { n += (await fetchSource(TABC_BASE, zips, since, 'tabc')).length; } catch (e) {}
-      try { n += (await fetchPending(zips, since)).length; } catch (e) {}
-      if (n > 0) { const b = $('prospectsBadge'); if (b) { b.textContent = n > 99 ? '99+' : n; b.style.display = ''; } }
-    } catch (e) { console.warn('Permit alert check failed:', e); }
+      const { data } = await sb.from('prospect_watch').select('last_checked').eq('id', 1).maybeSingle();
+      const floor = Date.now() - 30 * 864e5; // never look more than 30 days back
+      const last = data ? (new Date(data.last_checked || 0).getTime() || floor) : floor;
+      const since = new Date(Math.max(last, floor)).toISOString();
+      const { count } = await sb.from('prospect_permits')
+        .select('id', { count: 'exact', head: true })
+        .gt('first_seen', since);
+      if (count && count > 0) { const b = $('prospectsBadge'); if (b) { b.textContent = count > 99 ? '99+' : count; b.style.display = ''; } }
+    } catch (e) { console.warn('Permit badge check failed:', e); }
   };
 
   /* ---------- view switcher + wiring ---------- */
