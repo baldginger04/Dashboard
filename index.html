@@ -5070,6 +5070,19 @@ async function sendMsgReply(rootId) {
     alert("Couldn't post your reply — " + (err.message || 'please try again.'));
     return;
   }
+  // A new reply on a resolved thread reopens it. Without this the reply lives
+  // under a cleared root: hidden from the default (unresolved) view on both
+  // sides, while still counting toward the badges. Reopening keeps the thread
+  // and the badge telling the same story.
+  if (root && root.cleared) {
+    try {
+      await writeOrThrow(sb.from('messages')
+        .update({ cleared: false })
+        .or('id.eq.' + rootId + ',parent_message_id.eq.' + rootId), 'Reopen thread');
+    } catch (err) {
+      console.error('reopen thread on reply failed:', err);
+    }
+  }
   ta.value = '';
   clearReplyAttach(rootId);
   if (body) { const mentions = detectMentions(body); for (const name of mentions) { if (name !== author) await sendMentionEmail(name, author, context, body, imageUrl, 'https://triple.baldginger.com/?go=cmsg&client=' + currentClientId); } }
@@ -5081,11 +5094,18 @@ function msgReplyKey(e, rootId) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsgReply(rootId); }
 }
 
-// Flip the cleared boolean on a single message row. Called from the per-message
-// Clear/Unmark button. After the update, reload the list so the new state (and
-// visibility, if "Show resolved" is off) renders correctly.
+// Flip the cleared boolean on a message AND its replies. Called from the
+// per-message Clear/Unmark button. The cascade matters: clearing only the root
+// used to strand its replies at cleared = false, which left the portal badge
+// counting a thread whose root no longer rendered. Mirrors the cascade that
+// clearTeamNote/reopenTeamNote already use on team_messages.
+//
+// When `id` is itself a reply the OR clause simply matches that one row —
+// replies have no children — so clearing a single reply still works.
 async function toggleMsgCleared(id, currentlyCleared) {
-  const { error } = await sb.from('messages').update({ cleared: !currentlyCleared }).eq('id', id);
+  const { error } = await sb.from('messages')
+    .update({ cleared: !currentlyCleared })
+    .or('id.eq.' + id + ',parent_message_id.eq.' + id);
   if (error) { alert("Couldn't update message: " + error.message); return; }
   await loadMessages(currentClientId);
   loadPortalBadge();
