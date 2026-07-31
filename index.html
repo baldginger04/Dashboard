@@ -435,6 +435,15 @@
     /* Per-message Clear/Unclear button. Always visible (not hover-revealed) per design;
        muted by default, picks up the accent color on hover. */
     .msg-clear-btn{margin-left:auto;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s}
+    /* Bare URLs typed into any message body render as links (see linkifyEscaped). */
+    .msg-link{color:var(--accent);text-decoration:underline;overflow-wrap:anywhere}
+    /* Inline edit affordance on your own posts. */
+    .msg-edit-btn{background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s;margin-left:8px}
+    .msg-edit-btn:hover{color:var(--accent);border-color:var(--accent)}
+    .msg-edited{font-size:11px;color:var(--text3);margin-left:6px;font-style:italic}
+    .msg-edit-box{width:100%;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-family:'Inter',sans-serif;font-size:13px;line-height:1.5;resize:vertical;outline:none}
+    .msg-edit-box:focus{border-color:var(--accent)}
+    .msg-edit-actions{display:flex;gap:8px;margin-top:6px}
     .msg-clear-btn:hover{border-color:var(--accent);color:var(--accent)}
     .msg-input-row{display:flex;gap:8px}
     .msg-input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:white;transition:border-color .15s;resize:none}
@@ -869,7 +878,7 @@
             </div>
             <div class="msg-list" id="msgList"></div>
             <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white">
-              <textarea class="msg-input" id="msgInput" rows="3" placeholder="Add a note… type @ to mention someone" onkeydown="handleMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
+              <textarea class="msg-input" id="msgInput" rows="3" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="Add a note… type @ to mention someone" onkeydown="handleMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
               <div id="imgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
                 <div id="imgPreviewImgBox" style="position:relative;display:inline-block">
                   <img id="imgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -1101,7 +1110,7 @@
           </div>
           <div class="msg-list" id="teamMsgList"><div class="empty"><span class="spinner"></span></div></div>
           <div style="border:1px solid var(--border);border-radius:8px;overflow:hidden;background:white;margin-top:1rem">
-            <textarea class="msg-input" id="teamMsgInput" rows="3" placeholder="Send a message to the team… type @ to mention someone" onkeydown="handleTeamMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
+            <textarea class="msg-input" id="teamMsgInput" rows="3" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="Send a message to the team… type @ to mention someone" onkeydown="handleTeamMsgKey(event)" oninput="onMentionInput(event)" style="border:none;border-bottom:1px solid var(--border);border-radius:0;resize:none;width:100%;padding:10px 12px;font-family:'Inter',sans-serif;font-size:13px;outline:none"></textarea>
             <div id="teamImgPreviewWrap" style="display:none;padding:8px 12px;border-bottom:1px solid var(--border)">
               <div id="teamImgPreviewImgBox" style="position:relative;display:inline-block">
                 <img id="teamImgPreview" style="max-height:120px;max-width:300px;border-radius:4px;border:1px solid var(--border)" />
@@ -1437,7 +1446,7 @@
       </div>
       <div class="form-row">
         <label class="form-label">Notes</label>
-        <textarea class="form-textarea" id="tmNotes" placeholder="Any notes or instructions…"></textarea>
+        <textarea class="form-textarea" id="tmNotes" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="Any notes or instructions…"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -4845,14 +4854,124 @@ function detectMentions(text) {
 }
 
 // Render a posted message: bold each @Name with the "@" dropped (iMessage-style).
+// Turn bare URLs inside an ALREADY-ESCAPED string into anchors. Two rules keep
+// this safe: it only ever runs on escaped text (so it can't resurrect markup),
+// and it only links http/https — a pasted "javascript:" or "data:" URI stays
+// inert plain text. Matches are swapped for \u0000N\u0000 tokens so the mention
+// pass that runs afterwards can't chew through the middle of a URL; the tokens
+// are substituted back last.
+function linkifyEscaped(escaped) {
+  const parts = [];
+  const tokenized = escaped.replace(/\b(?:https?:\/\/|www\.)[^\s<>"]+/gi, (m) => {
+    let url = m, tail = '';
+    // Trailing punctuation and escaped entities belong to the sentence, not the
+    // URL — peel them off so "see https://x.com/a." doesn't link the period.
+    for (;;) {
+      const ent = url.match(/(&(?:amp|quot|lt|gt|#39);)$/i);
+      if (ent) { tail = ent[1] + tail; url = url.slice(0, -ent[1].length); continue; }
+      const punc = url.match(/[.,;:!?)\]}'"]$/);
+      if (punc) {
+        // A closing bracket only counts as sentence punctuation if it is
+        // unmatched. Otherwise it belongs to the URL, as in the Wikipedia
+        // ".../Foo_(bar)" shape, which would otherwise link as ".../Foo_(bar".
+        const ch = punc[0];
+        const open = { ')': '(', ']': '[', '}': '{' }[ch];
+        if (open) {
+          const opens = url.split(open).length - 1;
+          const closes = url.split(ch).length - 1;
+          if (closes <= opens) break;
+        }
+        tail = ch + tail; url = url.slice(0, -1); continue;
+      }
+      break;
+    }
+    if (!url || url === 'www.' || /^https?:\/\/$/i.test(url)) return m;
+    const href = /^www\./i.test(url) ? 'https://' + url : url;
+    parts.push('<a href="' + href + '" target="_blank" rel="noopener noreferrer" class="msg-link">' + url + '</a>');
+    return '\u0000' + (parts.length - 1) + '\u0000' + tail;
+  });
+  return { text: tokenized, parts };
+}
 function highlightMentions(text) {
-  let html = escHtml(text);
+  const lk = linkifyEscaped(escHtml(text));
+  let html = lk.text;
   const users = [...taggableUsers].sort((a, b) => b.name.length - a.name.length);
   for (const u of users) {
     const re = new RegExp('@' + escRe(escHtml(u.name)) + '(?![\\w])', 'giu');
     html = html.replace(re, '<span class="mention">' + escHtml(u.name) + '</span>');
   }
-  return html;
+  return html.replace(/\u0000(\d+)\u0000/g, (_, i) => lk.parts[i]);
+}
+
+// ── Editing your own posts ────────────────────────────────
+// Ownership is author_id (added 7/31). Rows written before that column existed
+// have author_id null, so we fall back to a display-name match. That fallback is
+// only safe here because Triple is team-only and RLS already lets any team
+// member update any message row — it grants nothing new. The portal deliberately
+// does NOT use the fallback: there, ownership must be provable.
+function canEditMsg(m) {
+  if (m.author_id && currentUser && m.author_id === currentUser.id) return true;
+  if (!m.author_id) {
+    const me = document.getElementById('sidebarName')?.textContent || '';
+    return !!me && m.author === me;
+  }
+  return false;
+}
+function msgEditBtn(m, table, prefix) {
+  if (!canEditMsg(m)) return '';
+  return `<button class="msg-edit-btn" onclick="startEditMsg('${table}','${prefix}','${m.id}')">Edit</button>`;
+}
+function msgEditedTag(m) {
+  return m.edited_at ? `<span class="msg-edited" title="Edited ${fmtDateTime(m.edited_at)}">(edited)</span>` : '';
+}
+// Holds the rendered body HTML while a post is being edited, so Cancel can put
+// it back without a round-trip to the database.
+const msgEditPrev = new Map();
+function msgRowById(table, id) {
+  const arr = table === 'team_messages' ? currentTeamMessages : currentMessages;
+  return (arr || []).find(x => x.id === id) || null;
+}
+function startEditMsg(table, prefix, id) {
+  const el = document.getElementById(prefix + id);
+  if (!el) return;
+  const bodyEl = el.querySelector(':scope > .msg-body');
+  if (!bodyEl || msgEditPrev.has(id)) return;
+  const row = msgRowById(table, id);
+  if (!row) { alert('Could not find that post to edit — try refreshing.'); return; }
+  msgEditPrev.set(id, bodyEl.innerHTML);
+  bodyEl.innerHTML = `<textarea class="msg-edit-box" id="msgEdit_${id}" rows="3" autocorrect="on" autocapitalize="sentences" spellcheck="true" oninput="onMentionInput(event)"></textarea>
+    <div class="msg-edit-actions">
+      <button class="btn btn-primary btn-sm" onclick="saveEditMsg('${table}','${prefix}','${id}')">Save</button>
+      <button class="btn btn-secondary btn-sm" onclick="cancelEditMsg('${prefix}','${id}')">Cancel</button>
+    </div>`;
+  const ta = document.getElementById('msgEdit_' + id);
+  // Assign through .value, never into the HTML, so the raw text is never parsed.
+  ta.value = row.body || '';
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+function cancelEditMsg(prefix, id) {
+  const el = document.getElementById(prefix + id);
+  const bodyEl = el && el.querySelector(':scope > .msg-body');
+  if (bodyEl && msgEditPrev.has(id)) bodyEl.innerHTML = msgEditPrev.get(id);
+  msgEditPrev.delete(id);
+}
+async function saveEditMsg(table, prefix, id) {
+  const ta = document.getElementById('msgEdit_' + id);
+  if (!ta) return;
+  const body = ta.value.trim();
+  if (!body) { alert('A post cannot be emptied by editing. Clear the thread instead.'); return; }
+  try {
+    await writeOrThrow(sb.from(table).update({ body, edited_at: new Date().toISOString() }).eq('id', id), 'Edit post');
+  } catch (err) {
+    alert("Couldn't save your edit — " + (err.message || 'please try again.'));
+    return;
+  }
+  msgEditPrev.delete(id);
+  // Deliberately no mention email / push on an edit — an edit shouldn't re-ping
+  // people who already read the original.
+  if (table === 'team_messages') await loadTeamMessages();
+  else await loadMessages(currentClientId);
 }
 
 // ── @mention autocomplete (works on a plain textarea) ─────
@@ -4991,7 +5110,7 @@ function replyComposerHtml(rootId, kind) {
   const onKey = kind === 'team' ? `teamReplyKey(event,'${rootId}')` : `msgReplyKey(event,'${rootId}')`;
   const onSend = kind === 'team' ? `sendTeamReply('${rootId}')` : `sendMsgReply('${rootId}')`;
   return `<div class="reply-composer">
-    <textarea class="msg-input ${inputCls}" data-root-id="${rootId}" rows="2" placeholder="Reply…" oninput="onMentionInput(event)" onkeydown="${onKey}"></textarea>
+    <textarea class="msg-input ${inputCls}" data-root-id="${rootId}" rows="2" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="Reply…" oninput="onMentionInput(event)" onkeydown="${onKey}"></textarea>
     <div class="reply-prev" id="replyPrev_${rootId}" style="display:none"></div>
     <div class="reply-foot">
       <label class="reply-attach"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="14" height="14" rx="2" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="5.5" r="1.5" fill="currentColor"/><path d="M1 11l4-4 3 3 2-2 5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>Attach file<input type="file" style="display:none" onchange="replyAttachSelect(event,'${rootId}')" /></label>
@@ -5024,6 +5143,9 @@ function clearReplyAttach(rootId) {
   if (wrap) { wrap.innerHTML = ''; wrap.style.display = 'none'; }
 }
 let currentMessages = [];
+// Mirror of currentMessages for Team Chat. Edit needs the RAW body text, and the
+// rendered card only holds escaped/linkified HTML, so both lists are cached.
+let currentTeamMessages = [];
 function msgImgHtml(m) {
   return chatAttachHtml(m.image_url);
 }
@@ -5032,7 +5154,7 @@ function renderMsgReply(m) {
   const isResolved = !!m.cleared;
   const btnLabel = isResolved ? 'Unmark' : '✓ Clear';
   return `<div class="msg-reply${m.is_internal ? ' is-internal' : ''}" id="cmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${internalBadge}<button class="msg-clear-btn" style="margin-left:auto" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button></div>
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${internalBadge}${msgEditBtn(m, 'messages', 'cmsg_')}<button class="msg-clear-btn" style="margin-left:auto" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button></div>
     <div class="msg-body">${highlightMentions(m.body)}${msgImgHtml(m)}</div>
   </div>`;
 }
@@ -5044,7 +5166,7 @@ function renderMsgCard(m, replies) {
   const btnHtml = `<button class="msg-clear-btn" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button>`;
   const repliesHtml = (replies && replies.length) ? `<div class="msg-replies">${replies.map(renderMsgReply).join('')}</div>` : '';
   return `<div class="msg-item${isResolved ? ' is-resolved' : ''}${m.is_internal ? ' is-internal' : ''}" id="cmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${internalBadge}${badgeHtml}${btnHtml}</div>
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${internalBadge}${badgeHtml}${msgEditBtn(m, 'messages', 'cmsg_')}${btnHtml}</div>
     <div class="msg-body">${highlightMentions(m.body)}${msgImgHtml(m)}</div>
     ${repliesHtml}
     ${replyComposerHtml(m.id, 'msg')}
@@ -5065,7 +5187,7 @@ async function sendMsgReply(rootId) {
   if (file) { imageUrl = await uploadMsgImage(file, `client-${currentClientId}`); if (!imageUrl) { alert("Couldn't upload the attachment — please try again."); return; } }
   const finalBody = body || attachPlaceholderText(file);
   try {
-    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: finalBody, is_team: true, parent_message_id: rootId, is_internal: isInternal, image_url: imageUrl }), 'Send reply');
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, author_id: currentUser?.id || null, body: finalBody, is_team: true, parent_message_id: rootId, is_internal: isInternal, image_url: imageUrl }), 'Send reply');
   } catch (err) {
     alert("Couldn't post your reply — " + (err.message || 'please try again.'));
     return;
@@ -5165,9 +5287,9 @@ async function sendMessage(isInternal) {
   // Triple AND the portal with no schema change.
   const firstUrl = uploads[0]?.url || null;
   try {
-    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: body || attachPlaceholderText(currentImgFiles[0]), image_url: firstUrl, is_team: true, is_internal: !!isInternal }), 'Send message');
+    await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, author_id: currentUser?.id || null, body: body || attachPlaceholderText(currentImgFiles[0]), image_url: firstUrl, is_team: true, is_internal: !!isInternal }), 'Send message');
     for (let i = 1; i < uploads.length; i++) {
-      await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, body: attachPlaceholderText(uploads[i].file), image_url: uploads[i].url, is_team: true, is_internal: !!isInternal }), 'Send attachment');
+      await writeOrThrow(sb.from('messages').insert({ client_id: currentClientId, author, author_id: currentUser?.id || null, body: attachPlaceholderText(uploads[i].file), image_url: uploads[i].url, is_team: true, is_internal: !!isInternal }), 'Send attachment');
     }
   } catch (err) {
     alert("Couldn't send your message — " + (err.message || 'please try again.') + "\n\nIt was not fully posted, so your text is still here to retry.");
@@ -5229,6 +5351,7 @@ async function loadTeamMessages() {
   let q = sb.from('team_messages').select('*');
   if (!showCleared) q = q.eq('cleared', false);
   const { data } = await q.order('created_at');
+  currentTeamMessages = data || [];
   const list = document.getElementById('teamMsgList');
   if (!data || !data.length) {
     list.innerHTML = '<div style="color:var(--text3);font-size:13px;text-align:center;padding:2rem">' + (showCleared ? 'No messages yet. Send something!' : 'No active messages. Toggle "Show cleared" to see cleared ones.') + '</div>';
@@ -5252,7 +5375,7 @@ function teamClearBtn(m) {
 function renderTeamReply(m) {
   const isResolved = !!m.cleared;
   return `<div class="msg-reply${isResolved ? ' is-resolved' : ''}" id="tmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${teamClearBtn(m)}</div>
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${msgEditBtn(m, 'team_messages', 'tmsg_')}${teamClearBtn(m)}</div>
     <div class="msg-body">${highlightMentions(m.body)}${teamImgHtml(m)}</div>
   </div>`;
 }
@@ -5261,7 +5384,7 @@ function renderTeamCard(m, replies) {
   const badgeHtml = isResolved ? `<span class="msg-resolved-badge">✓ Resolved</span>` : '';
   const repliesHtml = (replies && replies.length) ? `<div class="msg-replies">${replies.map(renderTeamReply).join('')}</div>` : '';
   return `<div class="msg-item${isResolved ? ' is-resolved' : ''}" id="tmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${badgeHtml}${teamClearBtn(m)}</div>
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${badgeHtml}${msgEditBtn(m, 'team_messages', 'tmsg_')}${teamClearBtn(m)}</div>
     <div class="msg-body">${highlightMentions(m.body)}${teamImgHtml(m)}</div>
     ${repliesHtml}
     ${replyComposerHtml(m.id, 'team')}
@@ -5277,7 +5400,7 @@ async function sendTeamReply(rootId) {
   let imageUrl = null;
   if (file) { imageUrl = await uploadMsgImage(file, 'team'); if (!imageUrl) { alert("Couldn't upload the attachment — please try again."); return; } }
   const finalBody = body || attachPlaceholderText(file);
-  const { error } = await sb.from('team_messages').insert({ author, body: finalBody, parent_message_id: rootId, image_url: imageUrl });
+  const { error } = await sb.from('team_messages').insert({ author, author_id: currentUser?.id || null, body: finalBody, parent_message_id: rootId, image_url: imageUrl });
   if (error) { alert('Could not post reply: ' + error.message); return; }
   ta.value = '';
   clearReplyAttach(rootId);
@@ -5340,10 +5463,10 @@ async function sendTeamMessage() {
   }
   const firstUrl = uploads[0]?.url || null;
 
-  const { error } = await sb.from('team_messages').insert({ author, body: body || attachPlaceholderText(currentTeamImgFiles[0]), image_url: firstUrl });
+  const { error } = await sb.from('team_messages').insert({ author, author_id: currentUser?.id || null, body: body || attachPlaceholderText(currentTeamImgFiles[0]), image_url: firstUrl });
   if (error) { console.error('Team message error:', error); alert('Could not post message: ' + error.message); return; }
   for (let i = 1; i < uploads.length; i++) {
-    const { error: e2 } = await sb.from('team_messages').insert({ author, body: attachPlaceholderText(uploads[i].file), image_url: uploads[i].url });
+    const { error: e2 } = await sb.from('team_messages').insert({ author, author_id: currentUser?.id || null, body: attachPlaceholderText(uploads[i].file), image_url: uploads[i].url });
     if (e2) { console.error('Team attachment error:', e2); alert('Could not post attachment: ' + e2.message); break; }
   }
   document.getElementById('teamMsgInput').value = '';
@@ -5989,7 +6112,7 @@ function anNoteCancel() { An.noteFor = null; An.noteMode = null; renderAnalyses(
 function anNoteEditor(r) {
   const changes = An.noteMode === 'changes';
   return `<div style="margin-top:.6rem;display:flex;gap:.5rem;align-items:flex-start;flex-wrap:wrap">
-    <textarea id="anNoteBox" rows="2" placeholder="${changes ? 'What needs to change? (required)' : 'Optional note back to the team'}" style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;font:inherit;font-size:.85rem"></textarea>
+    <textarea id="anNoteBox" rows="2" autocorrect="on" autocapitalize="sentences" spellcheck="true" placeholder="${changes ? 'What needs to change? (required)' : 'Optional note back to the team'}" style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:8px;padding:.5rem .6rem;font:inherit;font-size:.85rem"></textarea>
     <button onclick="anNoteConfirm('${r.id}')" style="border:0;background:${changes ? '#b93232' : '#1e7a45'};color:#fff;border-radius:7px;padding:.45rem .9rem;font-size:.8rem;font-weight:700;cursor:pointer">${changes ? 'Send back' : 'Confirm reviewed'}</button>
     <button onclick="anNoteCancel()" style="border:1px solid var(--border);background:white;border-radius:7px;padding:.45rem .9rem;font-size:.8rem;cursor:pointer">Cancel</button>
   </div>`;
