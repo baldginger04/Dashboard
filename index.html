@@ -639,7 +639,11 @@
 
     #page-prospects .txs-views{display:flex;gap:6px;margin-bottom:1rem}
     #page-prospects #plTbl td input,#page-prospects #plTbl td select{font:inherit;font-size:12px;padding:.3rem .45rem;border:1px solid var(--border2);border-radius:5px;background:var(--bg);color:var(--text)}
-    #page-prospects #plTbl td.pl-online{white-space:normal;min-width:165px;font-size:11px}
+    #page-prospects #plTbl td.pl-online{white-space:normal;min-width:120px;font-size:11px}
+    #page-prospects #plTbl td.pl-contact{white-space:normal;font-size:11px;max-width:170px;word-break:break-word}
+    #page-prospects #plTbl td.pl-contact a{color:var(--accent);text-decoration:none}
+    #page-prospects #plTbl td.pl-contact a:hover{text-decoration:underline}
+    #page-prospects #plTbl td.pl-contact .pl-blank{color:var(--border2)}
     #page-prospects .pl-links a{color:var(--accent);text-decoration:none}
     #page-prospects .pl-links a:hover{text-decoration:underline}
     #page-prospects .pl-links.pl-none{color:var(--text3);font-style:italic}
@@ -1092,12 +1096,13 @@
             </div>
           </div>
           <div class="txs-tblwrap">
-            <table class="txs-tbl" id="plTbl" style="min-width:1080px">
+            <table class="txs-tbl" id="plTbl" style="min-width:1560px">
               <thead><tr>
-                <th style="width:30px">★</th><th>Lead</th><th>Address</th><th>Phone</th><th>Online</th>
+                <th style="width:30px">★</th><th>Lead</th><th>Address</th><th>Phone</th>
+                <th>Email</th><th>Instagram</th><th>Facebook</th><th>Website</th><th>Google</th>
                 <th>Status</th><th>Follow-up</th><th>Notes</th><th>First seen</th>
               </tr></thead>
-              <tbody id="plRows"><tr><td colspan="9" style="text-align:center;color:var(--text3);padding:1.8rem">
+              <tbody id="plRows"><tr><td colspan="13" style="text-align:center;color:var(--text3);padding:1.8rem">
                 Loading pipeline…</td></tr></tbody>
             </table>
           </div>
@@ -7868,23 +7873,41 @@ init();
     return out;
   }
 
-  function onlineCell(r){
-    const ig = String(r.instagram || '').replace(/^@/, '');
-    const links = [];
-    if (r.website)         links.push('<a href="' + esc(r.website) + '" target="_blank" rel="noopener">site</a>');
-    if (ig)                links.push('<a href="https://instagram.com/' + esc(ig) + '" target="_blank" rel="noopener">@' + esc(ig) + '</a>');
-    if (r.facebook)        links.push('<a href="' + esc(r.facebook) + '" target="_blank" rel="noopener">fb</a>');
-    if (r.google_maps_url) links.push('<a href="' + esc(r.google_maps_url) + '" target="_blank" rel="noopener">maps</a>');
-    if (r.email)           links.push('<a href="mailto:' + esc(r.email) + '">email</a>');
+  // Each researched field gets its own column so the board can be
+  // scanned and the CSV columns line up with what's on screen. An empty
+  // cell shows a dim dash rather than nothing, so "we looked and found
+  // none" reads differently from "this row is still blank".
+  const DASH = '<span class="pl-blank">\u2013</span>';
 
+  function contactCells(r){
+    const ig = String(r.instagram || '').replace(/^@/, '');
+    const fbLabel = r.facebook
+      ? String(r.facebook).replace(/^https?:\/\/(www\.)?facebook\.com\//i, '').replace(/[/?].*$/, '').slice(0, 24) || 'page'
+      : '';
+    const siteLabel = r.website
+      ? String(r.website).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '').slice(0, 28)
+      : '';
+    return '' +
+      '<td class="pl-contact">' + (r.email
+        ? '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : DASH) + '</td>' +
+      '<td class="pl-contact">' + (ig
+        ? '<a href="https://instagram.com/' + esc(ig) + '" target="_blank" rel="noopener">@' + esc(ig) + '</a>' : DASH) + '</td>' +
+      '<td class="pl-contact">' + (r.facebook
+        ? '<a href="' + esc(r.facebook) + '" target="_blank" rel="noopener">' + esc(fbLabel) + '</a>' : DASH) + '</td>' +
+      '<td class="pl-contact">' + (r.website
+        ? '<a href="' + esc(r.website) + '" target="_blank" rel="noopener">' + esc(siteLabel) + '</a>' : DASH) + '</td>';
+  }
+
+  // Google column keeps the enrich control, the confidence dot and the
+  // Places-only facts (rating, open/closed, opening date, cuisine).
+  function onlineCell(r){
     const conf = r.enrich_confidence || 'none';
     const dot = r.enriched_at
       ? '<span class="pl-conf pl-conf-' + esc(conf) + '" title="match confidence: ' + esc(conf) + '"></span>' : '';
     const btn = '<button class="pl-enrich" data-id="' + r.id + '" title="' +
       (r.enriched_at ? 'Look this lead up again' : 'Look this lead up online') + '">\u27f3</button>';
-    const body = links.length
-      ? '<div class="pl-links">' + links.join(' \u00b7 ') + '</div>'
-      : (r.enriched_at ? '<div class="pl-links pl-none">nothing found</div>' : '');
+    const maps = r.google_maps_url
+      ? '<div class="pl-links"><a href="' + esc(r.google_maps_url) + '" target="_blank" rel="noopener">maps</a></div>' : '';
 
     const meta = [];
     if (r.google_rating) meta.push('\u2605 ' + r.google_rating + (r.google_reviews ? ' (' + r.google_reviews + ')' : ''));
@@ -7892,7 +7915,7 @@ init();
     if (r.opening_date) meta.push('opens ' + r.opening_date);
     if (r.cuisine) meta.push(r.cuisine);
 
-    return '<td class="pl-online">' + dot + btn + body +
+    return '<td class="pl-online">' + dot + btn + maps +
       (meta.length ? '<div class="pl-meta">' + esc(meta.join(' \u00b7 ')) + '</div>' : '') + '</td>';
   }
 
@@ -7909,12 +7932,13 @@ init();
           (r.owner_web ? '<div style="font-weight:400;font-size:11px;color:var(--text3)">owner: ' + esc(r.owner_web) + '</div>' : '') + '</td>' +
         '<td class="ad">' + esc(r.address) + ', ' + esc(r.city) + ' ' + esc(r.zip) + '</td>' +
         '<td>' + esc(r.phone || r.google_phone || '') + '</td>' +
+        contactCells(r) +
         onlineCell(r) +
         '<td>' + sel + '</td>' +
         '<td><input type="date" class="pl-fu" data-id="' + r.id + '" value="' + esc(r.next_follow_up || '') + '"></td>' +
         '<td><input type="text" class="pl-notes" data-id="' + r.id + '" value="' + esc(r.notes || '') + '" placeholder="notes\u2026" style="width:200px"></td>' +
         '<td style="font-size:11px;color:var(--text3)">' + String(r.first_seen || '').slice(0, 10) + '</td></tr>';
-    }).join('') || '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No leads match.</td></tr>';
+    }).join('') || '<tr><td colspan="13" style="text-align:center;padding:1.5rem;color:var(--text3)">No leads match.</td></tr>';
 
     document.querySelectorAll('#plTbl .pl-star').forEach(el => el.addEventListener('click', () => {
       const r = rows.find(x => x.id === +el.dataset.id);
