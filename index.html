@@ -639,6 +639,17 @@
 
     #page-prospects .txs-views{display:flex;gap:6px;margin-bottom:1rem}
     #page-prospects #plTbl td input,#page-prospects #plTbl td select{font:inherit;font-size:12px;padding:.3rem .45rem;border:1px solid var(--border2);border-radius:5px;background:var(--bg);color:var(--text)}
+    #page-prospects #plTbl td.pl-online{white-space:normal;min-width:165px;font-size:11px}
+    #page-prospects .pl-links a{color:var(--accent);text-decoration:none}
+    #page-prospects .pl-links a:hover{text-decoration:underline}
+    #page-prospects .pl-links.pl-none{color:var(--text3);font-style:italic}
+    #page-prospects .pl-meta{color:var(--text3);margin-top:2px}
+    #page-prospects .pl-conf{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+    #page-prospects .pl-conf-high{background:var(--green)}
+    #page-prospects .pl-conf-medium{background:var(--amber)}
+    #page-prospects .pl-conf-low,#page-prospects .pl-conf-none{background:var(--red)}
+    #page-prospects button.pl-enrich{font:inherit;font-size:12px;line-height:1;background:none;border:1px solid var(--border2);border-radius:5px;padding:2px 6px;margin-bottom:3px;cursor:pointer;color:var(--text2);vertical-align:middle}
+    #page-prospects button.pl-enrich:disabled{opacity:.45;cursor:default}
     #page-prospects .pl-star{user-select:none}
   </style>
 </head>
@@ -1073,8 +1084,9 @@
                 </div></div>
               <button class="txs-chip" id="plStarOnly" aria-pressed="false" style="margin-top:14px">★ Starred only</button>
               <div class="txs-field"><label for="plSearch">Search</label>
-                <input type="text" id="plSearch" placeholder="name / owner / address" style="width:200px"></div>
+                <input type="text" id="plSearch" placeholder="name / owner / address / @handle" style="width:200px"></div>
               <button class="txs-ghost" id="plRefresh" style="margin-top:14px">Refresh</button>
+              <button class="txs-ghost" id="plEnrich" style="margin-top:14px">Look up online</button>
               <button class="txs-ghost" id="plCsv" style="margin-top:14px">Download CSV</button>
               <span id="plStatus" style="font-size:12px;color:var(--text3);margin-top:14px"></span>
             </div>
@@ -1082,17 +1094,24 @@
           <div class="txs-tblwrap">
             <table class="txs-tbl" id="plTbl" style="min-width:1080px">
               <thead><tr>
-                <th style="width:30px">★</th><th>Lead</th><th>Address</th><th>Phone</th>
+                <th style="width:30px">★</th><th>Lead</th><th>Address</th><th>Phone</th><th>Online</th>
                 <th>Status</th><th>Follow-up</th><th>Notes</th><th>First seen</th>
               </tr></thead>
-              <tbody id="plRows"><tr><td colspan="8" style="text-align:center;color:var(--text3);padding:1.8rem">
+              <tbody id="plRows"><tr><td colspan="9" style="text-align:center;color:var(--text3);padding:1.8rem">
                 Loading pipeline…</td></tr></tbody>
             </table>
           </div>
           <p class="txs-note"><b>How this works.</b> The pipeline fills itself: every morning, new restaurant and bar
             permits in your watched zips are added automatically (showing <span id="plCount">–</span> matching
             leads). Star the promising ones, set a status and follow-up date, and leave notes — changes save
-            instantly and both of you see the same board. Filter to a status to build a call list.</p>
+            instantly and both of you see the same board. Filter to a status to build a call list.
+            Anything you set to <b>Ignore</b> drops off the board — click the Ignore chip to review or
+            un-ignore it. <b>Look up online</b> runs every not-yet-researched lead on screen through Google
+            Places and a web search, filling in website, Instagram, owner, rating and whether the place has
+            opened yet — results land on the board as they finish. The dot rates the match:
+            <span class="pl-conf pl-conf-high"></span> solid, <span class="pl-conf pl-conf-medium"></span>
+            probable, <span class="pl-conf pl-conf-low"></span> shaky (click through before you trust it).
+            ⟳ re-runs one lead.</p>
         </div>
       </div>
 
@@ -7796,7 +7815,9 @@ init();
         .order('issued', { ascending: false }).limit(2000);
       if (error) throw error;
       rows = data || []; loaded = true;
-      $('plStatus').textContent = rows.length + ' leads in pipeline.';
+      const ign = rows.filter(r => (r.status || 'new') === 'ignore').length;
+      $('plStatus').textContent = (rows.length - ign) + ' leads in pipeline'
+        + (ign ? ' \u00b7 ' + ign + ' ignored (hidden)' : '') + '.';
       render();
     } catch (e) {
       $('plStatus').textContent = 'Load failed: ' + (e.message || e) + ' — has pipeline-upgrade.sql been run?';
@@ -7806,10 +7827,13 @@ init();
   function visible(){
     const q = ($('plSearch').value || '').trim().toUpperCase();
     return rows.filter(r => {
-      if (statusFilter !== 'all' && (r.status || 'new') !== statusFilter) return false;
+      const st = r.status || 'new';
+      // "All" means all *live* leads — ignored ones only surface under their own chip.
+      if (statusFilter === 'all') { if (st === 'ignore') return false; }
+      else if (st !== statusFilter) return false;
       if (starOnly && !r.starred) return false;
-      if (q && !((r.name || '').toUpperCase().includes(q) || (r.owner_taxpayer || '').toUpperCase().includes(q)
-        || (r.address || '').toUpperCase().includes(q))) return false;
+      if (q && !([r.name, r.owner_taxpayer, r.address, r.owner_web, r.instagram, r.website, r.concept_note]
+        .some(v => String(v || '').toUpperCase().includes(q.replace(/^@/, ''))))) return false;
       return true;
     });
   }
@@ -7824,6 +7848,54 @@ init();
     } catch (e) { alert('Save failed: ' + (e.message || e)); }
   }
 
+  // ---- Enrichment ----------------------------------------------------
+  // Calls the prospect-enrich Edge Function, which does the Google
+  // Places lookup and the Anthropic web search. The function checks the
+  // caller's own session token (Ed/Lydia only) rather than a shared
+  // secret, since this file is in a public repo.
+  async function callEnrich(payload){
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session && session.access_token;
+    if (!token) throw new Error('Session expired \u2014 reload and sign in again.');
+    const resp = await fetch(SB_URL + '/functions/v1/prospect-enrich', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token, 'apikey': SB_KEY },
+      body: JSON.stringify(payload)
+    });
+    let out = {};
+    try { out = await resp.json(); } catch (e) { /* non-JSON error body */ }
+    if (!resp.ok) throw new Error(out.error || ('lookup failed \u2014 HTTP ' + resp.status));
+    return out;
+  }
+
+  function onlineCell(r){
+    const ig = String(r.instagram || '').replace(/^@/, '');
+    const links = [];
+    if (r.website)         links.push('<a href="' + esc(r.website) + '" target="_blank" rel="noopener">site</a>');
+    if (ig)                links.push('<a href="https://instagram.com/' + esc(ig) + '" target="_blank" rel="noopener">@' + esc(ig) + '</a>');
+    if (r.facebook)        links.push('<a href="' + esc(r.facebook) + '" target="_blank" rel="noopener">fb</a>');
+    if (r.google_maps_url) links.push('<a href="' + esc(r.google_maps_url) + '" target="_blank" rel="noopener">maps</a>');
+    if (r.email)           links.push('<a href="mailto:' + esc(r.email) + '">email</a>');
+
+    const conf = r.enrich_confidence || 'none';
+    const dot = r.enriched_at
+      ? '<span class="pl-conf pl-conf-' + esc(conf) + '" title="match confidence: ' + esc(conf) + '"></span>' : '';
+    const btn = '<button class="pl-enrich" data-id="' + r.id + '" title="' +
+      (r.enriched_at ? 'Look this lead up again' : 'Look this lead up online') + '">\u27f3</button>';
+    const body = links.length
+      ? '<div class="pl-links">' + links.join(' \u00b7 ') + '</div>'
+      : (r.enriched_at ? '<div class="pl-links pl-none">nothing found</div>' : '');
+
+    const meta = [];
+    if (r.google_rating) meta.push('\u2605 ' + r.google_rating + (r.google_reviews ? ' (' + r.google_reviews + ')' : ''));
+    if (r.business_status && r.business_status !== 'OPERATIONAL') meta.push(String(r.business_status).replace(/_/g, ' ').toLowerCase());
+    if (r.opening_date) meta.push('opens ' + r.opening_date);
+    if (r.cuisine) meta.push(r.cuisine);
+
+    return '<td class="pl-online">' + dot + btn + body +
+      (meta.length ? '<div class="pl-meta">' + esc(meta.join(' \u00b7 ')) + '</div>' : '') + '</td>';
+  }
+
   function render(){
     const list = visible();
     $('plCount').textContent = list.length;
@@ -7832,14 +7904,17 @@ init();
         STATUSES.map(s => '<option value="' + s + '"' + (((r.status || 'new') === s) ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>';
       return '<tr>' +
         '<td class="pl-star" data-id="' + r.id + '" style="cursor:pointer;font-size:16px;color:var(--amber)">' + (r.starred ? '\u2605' : '\u2606') + '</td>' +
-        '<td class="nm">' + esc(r.name) + '<div style="font-weight:400;font-size:11px;color:var(--text3)">' + esc(r.source) + ' \u00b7 issued ' + String(r.issued || '').slice(0, 10) + '</div></td>' +
+        '<td class="nm"' + (r.concept_note ? ' title="' + esc(r.concept_note) + '"' : '') + '>' + esc(r.name) +
+          '<div style="font-weight:400;font-size:11px;color:var(--text3)">' + esc(r.source) + ' \u00b7 issued ' + String(r.issued || '').slice(0, 10) + '</div>' +
+          (r.owner_web ? '<div style="font-weight:400;font-size:11px;color:var(--text3)">owner: ' + esc(r.owner_web) + '</div>' : '') + '</td>' +
         '<td class="ad">' + esc(r.address) + ', ' + esc(r.city) + ' ' + esc(r.zip) + '</td>' +
-        '<td>' + esc(r.phone || '') + '</td>' +
+        '<td>' + esc(r.phone || r.google_phone || '') + '</td>' +
+        onlineCell(r) +
         '<td>' + sel + '</td>' +
         '<td><input type="date" class="pl-fu" data-id="' + r.id + '" value="' + esc(r.next_follow_up || '') + '"></td>' +
         '<td><input type="text" class="pl-notes" data-id="' + r.id + '" value="' + esc(r.notes || '') + '" placeholder="notes\u2026" style="width:200px"></td>' +
         '<td style="font-size:11px;color:var(--text3)">' + String(r.first_seen || '').slice(0, 10) + '</td></tr>';
-    }).join('') || '<tr><td colspan="8" style="text-align:center;padding:1.5rem;color:var(--text3)">No leads match.</td></tr>';
+    }).join('') || '<tr><td colspan="9" style="text-align:center;padding:1.5rem;color:var(--text3)">No leads match.</td></tr>';
 
     document.querySelectorAll('#plTbl .pl-star').forEach(el => el.addEventListener('click', () => {
       const r = rows.find(x => x.id === +el.dataset.id);
@@ -7851,6 +7926,19 @@ init();
       save(+el.dataset.id, { next_follow_up: el.value || null }, el.parentElement)));
     document.querySelectorAll('#plTbl .pl-notes').forEach(el => el.addEventListener('change', () =>
       save(+el.dataset.id, { notes: el.value }, el.parentElement)));
+    document.querySelectorAll('#plTbl .pl-enrich').forEach(el => el.addEventListener('click', async () => {
+      const id = +el.dataset.id;
+      el.disabled = true; el.textContent = '\u2026';
+      try {
+        // force:true so the button also works as a refresh on rows
+        // that were already looked up.
+        await callEnrich({ ids: [id], force: true });
+        await loadRows();
+      } catch (e) {
+        alert('Lookup failed: ' + (e.message || e));
+        el.disabled = false; el.textContent = '\u27f3';
+      }
+    }));
   }
 
   document.querySelectorAll('.pl-filter').forEach(c => c.addEventListener('click', () => {
@@ -7866,17 +7954,48 @@ init();
   });
   $('plSearch').addEventListener('input', render);
   $('plRefresh').addEventListener('click', () => loadRows());
+  $('plEnrich').addEventListener('click', async () => {
+    const pending = visible().filter(r => !r.enriched_at);
+    if (!pending.length) {
+      alert('Every lead on screen has already been looked up. Use \u27f3 on a row to refresh just that one.');
+      return;
+    }
+    if (!confirm('Look up ' + pending.length + ' lead' + (pending.length > 1 ? 's' : '') +
+      ' on Google Places and the web?\n\nThis runs in the background \u2014 rows fill in as results land.')) return;
+    const btn = $('plEnrich');
+    btn.disabled = true; btn.textContent = 'Looking up\u2026';
+    try {
+      const out = await callEnrich({ ids: pending.map(r => r.id) });
+      $('plStatus').textContent = 'Looking up ' + (out.queued || out.enriched || pending.length) +
+        ' lead(s) \u2014 the board fills in as each finishes.';
+      // The realtime subscription repaints as rows land; this is a
+      // backstop in case the socket is asleep.
+      setTimeout(loadRows, 20000);
+    } catch (e) {
+      alert('Lookup failed: ' + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Look up online';
+    }
+  });
   $('plCsv').addEventListener('click', () => {
     const q = s => '"' + String(s ?? '').replace(/"/g, '""') + '"';
     const head = ['starred','status','name','address','city','zip','phone','issued','source',
       'type_or_naics','owner_taxpayer','taxpayer_number','legal_name','mailing_address',
-      'sos_file_number','registered_agent','next_follow_up','notes','first_seen'];
+      'sos_file_number','registered_agent','next_follow_up','notes','first_seen',
+      'website','instagram','facebook','email','owner_web','concept_note','cuisine',
+      'google_rating','google_reviews','business_status','opening_date','google_maps_url',
+      'enrich_confidence','enriched_at'];
     const lines = [head.join(',')].concat(visible().map(r => [
       r.starred ? 'Y' : '', q(r.status || 'new'), q(r.name), q(r.address), q(r.city), q(r.zip),
       q(r.phone), String(r.issued || '').slice(0, 10), q(r.source), q(r.detail),
       q(r.owner_taxpayer), q(r.taxpayer_number), q(r.legal_name), q(r.mailing_address),
       q(r.sos_file_number), q(r.registered_agent), String(r.next_follow_up || '').slice(0, 10),
-      q(r.notes), String(r.first_seen || '').slice(0, 10)].join(',')));
+      q(r.notes), String(r.first_seen || '').slice(0, 10),
+      q(r.website), q(r.instagram ? '@' + String(r.instagram).replace(/^@/, '') : ''), q(r.facebook),
+      q(r.email), q(r.owner_web), q(r.concept_note), q(r.cuisine),
+      q(r.google_rating), q(r.google_reviews), q(r.business_status), q(r.opening_date),
+      q(r.google_maps_url), q(r.enrich_confidence),
+      String(r.enriched_at || '').slice(0, 10)].join(',')));
     const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
