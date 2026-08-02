@@ -644,6 +644,14 @@
     #page-prospects #plTbl td.pl-contact a{color:var(--accent);text-decoration:none}
     #page-prospects #plTbl td.pl-contact a:hover{text-decoration:underline}
     #page-prospects #plTbl td.pl-contact .pl-blank{color:var(--border2)}
+    #page-prospects #plTbl input.pl-f{width:100%;box-sizing:border-box;font:inherit;font-size:11px;padding:.28rem .4rem;border:1px solid transparent;border-radius:5px;background:transparent;color:var(--text)}
+    #page-prospects #plTbl input.pl-f:hover{border-color:var(--border2)}
+    #page-prospects #plTbl input.pl-f:focus{border-color:var(--accent);background:var(--bg);outline:none}
+    #page-prospects #plTbl input.pl-f.pl-name{font-weight:600;font-size:12px}
+    #page-prospects #plTbl .pl-fwrap{display:flex;align-items:center;gap:2px}
+    #page-prospects #plTbl .pl-lock{flex:none;cursor:pointer;font-size:10px;color:var(--amber);opacity:.85;line-height:1}
+    #page-prospects #plTbl .pl-lock:hover{opacity:1}
+    #page-prospects #plTbl a.pl-open{flex:none;font-size:10px;text-decoration:none;color:var(--accent)}
     #page-prospects .pl-links a{color:var(--accent);text-decoration:none}
     #page-prospects .pl-links a:hover{text-decoration:underline}
     #page-prospects .pl-links.pl-none{color:var(--text3);font-style:italic}
@@ -1116,7 +1124,9 @@
             opened yet — results land on the board as they finish. The dot rates the match:
             <span class="pl-conf pl-conf-high"></span> solid, <span class="pl-conf pl-conf-medium"></span>
             probable, <span class="pl-conf pl-conf-low"></span> shaky (click through before you trust it).
-            ⟳ re-runs one lead.</p>
+            ⟳ re-runs one lead. <b>Every field on a lead is editable</b> — type over anything that's
+            wrong. A field you edit gets a ✎ and is locked: future lookups write around it and leave your
+            version alone. Click the ✎ to hand that one field back to enrichment.</p>
         </div>
       </div>
 
@@ -7806,7 +7816,7 @@ init();
         clearTimeout(plReloadTimer);
         plReloadTimer = setTimeout(() => {
           const ae = document.activeElement;
-          if (ae && ae.closest && ae.closest('#plTbl')) return;
+          if (ae && ae.closest && ae.closest('#plTbl')) return;  // never yank the table mid-edit
           loadRows();
         }, 800);
       })
@@ -7879,23 +7889,42 @@ init();
   // none" reads differently from "this row is still blank".
   const DASH = '<span class="pl-blank">\u2013</span>';
 
+  // ---- Editable fields -------------------------------------------------
+  // Every lead field is a live input. Editing one also records the column
+  // name in edited_fields, which prospect-enrich reads and refuses to
+  // overwrite — so a correction made here survives future lookups. The
+  // lock is per field, so fixing a phone number by hand doesn't stop the
+  // next run finding an Instagram handle.
+  const isLocked = (r, f) => Array.isArray(r.edited_fields) && r.edited_fields.indexOf(f) !== -1;
+
+  // link: optional href built from the value, shown as a small ↗ so the
+  // cell stays editable AND clickable.
+  function field(r, f, opts){
+    opts = opts || {};
+    const v = r[f] == null ? '' : String(r[f]);
+    const lock = isLocked(r, f)
+      ? '<span class="pl-lock" data-id="' + r.id + '" data-field="' + f + '" ' +
+        'title="Edited by hand \u2014 enrichment won\u2019t overwrite it. Click to unlock.">\u270e</span>' : '';
+    const href = (opts.href && v) ? opts.href(v) : '';
+    const open = href
+      ? '<a class="pl-open" href="' + esc(href) + '" target="_blank" rel="noopener" title="Open">\u2197</a>' : '';
+    return '<div class="pl-fwrap">' +
+      '<input class="pl-f' + (opts.cls ? ' ' + opts.cls : '') + '" type="' + (opts.type || 'text') + '" ' +
+        'data-id="' + r.id + '" data-field="' + f + '" value="' + esc(v) + '" ' +
+        'placeholder="' + esc(opts.ph || '') + '">' + open + lock +
+      '</div>';
+  }
+
   function contactCells(r){
-    const ig = String(r.instagram || '').replace(/^@/, '');
-    const fbLabel = r.facebook
-      ? String(r.facebook).replace(/^https?:\/\/(www\.)?facebook\.com\//i, '').replace(/[/?].*$/, '').slice(0, 24) || 'page'
-      : '';
-    const siteLabel = r.website
-      ? String(r.website).replace(/^https?:\/\/(www\.)?/i, '').replace(/\/$/, '').slice(0, 28)
-      : '';
     return '' +
-      '<td class="pl-contact">' + (r.email
-        ? '<a href="mailto:' + esc(r.email) + '">' + esc(r.email) + '</a>' : DASH) + '</td>' +
-      '<td class="pl-contact">' + (ig
-        ? '<a href="https://instagram.com/' + esc(ig) + '" target="_blank" rel="noopener">@' + esc(ig) + '</a>' : DASH) + '</td>' +
-      '<td class="pl-contact">' + (r.facebook
-        ? '<a href="' + esc(r.facebook) + '" target="_blank" rel="noopener">' + esc(fbLabel) + '</a>' : DASH) + '</td>' +
-      '<td class="pl-contact">' + (r.website
-        ? '<a href="' + esc(r.website) + '" target="_blank" rel="noopener">' + esc(siteLabel) + '</a>' : DASH) + '</td>';
+      '<td class="pl-contact">' + field(r, 'email',
+        { ph: 'email', href: v => 'mailto:' + v }) + '</td>' +
+      '<td class="pl-contact">' + field(r, 'instagram',
+        { ph: 'handle', href: v => 'https://instagram.com/' + v.replace(/^@/, '') }) + '</td>' +
+      '<td class="pl-contact">' + field(r, 'facebook',
+        { ph: 'fb url', href: v => v }) + '</td>' +
+      '<td class="pl-contact">' + field(r, 'website',
+        { ph: 'website', href: v => (/^https?:/i.test(v) ? v : 'https://' + v) }) + '</td>';
   }
 
   // Google column keeps the enrich control, the confidence dot and the
@@ -7927,11 +7956,13 @@ init();
         STATUSES.map(s => '<option value="' + s + '"' + (((r.status || 'new') === s) ? ' selected' : '') + '>' + s + '</option>').join('') + '</select>';
       return '<tr>' +
         '<td class="pl-star" data-id="' + r.id + '" style="cursor:pointer;font-size:16px;color:var(--amber)">' + (r.starred ? '\u2605' : '\u2606') + '</td>' +
-        '<td class="nm"' + (r.concept_note ? ' title="' + esc(r.concept_note) + '"' : '') + '>' + esc(r.name) +
-          '<div style="font-weight:400;font-size:11px;color:var(--text3)">' + esc(r.source) + ' \u00b7 issued ' + String(r.issued || '').slice(0, 10) + '</div>' +
-          (r.owner_web ? '<div style="font-weight:400;font-size:11px;color:var(--text3)">owner: ' + esc(r.owner_web) + '</div>' : '') + '</td>' +
-        '<td class="ad">' + esc(r.address) + ', ' + esc(r.city) + ' ' + esc(r.zip) + '</td>' +
-        '<td>' + esc(r.phone || r.google_phone || '') + '</td>' +
+        '<td class="nm"' + (r.concept_note ? ' title="' + esc(r.concept_note) + '"' : '') + '>' +
+          field(r, 'name', { cls: 'pl-name', ph: 'lead name' }) +
+          '<div style="font-weight:400;font-size:11px;color:var(--text3);padding:2px 0 0 .4rem">' + esc(r.source) + ' \u00b7 issued ' + String(r.issued || '').slice(0, 10) + '</div>' +
+          field(r, 'owner_web', { ph: 'owner' }) + '</td>' +
+        '<td class="ad">' + field(r, 'address', { ph: 'street' }) +
+          '<div style="display:flex;gap:2px">' + field(r, 'city', { ph: 'city' }) + field(r, 'zip', { ph: 'zip' }) + '</div></td>' +
+        '<td>' + field(r, 'phone', { ph: r.google_phone || 'phone' }) + '</td>' +
         contactCells(r) +
         onlineCell(r) +
         '<td>' + sel + '</td>' +
@@ -7950,6 +7981,30 @@ init();
       save(+el.dataset.id, { next_follow_up: el.value || null }, el.parentElement)));
     document.querySelectorAll('#plTbl .pl-notes').forEach(el => el.addEventListener('change', () =>
       save(+el.dataset.id, { notes: el.value }, el.parentElement)));
+
+    // Editing any lead field saves the value AND records the lock, so
+    // enrichment writes around it from then on.
+    document.querySelectorAll('#plTbl input.pl-f').forEach(el => el.addEventListener('change', async () => {
+      const id = +el.dataset.id, f = el.dataset.field;
+      const r = rows.find(x => x.id === id);
+      if (!r) return;
+      const locks = Array.isArray(r.edited_fields) ? r.edited_fields.slice() : [];
+      if (locks.indexOf(f) === -1) locks.push(f);
+      const patch = { edited_fields: locks };
+      patch[f] = el.value.trim() === '' ? null : el.value.trim();
+      await save(id, patch, el.parentElement);
+      render();
+    }));
+
+    // Click the pencil to hand a field back to enrichment.
+    document.querySelectorAll('#plTbl .pl-lock').forEach(el => el.addEventListener('click', async () => {
+      const id = +el.dataset.id, f = el.dataset.field;
+      const r = rows.find(x => x.id === id);
+      if (!r) return;
+      const locks = (r.edited_fields || []).filter(x => x !== f);
+      await save(id, { edited_fields: locks }, el.parentElement);
+      render();
+    }));
     document.querySelectorAll('#plTbl .pl-enrich').forEach(el => el.addEventListener('click', async () => {
       const id = +el.dataset.id;
       el.disabled = true; el.textContent = '\u2026';
