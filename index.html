@@ -602,6 +602,58 @@
     #page-prospects .txs-field input:focus{outline:2px solid var(--accent);outline-offset:1px}
     #page-prospects #txsZips{width:300px}
     #page-prospects #txsSearch{width:170px}
+    /* ── VENDOR CODING AUDIT ───────────────────────────── */
+    #page-vendoraudit .va-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
+    #page-vendoraudit .va-chip[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
+    #page-vendoraudit .va-views{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+    #page-vendoraudit .va-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+    #page-vendoraudit .va-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
+    #page-vendoraudit .va-field{display:flex;flex-direction:column;gap:.25rem}
+    #page-vendoraudit .va-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-vendoraudit select,#page-vendoraudit input[type=text],#page-vendoraudit input[type=number]{font:inherit;font-size:13px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:7px;background:var(--bg)}
+    #page-vendoraudit .va-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1.05rem;cursor:pointer}
+    #page-vendoraudit .va-btn:hover{filter:brightness(.93)}
+    #page-vendoraudit .va-ghost{font:inherit;font-weight:500;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.45rem .85rem;cursor:pointer}
+    #page-vendoraudit .va-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    #page-vendoraudit button:disabled{opacity:.45;cursor:default}
+    #page-vendoraudit .va-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-vendoraudit .va-status.err{color:var(--red)}
+    #page-vendoraudit .va-runmeta{font-size:11.5px;color:var(--text3);margin-top:.35rem}
+    #page-vendoraudit .va-filters{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.9rem}
+    #page-vendoraudit .va-find{background:var(--bg2);border:1px solid var(--border);border-left-width:3px;border-radius:9px;padding:.75rem .9rem;margin-bottom:.55rem}
+    #page-vendoraudit .va-find.sev-high{border-left-color:var(--red)}
+    #page-vendoraudit .va-find.sev-medium{border-left-color:var(--yellow-border)}
+    #page-vendoraudit .va-find.sev-low{border-left-color:var(--border2)}
+    #page-vendoraudit .va-find.is-fixed{opacity:.55}
+    #page-vendoraudit .va-head{display:flex;gap:.5rem;align-items:baseline;flex-wrap:wrap}
+    #page-vendoraudit .va-headline{font-size:13.5px;font-weight:600;color:var(--text);flex:1;min-width:240px}
+    #page-vendoraudit .va-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.15rem .5rem;white-space:nowrap}
+    #page-vendoraudit .t-boundary{background:var(--red-bg);color:var(--red)}
+    #page-vendoraudit .t-new_account{background:var(--blue-bg);color:var(--blue)}
+    #page-vendoraudit .t-dominance{background:var(--yellow-bg);color:var(--yellow)}
+    #page-vendoraudit .t-cross_client{background:var(--purple-bg);color:var(--purple)}
+    #page-vendoraudit .t-item_map{background:var(--green-bg);color:var(--green)}
+    #page-vendoraudit .va-meta{font-size:11.5px;color:var(--text3);margin-top:.3rem}
+    #page-vendoraudit .va-acts{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.55rem}
+    #page-vendoraudit .va-act{font:inherit;font-size:11.5px;font-weight:600;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:.28rem .6rem;cursor:pointer;color:var(--text2)}
+    #page-vendoraudit .va-act:hover{border-color:var(--accent);color:var(--accent)}
+    #page-vendoraudit .va-act.danger:hover{border-color:var(--red);color:var(--red)}
+    #page-vendoraudit .va-form{margin-top:.55rem;padding:.6rem;background:var(--bg3);border-radius:7px}
+    #page-vendoraudit .va-form input[type=text]{width:100%;margin-bottom:.4rem}
+    #page-vendoraudit .va-form .row{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}
+    #page-vendoraudit .va-secthead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:700;margin:1.1rem 0 .5rem}
+    #page-vendoraudit .va-exc{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:.7rem .9rem;margin-bottom:.5rem;display:flex;gap:.75rem;align-items:flex-start}
+    #page-vendoraudit .va-exc .grow{flex:1;min-width:200px}
+    #page-vendoraudit .va-exc .lbl{font-size:13px;font-weight:600}
+    #page-vendoraudit .va-exc .why{font-size:12px;color:var(--text2);margin-top:.2rem;white-space:pre-wrap}
+    #page-vendoraudit .va-disp{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.15rem .5rem;white-space:nowrap}
+    #page-vendoraudit .d-wont_fix{background:var(--yellow-bg);color:var(--yellow)}
+    #page-vendoraudit .d-general{background:var(--blue-bg);color:var(--blue)}
+    #page-vendoraudit .va-cfg{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.75rem}
+    #page-vendoraudit .va-cfg label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:.2rem}
+    #page-vendoraudit .va-cfg input{width:100%}
+    #page-vendoraudit .va-toggles{display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:.9rem}
+    #page-vendoraudit .va-toggles label{font-size:12.5px;color:var(--text2);display:flex;gap:.35rem;align-items:center;cursor:pointer}
     #page-prospects .txs-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
     #page-prospects .txs-chip[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
     #page-prospects .txs-band{font-size:12.5px;color:var(--text2);margin-top:.7rem}
@@ -744,6 +796,7 @@
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
+        <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('prospects')" id="nav-prospects" style="display:none"><span>🎯</span> Prospects <span class="nav-badge" id="prospectsBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
         <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
@@ -957,6 +1010,75 @@
           <button onclick="runAllTax()" style="border:0;background:#D85B31;color:#fff;border-radius:8px;padding:.5rem 1.1rem;font-weight:700;cursor:pointer">Run all</button>
         </div>
         <div id="taxList"><div class="empty">Loading&#8230;</div></div>
+      </div>
+      <!-- VENDOR CODING AUDIT -->
+      <div class="page" id="page-vendoraudit">
+        <div class="page-header"><div><div class="page-title">Vendor Audit</div><div class="page-sub">Vendor coding consistency, checked against QuickBooks</div></div></div>
+        <div class="va-views">
+          <button class="va-chip" id="vaViewBtnFindings" aria-pressed="true">Findings</button>
+          <button class="va-chip" id="vaViewBtnExceptions" aria-pressed="false">Known exceptions</button>
+          <button class="va-chip" id="vaViewBtnSettings" aria-pressed="false">Settings</button>
+        </div>
+
+        <div class="va-panel">
+          <div class="va-controls">
+            <div class="va-field"><label for="vaClient">Client</label>
+              <select id="vaClient" style="min-width:230px"></select></div>
+            <div class="va-field"><label for="vaMonths">Look-back</label>
+              <select id="vaMonths">
+                <option value="6">6 months</option>
+                <option value="12" selected>12 months</option>
+                <option value="18">18 months</option>
+                <option value="24">24 months</option>
+              </select></div>
+            <button class="va-btn" id="vaRunBtn">Run audit</button>
+            <button class="va-ghost" id="vaRunAllBtn">Run all connected</button>
+            <button class="va-ghost" id="vaRefreshBtn">Refresh</button>
+          </div>
+          <div class="va-status" id="vaStatus"></div>
+          <div class="va-runmeta" id="vaRunMeta"></div>
+        </div>
+
+        <div id="vaViewFindings">
+          <div class="va-filters" id="vaFilters"></div>
+          <div id="vaFindingsList"><div class="empty">Pick a client and run an audit.</div></div>
+        </div>
+
+        <div id="vaViewExceptions" style="display:none">
+          <div class="va-panel">
+            <div class="va-secthead" style="margin-top:0">Log a client-level exception</div>
+            <div style="font-size:12.5px;color:var(--text2);margin-bottom:.6rem">
+              For a real issue the client has decided not to fix, that isn&#8217;t tied to one vendor &#8212;
+              expensed buildout, no inventory account, and so on. It won&#8217;t suppress anything;
+              it lives here so it can be handed to the tax preparer at year&#8217;s end.
+            </div>
+            <input type="text" id="vaGenTitle" placeholder="Short title, e.g. Buildout expensed, not capitalized" style="width:100%;margin-bottom:.4rem">
+            <input type="text" id="vaGenReason" placeholder="Why &#8212; who decided, what the amounts are, what a reviewer needs to know" style="width:100%;margin-bottom:.5rem">
+            <button class="va-btn" id="vaGenAddBtn">Add exception</button>
+          </div>
+          <div class="va-secthead">Register</div>
+          <div id="vaExceptionsList"><div class="empty">Loading&#8230;</div></div>
+          <div class="va-secthead">Suppression rules (accepted as correct)</div>
+          <div id="vaSuppressList"><div class="empty">Loading&#8230;</div></div>
+        </div>
+
+        <div id="vaViewSettings" style="display:none">
+          <div class="va-panel">
+            <div class="va-secthead" style="margin-top:0">Strategies</div>
+            <div class="va-toggles" id="vaToggles"></div>
+            <div class="va-secthead">Thresholds</div>
+            <div class="va-cfg" id="vaCfg"></div>
+            <div style="margin-top:1rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap">
+              <button class="va-btn" id="vaCfgSaveBtn">Save settings</button>
+              <button class="va-ghost" id="vaCfgResetBtn">Use firm defaults</button>
+              <span class="va-status" id="vaCfgStatus" style="margin-top:0"></span>
+            </div>
+            <div style="font-size:11.5px;color:var(--text3);margin-top:.8rem">
+              Settings apply to the selected client. Leave a client on firm defaults and it follows
+              the shared row, so tuning one number in Settings with no client selected moves everyone.
+            </div>
+          </div>
+        </div>
       </div>
       <!-- PROSPECT SCREENER (owner only) -->
       <div class="page" id="page-prospects">
@@ -2102,7 +2224,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); }
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot();
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -5732,6 +5854,7 @@ function showPage(name) {
   if (name === 'invoices') InvLoad();
   if (name === 'analyses') loadAnalyses();
   if (name === 'salestax') loadTaxPage();
+  if (name === 'vendoraudit' && window.VendorAuditOpen) window.VendorAuditOpen();
   if (name === 'prospects' && window.TxProspectsOpen) window.TxProspectsOpen();
 }
 function showTab(name) {
@@ -8082,6 +8205,533 @@ init();
     a.click();
     URL.revokeObjectURL(a.href);
   });
+})();
+</script>
+<script>
+// ══════════════════════════════════════════════════════════
+// VENDOR CODING AUDIT
+// ══════════════════════════════════════════════════════════
+// Reads vendor_audit_findings / coding_exceptions / vendor_audit_config and
+// drives the qbo-vendor-audit Edge Function. Two dispositions on purpose:
+//
+//   correct   the flag was wrong; suppress and forget.
+//   wont_fix  the flag was RIGHT, but the client wants it this way. Suppressed
+//             from the working list, kept in the register so it can be handed
+//             to the tax preparer. Never silently dropped.
+//
+// A 'general' exception has no vendor attached at all — it's a client-level
+// policy note (expensed buildout, no inventory account) that suppresses
+// nothing and exists purely to be on the register.
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  const STRATEGIES = [
+    ['boundary',     'Boundary'],
+    ['new_account',  'New account'],
+    ['dominance',    'Dominance'],
+    ['cross_client', 'Cross-client'],
+    ['item_map',     'Item library'],
+  ];
+  const CFG_FIELDS = [
+    ['min_vendor_amount',         'Min vendor $ in period',   '1'],
+    ['dominance_share_floor',     'Dominance share floor',    '0.01'],
+    ['dominance_min_amount',      'Dominance min $',          '1'],
+    ['dominance_min_txns',        'Dominance min txns',       '1'],
+    ['new_account_min_amount',    'New-account min $',        '1'],
+    ['new_account_baseline_days', 'Baseline required (days)', '1'],
+    ['cross_client_min_agree',    'Cross-client min agree',   '1'],
+  ];
+  const DEFAULTS = {
+    strategy_boundary: true, strategy_new_account: true, strategy_dominance: true,
+    strategy_cross_client: true, strategy_item_map: true,
+    min_vendor_amount: 500, dominance_share_floor: 0.20, dominance_min_amount: 250,
+    dominance_min_txns: 2, new_account_min_amount: 100,
+    new_account_baseline_days: 180, cross_client_min_agree: 2,
+  };
+
+  const S = {
+    view: 'findings',
+    clientId: '',
+    connected: new Set(),
+    findings: [],
+    exceptions: [],
+    lastRun: null,
+    cfgDefault: null,
+    cfgClient: null,
+    filterStrategy: 'all',
+    filterSeverity: 'all',
+    showFixed: false,
+    openForm: null,
+    booted: false,
+  };
+
+  const money = n => (n < 0 ? '-$' : '$') + Math.abs(Number(n) || 0)
+    .toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+  function setStatus(msg, isErr) {
+    const el = $('vaStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'va-status' + (isErr ? ' err' : '');
+  }
+
+  function clientName(id) {
+    const c = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === id);
+    return (c && c.name) || '(client)';
+  }
+
+  // ── views ────────────────────────────────────────────────
+  function setView(which) {
+    S.view = which;
+    $('vaViewBtnFindings').setAttribute('aria-pressed', which === 'findings');
+    $('vaViewBtnExceptions').setAttribute('aria-pressed', which === 'exceptions');
+    $('vaViewBtnSettings').setAttribute('aria-pressed', which === 'settings');
+    $('vaViewFindings').style.display   = which === 'findings'   ? '' : 'none';
+    $('vaViewExceptions').style.display = which === 'exceptions' ? '' : 'none';
+    $('vaViewSettings').style.display   = which === 'settings'   ? '' : 'none';
+    if (which === 'exceptions') renderExceptions();
+    if (which === 'settings') renderConfig();
+  }
+
+  // ── loading ──────────────────────────────────────────────
+  async function loadConnected() {
+    try {
+      const { data } = await sb.from('qbo_connections').select('client_id');
+      S.connected = new Set((data || []).map(r => r.client_id));
+    } catch (_) { S.connected = new Set(); }
+  }
+
+  function fillClientSelect() {
+    const sel = $('vaClient');
+    if (!sel) return;
+    const list = (typeof allClients !== 'undefined' ? allClients : [])
+      .filter(c => c && !c.is_firm)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const prev = S.clientId;
+    sel.innerHTML = '<option value="">Select client&#8230;</option>' + list.map(c =>
+      '<option value="' + c.id + '">' + esc(c.name) + (S.connected.has(c.id) ? '' : '  (not connected)') + '</option>'
+    ).join('');
+    if (prev && list.some(c => c.id === prev)) sel.value = prev;
+  }
+
+  async function loadFindings() {
+    if (!S.clientId) { S.findings = []; S.lastRun = null; return; }
+    const [f, r] = await Promise.all([
+      sb.from('vendor_audit_findings').select('*').eq('client_id', S.clientId)
+        .order('severity', { ascending: true }).order('amount', { ascending: false }),
+      sb.from('vendor_audit_runs').select('*').eq('client_id', S.clientId)
+        .order('created_at', { ascending: false }).limit(1),
+    ]);
+    if (f.error) throw new Error('Couldn\u2019t load findings \u2014 has vendor-audit.sql been run? (' + f.error.message + ')');
+    S.findings = f.data || [];
+    S.lastRun = (r.data || [])[0] || null;
+  }
+
+  async function loadExceptions() {
+    const q = sb.from('coding_exceptions').select('*').eq('active', true)
+      .order('created_at', { ascending: false });
+    const { data, error } = S.clientId ? await q.eq('client_id', S.clientId) : await q;
+    if (error) { S.exceptions = []; return; }
+    S.exceptions = data || [];
+  }
+
+  async function loadConfig() {
+    const { data } = await sb.from('vendor_audit_config').select('*');
+    const rows = data || [];
+    S.cfgDefault = rows.find(r => r.client_id === null) || null;
+    S.cfgClient  = S.clientId ? (rows.find(r => r.client_id === S.clientId) || null) : null;
+  }
+
+  async function loadAll() {
+    try {
+      await Promise.all([loadFindings(), loadExceptions(), loadConfig()]);
+      renderFilters();
+      renderFindings();
+      renderRunMeta();
+      if (S.view === 'exceptions') renderExceptions();
+      if (S.view === 'settings') renderConfig();
+      refreshBadge();
+    } catch (e) {
+      setStatus(e.message || String(e), true);
+      $('vaFindingsList').innerHTML = '<div class="empty" style="color:var(--red)">' + esc(e.message || String(e)) + '</div>';
+    }
+  }
+
+  // ── running ──────────────────────────────────────────────
+  async function run(all) {
+    const months = Number($('vaMonths').value || 12);
+    let body;
+    if (all) {
+      const ids = (typeof allClients !== 'undefined' ? allClients : [])
+        .filter(c => c && !c.is_firm && S.connected.has(c.id)).map(c => c.id);
+      if (!ids.length) { setStatus('No clients are connected to QuickBooks.', true); return; }
+      if (!confirm('Run the audit for ' + ids.length + ' connected clients? This runs in the background and can take several minutes.')) return;
+      body = { client_ids: ids, months };
+    } else {
+      if (!S.clientId) { setStatus('Pick a client first.', true); return; }
+      body = { client_id: S.clientId, months };
+    }
+
+    $('vaRunBtn').disabled = true; $('vaRunAllBtn').disabled = true;
+    setStatus(all ? 'Queuing\u2026' : 'Running \u2014 pulling the ledger a month at a time, this usually takes 30\u201390 seconds\u2026');
+    try {
+      const { data, error } = await sb.functions.invoke('qbo-vendor-audit', { body });
+      if (error) throw new Error(error.message || 'the function call failed');
+      if (data && data.ok === false) throw new Error(data.error || 'the audit failed');
+      if (all) {
+        setStatus('Queued ' + (data && data.queued) + ' clients. They finish in the background \u2014 pick a client and hit Refresh to see results.');
+      } else {
+        const bits = [];
+        if (data && data.lines_scanned != null) bits.push(data.lines_scanned.toLocaleString('en-US') + ' ledger lines');
+        if (data && data.vendors != null) bits.push(data.vendors + ' vendors');
+        if (data && data.findings != null) bits.push(data.findings + ' findings');
+        if (data && data.suppressed) bits.push(data.suppressed + ' suppressed');
+        setStatus('Done \u2014 ' + (bits.join(', ') || 'no detail returned') + '.');
+        if (data && data.lines_scanned === 0) {
+          setStatus('The run finished but read 0 ledger lines. That usually means the GeneralLedger report came back in a shape the parser didn\u2019t expect \u2014 check report_columns below.', true);
+        }
+        await loadAll();
+      }
+    } catch (e) {
+      const m = String((e && e.message) || e);
+      setStatus(/not_connected/.test(m) ? 'That client isn\u2019t connected to QuickBooks yet.'
+        : /reauth_needed/.test(m) ? 'QuickBooks needs reconnecting for that client.'
+        : m, true);
+    } finally {
+      $('vaRunBtn').disabled = false; $('vaRunAllBtn').disabled = false;
+    }
+  }
+
+  function renderRunMeta() {
+    const el = $('vaRunMeta');
+    if (!el) return;
+    if (!S.lastRun) { el.textContent = ''; return; }
+    const r = S.lastRun;
+    const when = r.completed_at || r.created_at;
+    const bits = [
+      'Last run ' + (when ? new Date(when).toLocaleString('en-US', { timeZone: 'America/Chicago' }) : '\u2014'),
+      r.range_start + ' to ' + r.range_end,
+      (r.lines_scanned || 0).toLocaleString('en-US') + ' lines',
+      (r.vendors_seen || 0) + ' vendors',
+    ];
+    if (r.suppressed) bits.push(r.suppressed + ' suppressed by rules');
+    if (r.status === 'error') bits.push('ERROR: ' + (r.error || 'unknown'));
+    const cols = r.result && r.result.report_columns;
+    if (cols && cols.length && (r.lines_scanned || 0) === 0) bits.push('report_columns: ' + cols.join(', '));
+    el.textContent = bits.join('  \u00b7  ');
+  }
+
+  // ── findings ─────────────────────────────────────────────
+  function visibleFindings() {
+    return S.findings.filter(f => {
+      if (!S.showFixed && f.status === 'fixed') return false;
+      if (S.filterStrategy !== 'all' && f.strategy !== S.filterStrategy) return false;
+      if (S.filterSeverity !== 'all' && f.severity !== S.filterSeverity) return false;
+      return true;
+    });
+  }
+
+  function renderFilters() {
+    const el = $('vaFilters');
+    if (!el) return;
+    const counts = {};
+    S.findings.filter(f => f.status !== 'fixed').forEach(f => { counts[f.strategy] = (counts[f.strategy] || 0) + 1; });
+    const openTotal = S.findings.filter(f => f.status !== 'fixed').length;
+    const sevCount = s => S.findings.filter(f => f.status !== 'fixed' && f.severity === s).length;
+
+    const chip = (label, active, handler) =>
+      '<button class="va-chip" aria-pressed="' + (active ? 'true' : 'false') + '" onclick="' + handler + '">' + label + '</button>';
+
+    let html = chip('All (' + openTotal + ')', S.filterStrategy === 'all', "VA.filterStrategy('all')");
+    STRATEGIES.forEach(([k, label]) => {
+      if (!counts[k]) return;
+      html += chip(label + ' (' + counts[k] + ')', S.filterStrategy === k, "VA.filterStrategy('" + k + "')");
+    });
+    html += '<span style="width:.75rem"></span>';
+    ['high', 'medium', 'low'].forEach(s => {
+      if (!sevCount(s)) return;
+      html += chip(s.charAt(0).toUpperCase() + s.slice(1) + ' (' + sevCount(s) + ')', S.filterSeverity === s, "VA.filterSeverity('" + s + "')");
+    });
+    if (S.filterSeverity !== 'all') html += chip('Any severity', false, "VA.filterSeverity('all')");
+    html += '<div style="flex:1"></div>';
+    html += '<label style="font-size:12px;color:var(--text2);display:flex;gap:.35rem;align-items:center;cursor:pointer">'
+         +  '<input type="checkbox" ' + (S.showFixed ? 'checked' : '') + ' onchange="VA.toggleFixed(this.checked)"> Show fixed</label>';
+    el.innerHTML = html;
+  }
+
+  function findingCard(f) {
+    const stratLabel = (STRATEGIES.find(s => s[0] === f.strategy) || [null, f.strategy])[1];
+    const meta = [];
+    if (f.txn_count) meta.push(f.txn_count + ' transaction' + (f.txn_count === 1 ? '' : 's'));
+    if (f.amount) meta.push(money(f.amount));
+    if (f.share != null) meta.push((f.share * 100).toFixed(0) + '% of this vendor');
+    if (f.account_name) meta.push('Account: ' + f.account_name);
+    if (f.peer_account_name && f.peer_account_name !== f.account_name) meta.push('Compared to: ' + f.peer_account_name);
+
+    const open = S.openForm && S.openForm.id === f.id;
+    let form = '';
+    if (open) {
+      const isWont = S.openForm.disposition === 'wont_fix';
+      form =
+        '<div class="va-form">' +
+          '<div style="font-size:12px;font-weight:700;margin-bottom:.4rem">' +
+            (isWont
+              ? 'Won\u2019t fix \u2014 this is a real issue the client has chosen to keep'
+              : 'Correct as coded \u2014 the check was wrong, this coding is right') +
+          '</div>' +
+          '<input type="text" id="vaReason_' + f.id + '" placeholder="Reason (required)">' +
+          '<div class="row">' +
+            '<select id="vaScope_' + f.id + '">' +
+              '<option value="vendor_account">This vendor in this account only</option>' +
+              '<option value="vendor">Every finding for ' + esc(f.vendor_name) + '</option>' +
+            '</select>' +
+            '<button class="va-act" onclick="VA.saveDisposition(\'' + f.id + '\')">Save</button>' +
+            '<button class="va-act" onclick="VA.closeForm()">Cancel</button>' +
+          '</div>' +
+        '</div>';
+    }
+
+    const acts = f.status === 'fixed'
+      ? '<button class="va-act" onclick="VA.setStatus(\'' + f.id + '\',\'open\')">Reopen</button>'
+      : '<button class="va-act" onclick="VA.openForm(\'' + f.id + '\',\'correct\')">Correct as coded</button>' +
+        '<button class="va-act" onclick="VA.openForm(\'' + f.id + '\',\'wont_fix\')">Won\u2019t fix</button>' +
+        '<button class="va-act" onclick="VA.setStatus(\'' + f.id + '\',\'fixed\')">Mark fixed</button>';
+
+    return '<div class="va-find sev-' + esc(f.severity) + (f.status === 'fixed' ? ' is-fixed' : '') + '">' +
+      '<div class="va-head">' +
+        '<div class="va-headline">' + esc(f.headline) + '</div>' +
+        '<span class="va-tag t-' + esc(f.strategy) + '">' + esc(stratLabel) + '</span>' +
+        (f.status === 'fixed' ? '<span class="va-tag" style="background:var(--green-bg);color:var(--green)">Fixed</span>' : '') +
+      '</div>' +
+      '<div class="va-meta">' + esc(meta.join('  \u00b7  ')) + '</div>' +
+      '<div class="va-acts">' + acts + '</div>' +
+      form +
+    '</div>';
+  }
+
+  function renderFindings() {
+    const el = $('vaFindingsList');
+    if (!el) return;
+    if (!S.clientId) { el.innerHTML = '<div class="empty">Pick a client and run an audit.</div>'; return; }
+    const list = visibleFindings();
+    if (!list.length) {
+      el.innerHTML = '<div class="empty">' +
+        (S.findings.length ? 'Nothing matches those filters.'
+                           : (S.lastRun ? 'No findings \u2014 this client\u2019s vendor coding came back clean.'
+                                        : 'No audit has been run for this client yet.')) +
+        '</div>';
+      return;
+    }
+    const order = { high: 0, medium: 1, low: 2 };
+    list.sort((a, b) => (order[a.severity] - order[b.severity]) || (Math.abs(b.amount) - Math.abs(a.amount)));
+    el.innerHTML = list.map(findingCard).join('');
+  }
+
+  // ── dispositions ─────────────────────────────────────────
+  async function saveDisposition(id) {
+    const f = S.findings.find(x => x.id === id);
+    if (!f || !S.openForm) return;
+    const reason = ($('vaReason_' + id) || {}).value || '';
+    const scope  = ($('vaScope_' + id) || {}).value || 'vendor_account';
+    if (!reason.trim()) { alert('A reason is required \u2014 future you will want to know why this was waved through.'); return; }
+
+    const disposition = S.openForm.disposition;
+    try {
+      await writeOrThrow(sb.from('coding_exceptions').insert({
+        client_id: S.clientId,
+        scope,
+        disposition,
+        vendor_key:   f.vendor_key,
+        vendor_name:  f.vendor_name,
+        account_key:  scope === 'vendor_account' ? f.account_key : null,
+        account_name: scope === 'vendor_account' ? f.account_name : null,
+        strategy:     null,
+        reason:       reason.trim(),
+        created_by:   (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null,
+      }), 'Save exception');
+
+      // Drop the findings this rule now covers; the next run won't recreate them.
+      const del = sb.from('vendor_audit_findings').delete().eq('client_id', S.clientId).eq('vendor_key', f.vendor_key);
+      await (scope === 'vendor_account' ? del.eq('account_key', f.account_key) : del);
+
+      S.openForm = null;
+      setStatus(disposition === 'wont_fix'
+        ? 'Logged as a known exception \u2014 it stays on the register but won\u2019t be raised again.'
+        : 'Accepted as correct \u2014 suppressed from future runs.');
+      await loadAll();
+    } catch (e) {
+      alert((e && e.message) || 'Couldn\u2019t save that.');
+    }
+  }
+
+  async function setFindingStatus(id, status) {
+    try {
+      await writeOrThrow(sb.from('vendor_audit_findings').update({
+        status,
+        status_by: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null,
+        status_at: new Date().toISOString(),
+      }).eq('id', id), 'Update finding');
+      await loadAll();
+    } catch (e) { alert((e && e.message) || 'Couldn\u2019t update that.'); }
+  }
+
+  // ── exceptions register ──────────────────────────────────
+  function excCard(e) {
+    const isGeneral = e.scope === 'general';
+    const label = e.title || (
+      e.scope === 'vendor_account' ? e.vendor_name + '  \u2192  ' + (e.account_name || e.account_key)
+      : e.scope === 'vendor' ? e.vendor_name + '  (all accounts)'
+      : e.scope === 'account' ? (e.account_name || e.account_key)
+      : '(rule)');
+    const tag = isGeneral
+      ? '<span class="va-disp d-general">Client policy</span>'
+      : (e.disposition === 'wont_fix' ? '<span class="va-disp d-wont_fix">Won\u2019t fix</span>' : '');
+    return '<div class="va-exc">' +
+      '<div class="grow">' +
+        '<div class="lbl">' + esc(label) + ' ' + tag + '</div>' +
+        '<div class="why">' + esc(e.reason || '') + '</div>' +
+        '<div class="va-meta">' + esc(clientName(e.client_id)) +
+          '  \u00b7  ' + new Date(e.created_at).toLocaleDateString('en-US', { timeZone: 'America/Chicago' }) + '</div>' +
+      '</div>' +
+      '<button class="va-act danger" onclick="VA.removeException(\'' + e.id + '\')">Remove</button>' +
+    '</div>';
+  }
+
+  function renderExceptions() {
+    const register  = S.exceptions.filter(e => e.disposition === 'wont_fix' || e.scope === 'general');
+    const suppress  = S.exceptions.filter(e => e.disposition === 'correct' && e.scope !== 'general');
+    $('vaExceptionsList').innerHTML = register.length ? register.map(excCard).join('')
+      : '<div class="empty">Nothing on the register' + (S.clientId ? ' for ' + esc(clientName(S.clientId)) : '') + '.</div>';
+    $('vaSuppressList').innerHTML = suppress.length ? suppress.map(excCard).join('')
+      : '<div class="empty">No suppression rules yet.</div>';
+  }
+
+  async function addGeneral() {
+    if (!S.clientId) { alert('Pick a client first \u2014 a policy note belongs to one client.'); return; }
+    const title  = ($('vaGenTitle')  || {}).value || '';
+    const reason = ($('vaGenReason') || {}).value || '';
+    if (!title.trim() || !reason.trim()) { alert('Both a title and a reason are required.'); return; }
+    try {
+      await writeOrThrow(sb.from('coding_exceptions').insert({
+        client_id: S.clientId, scope: 'general', disposition: 'wont_fix',
+        title: title.trim(), reason: reason.trim(),
+        created_by: (typeof currentUser !== 'undefined' && currentUser) ? currentUser.id : null,
+      }), 'Add exception');
+      $('vaGenTitle').value = ''; $('vaGenReason').value = '';
+      await loadExceptions(); renderExceptions();
+    } catch (e) { alert((e && e.message) || 'Couldn\u2019t save that.'); }
+  }
+
+  async function removeException(id) {
+    if (!confirm('Remove this exception? Whatever it was suppressing can surface again on the next run.')) return;
+    try {
+      await writeOrThrow(sb.from('coding_exceptions').update({ active: false }).eq('id', id), 'Remove exception');
+      await loadExceptions(); renderExceptions();
+    } catch (e) { alert((e && e.message) || 'Couldn\u2019t remove that.'); }
+  }
+
+  // ── settings ─────────────────────────────────────────────
+  function effectiveCfg() {
+    return Object.assign({}, DEFAULTS, S.cfgDefault || {}, S.cfgClient || {});
+  }
+
+  function renderConfig() {
+    const cfg = effectiveCfg();
+    const scopeNote = S.clientId
+      ? (S.cfgClient ? 'Custom settings for ' + esc(clientName(S.clientId)) + '.'
+                     : esc(clientName(S.clientId)) + ' is on firm defaults \u2014 saving creates an override for this client.')
+      : 'No client selected \u2014 saving edits the firm-wide defaults for every client.';
+    $('vaToggles').innerHTML = STRATEGIES.map(([k, label]) =>
+      '<label><input type="checkbox" id="vaTog_' + k + '" ' + (cfg['strategy_' + k] ? 'checked' : '') + '> ' + label + '</label>'
+    ).join('');
+    $('vaCfg').innerHTML = CFG_FIELDS.map(([k, label, step]) =>
+      '<div><label for="vaCfg_' + k + '">' + label + '</label>' +
+      '<input type="number" step="' + step + '" id="vaCfg_' + k + '" value="' + (cfg[k] != null ? cfg[k] : '') + '"></div>'
+    ).join('');
+    $('vaCfgStatus').textContent = scopeNote;
+    $('vaCfgStatus').className = 'va-status';
+    $('vaCfgResetBtn').style.display = S.cfgClient ? '' : 'none';
+  }
+
+  async function saveConfig() {
+    const patch = { client_id: S.clientId || null, updated_at: new Date().toISOString() };
+    STRATEGIES.forEach(([k]) => { patch['strategy_' + k] = !!($('vaTog_' + k) || {}).checked; });
+    CFG_FIELDS.forEach(([k]) => {
+      const v = ($('vaCfg_' + k) || {}).value;
+      if (v !== '' && v != null && isFinite(Number(v))) patch[k] = Number(v);
+    });
+    try {
+      const target = S.clientId
+        ? (S.cfgClient ? sb.from('vendor_audit_config').update(patch).eq('id', S.cfgClient.id)
+                       : sb.from('vendor_audit_config').insert(patch))
+        : sb.from('vendor_audit_config').update(patch).is('client_id', null);
+      await writeOrThrow(target, 'Save settings');
+      await loadConfig(); renderConfig();
+      $('vaCfgStatus').textContent = 'Saved. Takes effect on the next run.';
+    } catch (e) {
+      $('vaCfgStatus').textContent = (e && e.message) || 'Couldn\u2019t save.';
+      $('vaCfgStatus').className = 'va-status err';
+    }
+  }
+
+  async function resetConfig() {
+    if (!S.cfgClient) return;
+    if (!confirm('Drop this client\u2019s custom settings and follow the firm defaults?')) return;
+    try {
+      await writeOrThrow(sb.from('vendor_audit_config').delete().eq('id', S.cfgClient.id), 'Reset settings');
+      await loadConfig(); renderConfig();
+    } catch (e) { alert((e && e.message) || 'Couldn\u2019t reset.'); }
+  }
+
+  // ── nav badge: open high-severity findings across all clients ──
+  async function refreshBadge() {
+    try {
+      const { count } = await sb.from('vendor_audit_findings')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'open').eq('severity', 'high');
+      const b = $('vendorAuditBadge');
+      if (!b) return;
+      if (count) { b.textContent = count; b.style.display = ''; }
+      else { b.style.display = 'none'; }
+    } catch (_) { /* table may not exist yet */ }
+  }
+
+  // ── wiring ───────────────────────────────────────────────
+  window.VA = {
+    filterStrategy(v) { S.filterStrategy = v; renderFilters(); renderFindings(); },
+    filterSeverity(v) { S.filterSeverity = v; renderFilters(); renderFindings(); },
+    toggleFixed(v)    { S.showFixed = !!v; renderFindings(); },
+    openForm(id, disposition) { S.openForm = { id, disposition }; renderFindings(); setTimeout(() => { const el = $('vaReason_' + id); if (el) el.focus(); }, 30); },
+    closeForm()       { S.openForm = null; renderFindings(); },
+    saveDisposition, removeException,
+    setStatus: setFindingStatus,
+  };
+
+  window.VendorAuditOpen = async function () {
+    if (!S.booted) {
+      S.booted = true;
+      $('vaViewBtnFindings').addEventListener('click',   () => setView('findings'));
+      $('vaViewBtnExceptions').addEventListener('click', () => setView('exceptions'));
+      $('vaViewBtnSettings').addEventListener('click',   () => setView('settings'));
+      $('vaRunBtn').addEventListener('click',     () => run(false));
+      $('vaRunAllBtn').addEventListener('click',  () => run(true));
+      $('vaRefreshBtn').addEventListener('click', () => { setStatus('Refreshing\u2026'); loadAll().then(() => setStatus('')); });
+      $('vaGenAddBtn').addEventListener('click',  addGeneral);
+      $('vaCfgSaveBtn').addEventListener('click', saveConfig);
+      $('vaCfgResetBtn').addEventListener('click', resetConfig);
+      $('vaClient').addEventListener('change', e => {
+        S.clientId = e.target.value; S.openForm = null;
+        setStatus(''); loadAll();
+      });
+    }
+    await loadConnected();
+    fillClientSelect();
+    await loadAll();
+  };
+
+  // Keep the nav badge honest even when the tab has never been opened.
+  window.VendorAuditBadgeBoot = refreshBadge;
 })();
 </script>
 </body>
