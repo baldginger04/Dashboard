@@ -1525,7 +1525,8 @@
             <option>General</option><option>Payroll</option><option>Tax</option>
             <option>Account Reconciliation</option><option>Transaction Review</option>
             <option>Payee/Entity Review</option><option>Final Review</option>
-            <option>Pre-Close</option><option>Payables</option><option>Additional Items</option>
+            <option>Pre-Close</option><option>Payables</option><option>Marketing</option>
+            <option>Additional Items</option>
           </select>
         </div>
         <div>
@@ -1900,7 +1901,7 @@ function freqLabel(freq, interval) {
   const plural = { daily: 'days', weekdays: 'weekdays', weekly: 'weeks', monthly: 'months', quarterly: 'quarters', annually: 'years' };
   return plural[freq] ? `Every ${n} ${plural[freq]}` : (FREQ_LABELS[freq] || freq || '');
 }
-const CATS = ['General','Payroll','Tax','Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close','Payables','Additional Items'];
+const CATS = ['General','Payroll','Tax','Account Reconciliation','Transaction Review','Payee/Entity Review','Final Review','Pre-Close','Payables','Marketing','Additional Items'];
 
 // Month-end close categories. These tasks are driven by the close LIFECYCLE,
 // not a calendar cadence: they appear only while a client's close is "In
