@@ -715,6 +715,26 @@
     #page-prospects button.pl-enrich{font:inherit;font-size:12px;line-height:1;background:none;border:1px solid var(--border2);border-radius:5px;padding:2px 6px;margin-bottom:3px;cursor:pointer;color:var(--text2);vertical-align:middle}
     #page-prospects button.pl-enrich:disabled{opacity:.45;cursor:default}
     #page-prospects .pl-star{user-select:none}
+    #page-prospects #plTbl .pl-srcs{font-weight:400;font-size:11px;color:var(--text3);padding:2px 0 0 .4rem}
+    #page-prospects #plTbl .pl-mrg{display:inline-block;font-size:10px;font-weight:600;border-radius:4px;padding:0 5px;margin-left:6px;cursor:pointer;background:var(--bg3);color:var(--text2);border:1px solid var(--border);white-space:nowrap}
+    #page-prospects #plTbl .pl-mrg:hover{border-color:var(--accent);color:var(--accent)}
+
+    /* Duplicate-merge modal (lives outside #page-prospects, so it carries
+       its own chip + table styling rather than borrowing .txs-chip). */
+    #plMergeModal .modal{max-width:940px}
+    #plMergeModal .pm-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
+    #plMergeModal .pm-chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+    #plMergeModal .pm-grp{border:1px solid var(--border);border-radius:8px;padding:.75rem .9rem;margin-bottom:.9rem}
+    #plMergeModal .pm-tier{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:4px;padding:1px 6px;margin-right:6px;vertical-align:middle}
+    #plMergeModal .pm-tier.exact{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+    #plMergeModal .pm-tier.building{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border)}
+    #plMergeModal .pm-tier.name{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+    #plMergeModal .pm-why{font-size:11px;color:var(--text3);line-height:1.5}
+    #plMergeModal table.pm-t{width:100%;border-collapse:collapse;font-size:12px;margin:.55rem 0 .35rem}
+    #plMergeModal table.pm-t th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);border-bottom:1px solid var(--border);padding:3px 6px;font-weight:600}
+    #plMergeModal table.pm-t td{padding:5px 6px;border-bottom:1px solid var(--border);vertical-align:top}
+    #plMergeModal .pm-act{display:flex;gap:10px;align-items:center;margin-top:.5rem}
+    #plMergeModal .pm-act .pm-why{flex:1}
   </style>
 </head>
 <body>
@@ -1221,6 +1241,7 @@
                 <input type="text" id="plSearch" placeholder="name / owner / address / @handle" style="width:200px"></div>
               <button class="txs-ghost" id="plRefresh" style="margin-top:14px">Refresh</button>
               <button class="txs-ghost" id="plEnrich" style="margin-top:14px">Look up online</button>
+              <button class="txs-ghost" id="plMerge" style="margin-top:14px">Find duplicates</button>
               <button class="txs-ghost" id="plCsv" style="margin-top:14px">Download CSV</button>
               <span id="plStatus" style="font-size:12px;color:var(--text3);margin-top:14px"></span>
             </div>
@@ -1248,7 +1269,12 @@
             probable, <span class="pl-conf pl-conf-low"></span> shaky (click through before you trust it).
             ⟳ re-runs one lead. <b>Every field on a lead is editable</b> — type over anything that's
             wrong. A field you edit gets a ✎ and is locked: future lookups write around it and leave your
-            version alone. Click the ✎ to hand that one field back to enrichment.</p>
+            version alone. Click the ✎ to hand that one field back to enrichment.
+            <b>Find duplicates</b> looks for leads that arrived twice — the same place usually files a
+            TABC application months before its sales-tax permit, and the two land as separate rows because
+            each source is deduped on its own key. Merging keeps one row and folds the others into it;
+            the kept row then shows every permit it absorbed in date order, so the lifecycle reads straight
+            across. Nothing is deleted — the ⛓ pill on a merged lead re-opens the group to un-merge it.</p>
         </div>
       </div>
 
@@ -1638,6 +1664,26 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('accountModal')">Cancel</button>
       <button class="btn btn-primary" onclick="saveAccount()">Add Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- PIPELINE: duplicate-lead merge -->
+<div class="modal-overlay" id="plMergeModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Duplicate leads</div>
+      <button class="modal-close" onclick="closeModal('plMergeModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:6px;margin-bottom:1.1rem">
+        <button class="pm-chip" id="plMgSug" aria-pressed="true">Suggestions</button>
+        <button class="pm-chip" id="plMgDone" aria-pressed="false">Already merged</button>
+      </div>
+      <div id="plMgBody"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('plMergeModal')">Close</button>
     </div>
   </div>
 </div>
@@ -7874,6 +7920,7 @@ init();
       const since = new Date(Math.max(last, floor)).toISOString();
       const { count } = await sb.from('prospect_permits')
         .select('id', { count: 'exact', head: true })
+        .is('merged_into', null)          // folded-away rows aren't leads
         .gt('first_seen', since);
       if (count && count > 0) { const b = $('prospectsBadge'); if (b) { b.textContent = count > 99 ? '99+' : count; b.style.display = ''; } }
     } catch (e) { console.warn('Permit badge check failed:', e); }
@@ -7954,9 +8001,15 @@ init();
         .order('issued', { ascending: false }).limit(2000);
       if (error) throw error;
       rows = data || []; loaded = true;
-      const ign = rows.filter(r => (r.status || 'new') === 'ignore').length;
-      $('plStatus').textContent = (rows.length - ign) + ' leads in pipeline'
-        + (ign ? ' \u00b7 ' + ign + ' ignored (hidden)' : '') + '.';
+      // rows holds everything, including permits folded into another lead —
+      // the board needs them to render a merged lead's source history — but
+      // only the un-merged ones are counted as leads.
+      const live = rows.filter(r => r.merged_into == null);
+      const ign = live.filter(r => (r.status || 'new') === 'ignore').length;
+      const folded = rows.length - live.length;
+      $('plStatus').textContent = (live.length - ign) + ' leads in pipeline'
+        + (ign ? ' \u00b7 ' + ign + ' ignored (hidden)' : '')
+        + (folded ? ' \u00b7 ' + folded + ' merged into other leads' : '') + '.';
       render();
     } catch (e) {
       $('plStatus').textContent = 'Load failed: ' + (e.message || e) + ' — has pipeline-upgrade.sql been run?';
@@ -7966,13 +8019,19 @@ init();
   function visible(){
     const q = ($('plSearch').value || '').trim().toUpperCase();
     return rows.filter(r => {
+      // A permit merged into another lead is not its own lead any more.
+      if (r.merged_into != null) return false;
       const st = r.status || 'new';
       // "All" means all *live* leads — ignored ones only surface under their own chip.
       if (statusFilter === 'all') { if (st === 'ignore') return false; }
       else if (st !== statusFilter) return false;
       if (starOnly && !r.starred) return false;
-      if (q && !([r.name, r.owner_taxpayer, r.address, r.owner_web, r.instagram, r.website, r.concept_note]
-        .some(v => String(v || '').toUpperCase().includes(q.replace(/^@/, ''))))) return false;
+      // Searching a merged-away permit's name still finds the lead that
+      // absorbed it, so an old TABC filing name doesn't become unfindable.
+      const kids = kidsOf(r.id);
+      const hay = [r.name, r.owner_taxpayer, r.address, r.owner_web, r.instagram, r.website, r.concept_note]
+        .concat(kids.map(k => k.name)).concat(kids.map(k => k.address));
+      if (q && !hay.some(v => String(v || '').toUpperCase().includes(q.replace(/^@/, '')))) return false;
       return true;
     });
   }
@@ -8082,7 +8141,7 @@ init();
         '<td class="pl-star" data-id="' + r.id + '" style="cursor:pointer;font-size:16px;color:var(--amber)">' + (r.starred ? '\u2605' : '\u2606') + '</td>' +
         '<td class="nm"' + (r.concept_note ? ' title="' + esc(r.concept_note) + '"' : '') + '>' +
           field(r, 'name', { cls: 'pl-name', ph: 'lead name' }) +
-          '<div style="font-weight:400;font-size:11px;color:var(--text3);padding:2px 0 0 .4rem">' + esc(r.source) + ' \u00b7 issued ' + String(r.issued || '').slice(0, 10) + '</div>' +
+          srcSubline(r) +
           field(r, 'owner_web', { ph: 'owner' }) + '</td>' +
         '<td class="ad">' + field(r, 'address', { ph: 'street' }) +
           '<div style="display:flex;gap:2px">' + field(r, 'city', { ph: 'city' }) + field(r, 'zip', { ph: 'zip' }) + '</div></td>' +
@@ -8129,6 +8188,12 @@ init();
       await save(id, { edited_fields: locks }, el.parentElement);
       render();
     }));
+    // ⛓ pill on a merged lead opens the group so it can be reviewed or undone.
+    document.querySelectorAll('#plTbl .pl-mrg').forEach(el => el.addEventListener('click', () => {
+      mgTab = 'done'; renderMerge(); openModal('plMergeModal');
+    }));
+    updateMergeBtn();
+
     document.querySelectorAll('#plTbl .pl-enrich').forEach(el => el.addEventListener('click', async () => {
       const id = +el.dataset.id;
       el.disabled = true; el.textContent = '\u2026';
@@ -8182,7 +8247,7 @@ init();
   });
   $('plCsv').addEventListener('click', () => {
     const q = s => '"' + String(s ?? '').replace(/"/g, '""') + '"';
-    const head = ['starred','status','name','address','city','zip','phone','issued','source',
+    const head = ['starred','status','name','address','city','zip','phone','issued','sources','merged_records',
       'type_or_naics','owner_taxpayer','taxpayer_number','legal_name','mailing_address',
       'sos_file_number','registered_agent','next_follow_up','notes','first_seen',
       'website','instagram','facebook','email','owner_web','concept_note','cuisine',
@@ -8190,7 +8255,7 @@ init();
       'enrich_confidence','enriched_at'];
     const lines = [head.join(',')].concat(visible().map(r => [
       r.starred ? 'Y' : '', q(r.status || 'new'), q(r.name), q(r.address), q(r.city), q(r.zip),
-      q(r.phone), String(r.issued || '').slice(0, 10), q(r.source), q(r.detail),
+      q(r.phone), String(r.issued || '').slice(0, 10), q(srcCsv(r)), String(1 + kidsOf(r.id).length), q(r.detail),
       q(r.owner_taxpayer), q(r.taxpayer_number), q(r.legal_name), q(r.mailing_address),
       q(r.sos_file_number), q(r.registered_agent), String(r.next_follow_up || '').slice(0, 10),
       q(r.notes), String(r.first_seen || '').slice(0, 10),
@@ -8205,6 +8270,330 @@ init();
     a.download = 'permit-pipeline-' + new Date().toISOString().slice(0, 10) + '.csv';
     a.click();
     URL.revokeObjectURL(a.href);
+  });
+
+  /* ================= DUPLICATE MERGE =================================
+     The same physical place reaches the board more than once: a TABC
+     pending application months before the sales-tax permit, sometimes a
+     TABC licence after that. They arrive as separate rows because
+     dedupe_key is per-source, and the collector upserts with
+     ignoreDuplicates so it never reconciles them.
+
+     Merging keeps every row in the table. The ones merged away just
+     point at the survivor through merged_into and drop off the board;
+     the survivor then carries all their sources in date order, which is
+     the actual payoff -- "applied 6/12, registered 7/28" is a better
+     lead than either row alone. Because the merged-away rows keep their
+     dedupe_key, tomorrow's collector still won't re-insert them.
+     ------------------------------------------------------------------- */
+
+  const kidsOf = id => rows.filter(x => x.merged_into === id);
+  const isKid  = r  => r.merged_into != null;
+
+  // Sub-line under the lead name: every permit this lead is built from,
+  // oldest first, so the lifecycle reads left to right.
+  function srcSubline(r){
+    const all = [r].concat(kidsOf(r.id))
+      .sort((a, b) => String(a.issued || '').localeCompare(String(b.issued || '')));
+    const txt = all.map(x => esc(x.source || '?') + ' ' +
+      (String(x.issued || '').slice(0, 10) || '\u2014')).join(' \u00b7 ');
+    const pill = all.length > 1
+      ? '<span class="pl-mrg" title="' + all.length +
+        ' permit records merged into this lead \u2014 click to review or un-merge">\u26d3 ' + all.length + '</span>'
+      : '';
+    return '<div class="pl-srcs">' + txt + pill + '</div>';
+  }
+
+  function srcCsv(r){
+    return [r].concat(kidsOf(r.id))
+      .sort((a, b) => String(a.issued || '').localeCompare(String(b.issued || '')))
+      .map(x => (x.source || '?') + ' ' + String(x.issued || '').slice(0, 10)).join(' | ');
+  }
+
+  /* ---- matching ---------------------------------------------------- */
+  // Written-out street words are normalised so "1200 South Congress
+  // Avenue" and "1200 S CONGRESS AVE" land on the same key.
+  const ABBR = { STREET:'ST', AVENUE:'AVE', AV:'AVE', ROAD:'RD', BOULEVARD:'BLVD',
+    DRIVE:'DR', LANE:'LN', HIGHWAY:'HWY', PARKWAY:'PKWY', COURT:'CT', CIRCLE:'CIR',
+    PLACE:'PL', TRAIL:'TRL', EXPRESSWAY:'EXPY', TERRACE:'TER', SQUARE:'SQ',
+    NORTH:'N', SOUTH:'S', EAST:'E', WEST:'W', NORTHEAST:'NE', NORTHWEST:'NW',
+    SOUTHEAST:'SE', SOUTHWEST:'SW', SUITE:'STE', STE:'STE', UNIT:'STE',
+    APARTMENT:'STE', APT:'STE', NUMBER:'STE', BUILDING:'BLDG', BLDG:'BLDG' };
+  const ENTITY = ['LLC','LP','LLP','LTD','INC','CO','CORP','CORPORATION','COMPANY','THE','DBA','L','C'];
+
+  function words(s){
+    return String(s || '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim()
+      .split(' ').filter(Boolean).map(w => ABBR[w] || w);
+  }
+  // Address splits into [street, unit]. The unit is held separately on
+  // purpose: two tenants in one food hall or strip centre share a street
+  // address, and silently merging them would lose a real lead.
+  function addrParts(s){
+    // "#100" and "# 100" mean "STE 100" in the state files, so the hash is
+    // translated before punctuation gets stripped -- otherwise "AVE #100"
+    // collapses to "AVE100" and never matches "AVE STE 100".
+    const w = words(String(s || '').replace(/#\s*/g, ' STE '));
+    const cut = w.findIndex(x => x === 'STE' || x === 'BLDG');
+    return cut === -1 ? [w.join(''), ''] : [w.slice(0, cut).join(''), w.slice(cut).join('')];
+  }
+  const nameKey = s => words(s).filter(w => ENTITY.indexOf(w) === -1).join('');
+  const zipKey  = r => String(r.zip || '').trim().slice(0, 5);
+
+  const TIERS = [
+    { id:'exact', label:'Same address',
+      why:'Identical street address, unit and zip \u2014 almost certainly the same place at two stages.' },
+    { id:'building', label:'Same building',
+      why:'Same street address and zip, but the unit differs or is missing \u2014 check these aren\u2019t two tenants in one building.' },
+    { id:'name', label:'Same business name',
+      why:'Same business name and zip, addresses written differently.' }
+  ];
+
+  let mgSug = [], mgTab = 'sug', mgPick = {};
+
+  function candidates(){
+    const live = rows.filter(r => !isKid(r));
+    const used = new Set();
+    const out = [];
+    TIERS.forEach(t => {
+      const buckets = new Map();
+      live.forEach(r => {
+        const zip = zipKey(r);
+        if (!zip) return;                       // zip anchors every tier
+        const parts = addrParts(r.address);
+        let k = null;
+        if (t.id === 'exact'    && parts[0]) k = 'A|' + parts[0] + '|' + parts[1] + '|' + zip;
+        if (t.id === 'building' && parts[0]) k = 'B|' + parts[0] + '|' + zip;
+        if (t.id === 'name') { const n = nameKey(r.name); if (n) k = 'N|' + n + '|' + zip; }
+        if (!k) return;
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(r);
+      });
+      buckets.forEach(grp => {
+        if (grp.length < 2) return;
+        // Skip a group whose rows were all already offered at a stronger tier.
+        if (grp.every(r => used.has(r.id))) return;
+        grp.forEach(r => used.add(r.id));
+        out.push({ tier: t, rows: grp.slice()
+          .sort((a, b) => String(a.issued || '').localeCompare(String(b.issued || ''))) });
+      });
+    });
+    return out;
+  }
+
+  /* ---- which row survives ------------------------------------------ */
+  // Whichever row has been *worked* wins by a wide margin -- notes, a
+  // status, a follow-up date and hand-edits are things only you can
+  // recreate, whereas a missing phone number is one lookup away.
+  const STAGE = ['ignore','new','contacted','meeting','proposal','won','lost'];
+  function score(r){
+    let s = 0;
+    ['name','owner_web','address','phone','email','instagram','facebook','website']
+      .forEach(f => { if (r[f]) s += 1; });
+    if (r.starred) s += 6;
+    if (r.notes) s += 6;
+    if (r.next_follow_up) s += 4;
+    if ((r.status || 'new') !== 'new') s += 6;
+    if (Array.isArray(r.edited_fields) && r.edited_fields.length) s += 8;
+    return s;
+  }
+  const defaultPrimary = grp => grp.slice().sort((a, b) =>
+    (score(b) - score(a)) ||
+    String(a.first_seen || '').localeCompare(String(b.first_seen || '')) ||
+    (a.id - b.id))[0];
+
+  // Everything the survivor can absorb. Deliberately excludes id,
+  // source, issued, dedupe_key, first_seen, starred, status, notes,
+  // next_follow_up and the merge columns -- those are either identity
+  // (must stay per-record) or handled explicitly below.
+  const UNION_FIELDS = ['name','owner_web','address','city','zip','phone','email','instagram',
+    'facebook','website','legal_name','registered_agent','mailing_address','sos_file_number',
+    'taxpayer_number','owner_taxpayer','concept_note','cuisine','detail','google_phone',
+    'google_maps_url','google_rating','google_reviews','business_status','opening_date',
+    'enrich_confidence','enriched_at'];
+
+  async function doMerge(primaryId, grp){
+    const primary = rows.find(r => r.id === primaryId);
+    if (!primary) throw new Error('kept row not found \u2014 refresh and try again');
+    const kids = grp.filter(r => r.id !== primaryId);
+    const locks = Array.isArray(primary.edited_fields) ? primary.edited_fields.slice() : [];
+    const patch = {};
+
+    // Fill only what the survivor is missing. A field you edited by hand
+    // is skipped even when it's empty -- a deliberate blank is still a
+    // decision, and the lock is what says so.
+    UNION_FIELDS.forEach(f => {
+      if (primary[f] != null && primary[f] !== '') return;
+      if (locks.indexOf(f) !== -1) return;
+      const donor = kids.find(k => k[f] != null && k[f] !== '');
+      if (donor) patch[f] = donor[f];
+    });
+
+    if (!primary.starred && kids.some(k => k.starred)) patch.starred = true;
+
+    // Furthest-along status wins, so a merge can never walk a worked
+    // lead backwards to "new".
+    const best = grp.map(r => r.status || 'new')
+      .reduce((a, b) => (STAGE.indexOf(b) > STAGE.indexOf(a) ? b : a), 'ignore');
+    if (best !== (primary.status || 'new')) patch.status = best;
+
+    // Earliest outstanding follow-up survives.
+    const fu = grp.map(r => r.next_follow_up).filter(Boolean).sort()[0];
+    if (fu && fu !== primary.next_follow_up) patch.next_follow_up = fu;
+
+    // Notes are appended, never dropped.
+    const notes = [];
+    grp.forEach(r => {
+      const n = String(r.notes || '').trim();
+      if (n && notes.indexOf(n) === -1) notes.push(n);
+    });
+    const joined = notes.join('  |  ');
+    if (joined !== String(primary.notes || '')) patch.notes = joined || null;
+
+    // A lock travels with the value it was protecting.
+    const allLocks = locks.slice();
+    kids.forEach(k => (k.edited_fields || []).forEach(f => {
+      if (allLocks.indexOf(f) === -1 && patch[f] !== undefined) allLocks.push(f);
+    }));
+    if (allLocks.length !== locks.length) patch.edited_fields = allLocks;
+
+    const { data: { session } } = await sb.auth.getSession();
+    const uid = (session && session.user) ? session.user.id : null;
+
+    if (Object.keys(patch).length) {
+      const { error } = await sb.from('prospect_permits').update(patch).eq('id', primaryId);
+      if (error) throw error;
+    }
+    const { error: e2 } = await sb.from('prospect_permits')
+      .update({ merged_into: primaryId, merged_at: new Date().toISOString(), merged_by: uid })
+      .in('id', kids.map(k => k.id));
+    if (e2) throw e2;
+  }
+
+  async function doUnmerge(primaryId){
+    const { error } = await sb.from('prospect_permits')
+      .update({ merged_into: null, merged_at: null, merged_by: null })
+      .eq('merged_into', primaryId);
+    if (error) throw error;
+  }
+
+  /* ---- modal -------------------------------------------------------- */
+  function cells(r){
+    const contacts = [r.phone, r.email, r.instagram, r.website].filter(Boolean).length;
+    return '<td style="white-space:nowrap">' + esc(r.source || '?') + '<div style="color:var(--text3)">' +
+        (String(r.issued || '').slice(0, 10) || '\u2014') + '</div></td>' +
+      '<td><b>' + esc(r.name || '(no name)') + '</b>' +
+        (r.owner_web ? '<div style="color:var(--text3)">' + esc(r.owner_web) + '</div>' : '') + '</td>' +
+      '<td>' + esc([r.address, r.city, r.zip].filter(Boolean).join(', ')) + '</td>' +
+      '<td style="white-space:nowrap">' + esc(r.status || 'new') + (r.starred ? ' \u2605' : '') +
+        (r.next_follow_up ? '<div style="color:var(--text3)">' + esc(r.next_follow_up) + '</div>' : '') + '</td>' +
+      '<td style="white-space:nowrap">' + contacts + '/4</td>' +
+      '<td style="max-width:190px;word-break:break-word;color:var(--text3)">' + esc(r.notes || '') + '</td>';
+  }
+  const HEAD = '<thead><tr><th style="width:52px"></th><th>Source</th><th>Lead</th>' +
+    '<th>Address</th><th>Status</th><th>Contacts</th><th>Notes</th></tr></thead>';
+
+  function renderMerge(){
+    mgSug = candidates();
+    const merged = rows.filter(r => !isKid(r) && kidsOf(r.id).length);
+    $('plMgSug').textContent = 'Suggestions (' + mgSug.length + ')';
+    $('plMgDone').textContent = 'Already merged (' + merged.length + ')';
+    $('plMgSug').setAttribute('aria-pressed', mgTab === 'sug' ? 'true' : 'false');
+    $('plMgDone').setAttribute('aria-pressed', mgTab === 'done' ? 'true' : 'false');
+    const box = $('plMgBody');
+
+    if (mgTab === 'sug') {
+      if (!mgSug.length) {
+        box.innerHTML = '<p class="pm-why">No duplicate candidates on the board right now. ' +
+          'Matching runs on normalised address+zip, then street+zip, then business name+zip.</p>';
+        return;
+      }
+      box.innerHTML = mgSug.map((g, i) => {
+        const pick = (mgPick[i] && g.rows.some(r => r.id === mgPick[i])) ? mgPick[i] : defaultPrimary(g.rows).id;
+        mgPick[i] = pick;
+        return '<div class="pm-grp">' +
+          '<span class="pm-tier ' + g.tier.id + '">' + esc(g.tier.label) + '</span>' +
+          '<span class="pm-why">' + esc(g.tier.why) + '</span>' +
+          '<table class="pm-t">' + HEAD.replace('<th style="width:52px"></th>', '<th style="width:52px">Keep</th>') +
+          '<tbody>' + g.rows.map(r =>
+            '<tr><td><input type="radio" name="pmP' + i + '" class="pm-pick" data-g="' + i +
+              '" data-id="' + r.id + '"' + (r.id === pick ? ' checked' : '') + '></td>' + cells(r) + '</tr>'
+          ).join('') + '</tbody></table>' +
+          '<div class="pm-act">' +
+            '<button class="btn btn-primary pm-go" data-g="' + i + '">Merge these ' + g.rows.length + '</button>' +
+            '<span class="pm-why">The kept row absorbs every field it\u2019s missing, all notes, the ' +
+            'furthest-along status and the earliest follow-up. Hand-edited (\u270e) fields are never ' +
+            'overwritten. The other rows stay in the table and can be un-merged.</span>' +
+          '</div></div>';
+      }).join('');
+
+      box.querySelectorAll('.pm-pick').forEach(el => el.addEventListener('change', () => {
+        mgPick[+el.dataset.g] = +el.dataset.id;
+      }));
+      box.querySelectorAll('.pm-go').forEach(el => el.addEventListener('click', async () => {
+        const i = +el.dataset.g, g = mgSug[i];
+        if (!g) return;
+        const keep = rows.find(r => r.id === mgPick[i]);
+        if (!confirm('Merge ' + g.rows.length + ' records into "' + (keep && keep.name ? keep.name : 'this lead') +
+          '"?\n\nThe others drop off the board but stay in the table \u2014 you can un-merge them.')) return;
+        el.disabled = true; el.textContent = 'Merging\u2026';
+        try {
+          await doMerge(mgPick[i], g.rows);
+          await loadRows();
+          mgPick = {};
+          renderMerge();
+        } catch (e) {
+          alert('Merge failed: ' + (e.message || e) + '\n\nHas pipeline-merge.sql been run?');
+          el.disabled = false; el.textContent = 'Merge these ' + g.rows.length;
+        }
+      }));
+      return;
+    }
+
+    if (!merged.length) {
+      box.innerHTML = '<p class="pm-why">Nothing has been merged yet.</p>';
+      return;
+    }
+    box.innerHTML = merged.map(p =>
+      '<div class="pm-grp"><table class="pm-t">' + HEAD + '<tbody>' +
+        '<tr><td style="font-size:10px;font-weight:700;color:var(--green)">KEPT</td>' + cells(p) + '</tr>' +
+        kidsOf(p.id).map(k =>
+          '<tr style="opacity:.6"><td style="font-size:10px;color:var(--text3)">merged</td>' + cells(k) + '</tr>'
+        ).join('') +
+      '</tbody></table>' +
+      '<div class="pm-act">' +
+        '<button class="btn btn-secondary pm-un" data-id="' + p.id + '">Un-merge</button>' +
+        '<span class="pm-why">Puts the merged records back on the board as their own leads. Fields the ' +
+        'kept row absorbed stay where they are \u2014 un-merging separates the rows, it doesn\u2019t rewind the copy.</span>' +
+      '</div></div>'
+    ).join('');
+
+    box.querySelectorAll('.pm-un').forEach(el => el.addEventListener('click', async () => {
+      if (!confirm('Un-merge this lead? The folded records go back on the board as separate leads.')) return;
+      el.disabled = true; el.textContent = 'Un-merging\u2026';
+      try {
+        await doUnmerge(+el.dataset.id);
+        await loadRows();
+        renderMerge();
+      } catch (e) {
+        alert('Un-merge failed: ' + (e.message || e));
+        el.disabled = false; el.textContent = 'Un-merge';
+      }
+    }));
+  }
+
+  function updateMergeBtn(){
+    const b = $('plMerge');
+    if (!b || !loaded) return;
+    const n = candidates().length;
+    b.textContent = n ? 'Find duplicates (' + n + ')' : 'Find duplicates';
+    b.style.borderColor = n ? 'var(--amber)' : '';
+    b.style.color = n ? 'var(--amber)' : '';
+  }
+
+  $('plMerge').addEventListener('click', () => {
+    mgTab = 'sug'; mgPick = {};
+    renderMerge();
+    openModal('plMergeModal');
   });
 })();
 </script>
