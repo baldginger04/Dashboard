@@ -1029,6 +1029,7 @@
           <div style="flex:1"></div>
           <button onclick="runAllTax()" style="border:0;background:#D85B31;color:#fff;border-radius:8px;padding:.5rem 1.1rem;font-weight:700;cursor:pointer">Run all</button>
         </div>
+        <div id="taxSummary"></div>
         <div id="taxList"><div class="empty">Loading&#8230;</div></div>
       </div>
       <!-- VENDOR CODING AUDIT -->
@@ -5939,6 +5940,21 @@ function taxQuarter(d) {
   const s = new Date(d.getFullYear(), q * 3, 1), e = new Date(d.getFullYear(), q * 3 + 3, 0);
   return { s, e, label: 'Q' + (q + 1) + ' ' + d.getFullYear() };
 }
+// The period immediately before the selected one, for variance checks.
+// Quarterly filers step back a quarter, monthly a month.
+function taxPrevPeriodKey(cfg) {
+  if (cfg.cadence === 'quarterly') {
+    const q = taxQuarter(taxMonth);
+    const e = new Date(q.e.getFullYear(), q.e.getMonth() - 3, 1);
+    return taxKey(e);
+  }
+  return taxKey(new Date(taxMonth.getFullYear(), taxMonth.getMonth() - 1, 1));
+}
+function taxPrevResults(cfg) {
+  const f = Tax.saved[cfg.client_id + '|' + taxPrevPeriodKey(cfg)];
+  return (f && f.data && f.data.results) ? f.data.results : null;
+}
+
 function taxPeriodKey(cfg) {
   if (cfg.cadence !== 'quarterly') return taxKey(taxMonth);
   const q = taxQuarter(taxMonth);
@@ -5968,7 +5984,7 @@ async function loadTaxPage() {
   }
   // Saved filings for every period visible under the selected month
   Tax.saved = {};
-  const periods = [...new Set(Tax.cfgs.map(taxPeriodKey))];
+  const periods = [...new Set(Tax.cfgs.map(taxPeriodKey).concat(Tax.cfgs.map(taxPrevPeriodKey)))];
   try {
     const { data: rows } = await sb.from('tax_filings').select('*').in('period', periods);
     (rows || []).forEach(f => { Tax.saved[f.client_id + '|' + f.period] = f; });
@@ -5977,7 +5993,47 @@ async function loadTaxPage() {
 }
 function taxShiftMonth(d) { taxMonth = new Date(taxMonth.getFullYear(), taxMonth.getMonth() + d, 1); loadTaxPage(); }
 
+// Month-at-a-glance triage: every client with a saved filing, grouped by
+// how much attention it needs, so the sweep starts from the problems rather
+// than from the top of the list.
+function renderTaxSummary() {
+  const el = document.getElementById('taxSummary');
+  if (!el) return;
+  const rows = [];
+  Tax.cfgs.forEach(cfg => {
+    const f = Tax.saved[cfg.client_id + '|' + taxPeriodKey(cfg)];
+    if (!f || !f.data || !f.data.results) return;
+    const checks = taxChecks(cfg, f.data.results, taxPrevResults(cfg));
+    rows.push({
+      name: cfg.clients?.name || '(client)',
+      errors: checks.filter(c => c.level === 'error').length,
+      warns: checks.filter(c => c.level === 'warn').length,
+      filed: f.status === 'filed',
+    });
+  });
+  if (!rows.length) { el.innerHTML = ''; return; }
+  const bad = rows.filter(r => r.errors).sort((a, b) => b.errors - a.errors);
+  const warn = rows.filter(r => !r.errors && r.warns);
+  const ok = rows.filter(r => !r.errors && !r.warns);
+  const pill = (n, label, color, bg) =>
+    '<span style="font-size:.75rem;font-weight:700;color:' + color + ';background:' + bg + ';border-radius:999px;padding:.2rem .7rem">' + n + ' ' + label + '</span>';
+  const nameList = (list) => list.map(r => taxEsc(r.name) + (r.errors ? ' (' + r.errors + ')' : '')).join(' \u00b7 ');
+  el.innerHTML = '<div style="border:1px solid var(--border);border-radius:10px;background:white;padding:.7rem 1rem;margin-bottom:.8rem">'
+    + '<div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">'
+    + '<span style="font-weight:800;font-size:.85rem">' + rows.length + ' computed</span>'
+    + '<div style="flex:1"></div>'
+    + (bad.length ? pill(bad.length, 'with issues', '#b93232', '#fbe9e9') : '')
+    + (warn.length ? pill(warn.length, 'to check', '#b26a00', '#fbf0dd') : '')
+    + (ok.length ? pill(ok.length, 'clean', '#1e7a45', '#e7f3ec') : '')
+    + (rows.filter(r => r.filed).length ? pill(rows.filter(r => r.filed).length, 'filed', '#555', '#eee') : '')
+    + '</div>'
+    + (bad.length ? '<div style="font-size:.78rem;color:#8a1f1f;margin-top:.4rem">\u26d4 ' + nameList(bad) + '</div>' : '')
+    + (warn.length ? '<div style="font-size:.78rem;color:#8a5a00;margin-top:.25rem">\u26a0\ufe0f ' + nameList(warn) + '</div>' : '')
+    + '</div>';
+}
+
 function renderTaxList() {
+  renderTaxSummary();
   const list = document.getElementById('taxList');
   list.innerHTML = Tax.cfgs.map(cfg => {
     const name = cfg.clients?.name || '(client)';
@@ -5988,6 +6044,7 @@ function renderTaxList() {
       quarterly ? '<span style="font-size:.7rem;font-weight:700;color:#1B2A4B;background:#e8ecf5;border-radius:999px;padding:.15rem .55rem">Quarterly</span>' : '',
       cfg.mb_enabled ? '<span style="font-size:.7rem;font-weight:700;color:#6a4a8a;background:#efe8f7;border-radius:999px;padding:.15rem .55rem">MB</span>' : '',
       cfg.needs_review ? '<span title="' + taxEsc(cfg.notes || '') + '" style="font-size:.7rem;font-weight:700;color:#b26a00;background:#fbf0dd;border-radius:999px;padding:.15rem .55rem;cursor:help">Needs review</span>' : '',
+      filing && filing.data && filing.data.results ? taxCheckBadge(taxChecks(cfg, filing.data.results, taxPrevResults(cfg))) : '',
       filing ? (filing.status === 'filed'
         ? '<span style="font-size:.7rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.15rem .55rem">Filed \u2713</span>'
         : '<span style="font-size:.7rem;font-weight:700;color:#555;background:#eee;border-radius:999px;padding:.15rem .55rem">Computed</span>') : '',
@@ -6061,7 +6118,169 @@ function computeTax(cfg, income, gl) {
   const collected = counted.reduce((s, l) => s + l.amount, 0);
   const collectedLessMb = cfg.mb_enabled ? collected - mbStTax : collected;
   const expense = stPayable - collectedLessMb;
-  return { liq, beer, wine, comps, grossAlc, ti, exempt, alcOut, stBase, totalTexas, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense };
+  // Per-account role assignment, kept so taxChecks() can find accounts that
+  // no rule claims and accounts that two rules both claim.
+  const roleOf = (a) => {
+    const roles = [];
+    if (taxMatch(R.mb_liquor, a)) roles.push('mb_liquor');
+    if (taxMatch(R.mb_beer, a))   roles.push('mb_beer');
+    if (taxMatch(R.mb_wine, a))   roles.push('mb_wine');
+    if (taxMatch(R.mb_comps, a))  roles.push('mb_comps');
+    if (taxMatch(R.exempt, a))    roles.push('exempt');
+    if (R.taxable_only && R.taxable_only.length && taxMatch(R.taxable_only, a)) roles.push('taxable_only');
+    return roles;
+  };
+  const classified = (income || []).map(a => ({
+    num: a.num, name: a.name, amount: a.amount,
+    other: !!a.other, section: a.section || null,
+    counted: !a.other || taxMatch(R.include_other, a),
+    roles: roleOf(a),
+  }));
+  return { liq, beer, wine, comps, grossAlc, ti, exempt, alcOut, stBase, totalTexas, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense, classified };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// VALIDATION — every check below exists because a real filing was wrong.
+// Each returns { level, code, msg, detail? }. level 'error' means do not
+// file this until it's understood; 'warn' means look before filing.
+// Checks are PURE functions of a computed result plus the prior period's
+// saved figures, so they cost nothing extra and run on Recompute too.
+// ══════════════════════════════════════════════════════════════════════
+const TAX_VARIANCE_PCT = 0.25;   // month-over-month move that earns a flag
+const TAX_EXPENSE_WARN = 100;    // |sales tax expense| over this is suspicious
+const TAX_MB_ACCRUAL_TOL = 1.00; // vs the client's own MB accrual account
+
+function taxChecks(cfg, r, prev) {
+  const out = [];
+  const add = (level, code, msg, detail) => out.push({ level, code, msg, detail });
+  const cls = r.classified || [];
+  const money = v => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const acctLabel = a => (a.num ? a.num + ' ' : '') + (a.name || '(unnamed)');
+
+  // ---- 1. COVERAGE. Murray's (gross beer/wine unmatched), Nickel City's
+  // unnumbered "Sales" and Juniper's discounts were all invisible because
+  // nothing said an account was unaccounted for.
+  if (cfg.mb_enabled) {
+    const roles = ['mb_liquor', 'mb_beer', 'mb_wine'];
+    roles.forEach(role => {
+      if (!cls.some(a => a.roles.includes(role)))
+        add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0.');
+    });
+    // A discount/comp account caught by a GROSS rule is the Murray's fault.
+    cls.forEach(a => {
+      const looksContra = /discount|comp/i.test(a.name || '');
+      const grossRole = a.roles.find(x => x === 'mb_liquor' || x === 'mb_beer' || x === 'mb_wine');
+      if (looksContra && grossRole)
+        add('error', 'contra_as_gross', acctLabel(a) + ' looks like a discount account but is being counted as ' + grossRole + '.');
+    });
+    // Gross alcohol components should be positive; a negative means the rule
+    // is pointing somewhere wrong.
+    [['liquor', r.liq], ['beer', r.beer], ['wine', r.wine]].forEach(([n, v]) => {
+      if (v < 0) add('error', 'negative_gross', 'Gross ' + n + ' is negative (' + money(v) + ') — the rule is matching a contra account.');
+    });
+  }
+  // Accounts in the taxable base that no rule names at all. Not an error —
+  // most income SHOULD be plain taxable — but listed so a new account can't
+  // slip in unnoticed. Only flagged when it's material or looks non-taxable.
+  const unclaimed = cls.filter(a => a.counted && !a.roles.length);
+  const suspicious = unclaimed.filter(a =>
+    /event|service charge|admin|gratuit|tip|delivery|shipping|freight|rental|misc|other|interest|wholesale/i.test(a.name || '')
+    || !a.num);
+  if (suspicious.length)
+    add('warn', 'unclaimed_suspicious',
+        suspicious.length + ' account' + (suspicious.length === 1 ? '' : 's') + ' in the taxable base that often should be exempt — confirm each is taxable.',
+        suspicious.map(a => acctLabel(a) + '  ' + money(a.amount)));
+
+  // ---- 2. DOUBLE-CLAIMED. An account matched by two roles is counted twice
+  // in one direction and once in the other; always a config error.
+  const dupes = cls.filter(a => a.roles.filter(x => x !== 'taxable_only').length > 1);
+  if (dupes.length)
+    add('error', 'double_claimed', 'Account matched by more than one rule — it is being counted twice.',
+        dupes.map(a => acctLabel(a) + '  \u2192 ' + a.roles.join(' + ')));
+
+  // ---- 3. STRUCTURAL INVARIANTS. Each maps to a way the maths can go wrong.
+  if (r.stBase < 0)
+    add('error', 'base_negative', 'Taxable base is negative (' + money(r.stBase) + ') — an exempt rule is almost certainly matching too much.');
+  if (r.stBase > r.ti + 0.5)
+    add('error', 'base_over_income', 'Taxable base ' + money(r.stBase) + ' exceeds total income ' + money(r.ti) + '.');
+  if (r.stPayable > r.stTax + 0.005)
+    add('error', 'payable_over_calc', 'Payable ' + money(r.stPayable) + ' exceeds tax calculated ' + money(r.stTax) + ' — the timely discount should make it lower.');
+  if (cfg.mb_enabled && Math.abs(r.mbTotal - (Math.round(r.liq) + Math.round(r.beer) + Math.round(r.wine))) > 0.5)
+    add('error', 'mb_total_mismatch', 'MB total does not equal liquor + beer + wine.');
+  if (cfg.mb_enabled && r.mbTotal > 0 && r.comps / r.mbTotal > 0.35)
+    add('warn', 'comps_ratio', 'Comps are ' + Math.round(r.comps / r.mbTotal * 100) + '% of gross alcohol — unusually high, check the comps rule.');
+  if (cfg.mb_enabled && r.comps === 0)
+    add('warn', 'no_comps', 'No complimentary drinks or alcohol discounts found. Correct for some clients, but verify.');
+
+  // ---- 4. MB ACCRUAL CROSS-CHECK. An independent figure: what the client
+  // itself accrued for MB gross receipts tax, from its own P&L. Nickel City
+  // ATX books 13,914.35 against our 13,914.29.
+  if (cfg.mb_enabled) {
+    const accrual = cls.filter(a => /mixed\s*beverage|\bmb\b/i.test(a.name || '') && /tax/i.test(a.name || ''));
+    accrual.forEach(a => {
+      const booked = Math.abs(a.amount);
+      const d = booked - r.mbGrTax;
+      if (Math.abs(d) > TAX_MB_ACCRUAL_TOL)
+        add('warn', 'mb_accrual_gap',
+            'Client books ' + acctLabel(a) + ' at ' + money(booked) + ' vs computed MB gross receipts tax ' + money(r.mbGrTax) + ' (' + (d > 0 ? 'over' : 'under') + ' by ' + money(d) + ').');
+    });
+  }
+
+  // ---- 5. RECONCILIATION GATES. Murray's showed collected across 0 lines,
+  // which is a matcher failure, not a zero. Casa's $13,387 expense was the
+  // Bill-type bug announcing itself.
+  const nLines = (r.counted || []).length + (r.excluded || []).length;
+  if (nLines === 0)
+    add('error', 'no_gl_lines', 'No sales-tax liability lines found at all — liability_accounts probably does not match this client\u2019s payable account.');
+  else if ((r.counted || []).length === 0)
+    add('error', 'all_gl_excluded', 'Every liability line was excluded as a remittance type — nothing counted as collected.');
+  if (nLines > 0 && Math.abs(r.expense) > TAX_EXPENSE_WARN)
+    add('warn', 'expense_large', 'Sales tax expense ' + money(r.expense) + ' is large — collected and payable are not reconciling.');
+  if (r.collected < 0)
+    add('warn', 'collected_negative', 'Collected is negative (' + money(r.collected) + ') — a remittance type is still being counted.');
+
+  // ---- 6. MONTH-OVER-MONTH VARIANCE. Catches the bugs nobody predicted,
+  // including a config that was right last month and broke this month.
+  if (prev) {
+    const cmp = (label, now, was) => {
+      if (!was || Math.abs(was) < 1) return;
+      const pct = (now - was) / Math.abs(was);
+      if (Math.abs(pct) >= TAX_VARIANCE_PCT)
+        add('warn', 'variance', label + ' moved ' + (pct > 0 ? '+' : '') + Math.round(pct * 100) + '% vs last period (' + money(was) + ' \u2192 ' + money(now) + ').');
+    };
+    cmp('Taxable base', r.stBase, prev.stBase);
+    cmp('Total income', r.ti, prev.ti);
+    if (cfg.mb_enabled) cmp('Gross alcohol', r.mbTotal, prev.mbTotal);
+    // Effective rate is the sharpest signal: it should barely move even when
+    // volume swings, so a change means the COMPOSITION changed.
+    const eff = (x) => (x && x.ti) ? x.stBase / x.ti : null;
+    const e0 = eff(prev), e1 = eff(r);
+    if (e0 !== null && e1 !== null && Math.abs(e1 - e0) > 0.05)
+      add('warn', 'mix_shift', 'Taxable share of income moved ' + Math.round(e0 * 100) + '% \u2192 ' + Math.round(e1 * 100) + '% — the account mix or a rule changed.');
+  }
+
+  return out;
+}
+
+function taxCheckBadge(checks) {
+  const e = checks.filter(c => c.level === 'error').length;
+  const w = checks.filter(c => c.level === 'warn').length;
+  if (e) return '<span style="font-size:.7rem;font-weight:700;color:#b93232;background:#fbe9e9;border-radius:999px;padding:.15rem .55rem">' + e + ' issue' + (e === 1 ? '' : 's') + '</span>';
+  if (w) return '<span style="font-size:.7rem;font-weight:700;color:#b26a00;background:#fbf0dd;border-radius:999px;padding:.15rem .55rem">' + w + ' to check</span>';
+  return '<span style="font-size:.7rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.15rem .55rem">Checks pass</span>';
+}
+
+function renderTaxChecks(checks) {
+  if (!checks.length)
+    return '<div style="font-size:.78rem;color:#1e7a45;background:#e7f3ec;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u2713 All validation checks pass.</div>';
+  return checks.map(c => {
+    const err = c.level === 'error';
+    const detail = (c.detail && c.detail.length)
+      ? '<div style="margin-top:.25rem;font-size:.74rem;opacity:.85">' + c.detail.map(d => '\u00b7 ' + taxEsc(d)).join('<br>') + '</div>'
+      : '';
+    return '<div style="font-size:.78rem;color:' + (err ? '#8a1f1f' : '#8a5a00') + ';background:' + (err ? '#fbe9e9' : '#fbf0dd')
+      + ';border-radius:6px;padding:.35rem .6rem;margin-top:.4rem">' + (err ? '\u26d4' : '\u26a0\ufe0f') + ' ' + taxEsc(c.msg) + detail + '</div>';
+  }).join('');
 }
 
 // ── Rounding adjustments ───────────────────────────────────────────────
@@ -6441,7 +6660,8 @@ function renderTaxCard(cfg, r, filing) {
       + '<div id="taxFileConfirm_' + cid + '"></div>';
   }
   const note = cfg.notes ? '<div style="font-size:.75rem;color:#8a5a00;background:#fbf0dd;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u26a0\ufe0f ' + taxEsc(cfg.notes) + '</div>' : '';
-  return '<div style="padding:.2rem 1rem .9rem;border-top:1px solid var(--border)">' + mb + su + recon + stale + stamp + note + '</div>';
+  const checks = renderTaxChecks(taxChecks(cfg, r, taxPrevResults(cfg)));
+  return '<div style="padding:.2rem 1rem .9rem;border-top:1px solid var(--border)">' + mb + su + recon + stale + checks + stamp + note + '</div>';
 }
 window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth; window.markTaxFiled = markTaxFiled;
 window.saveTaxAdjustment = saveTaxAdjustment; window.confirmTaxFiled = confirmTaxFiled; window.taxSetFiled = taxSetFiled; window.cancelTaxFileConfirm = cancelTaxFileConfirm;
