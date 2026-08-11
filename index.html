@@ -6257,6 +6257,7 @@ function taxChecks(cfg, r, prev) {
   const out = [];
   const add = (level, code, msg, detail) => out.push({ level, code, msg, detail });
   const cls = r.classified || [];
+  const R_taxable_only = ((cfg && cfg.rules) || {}).taxable_only;
   // Filings computed before the validation build carry no per-account
   // classification. Checks that NEED it are skipped rather than reporting a
   // false negative — an empty list is "unknown", not "nothing matched".
@@ -6292,7 +6293,11 @@ function taxChecks(cfg, r, prev) {
   // Accounts in the taxable base that no rule names at all. Not an error —
   // most income SHOULD be plain taxable — but listed so a new account can't
   // slip in unnoticed. Only flagged when it's material or looks non-taxable.
-  const unclaimed = hasCls ? cls.filter(a => a.counted && !a.roles.length) : [];
+  // For taxable_only clients the base is built from a named list, so every
+  // OTHER account is excluded by design — flagging them as "unclaimed" is
+  // noise, not a finding.
+  const taxableOnly = !!(R_taxable_only && R_taxable_only.length);
+  const unclaimed = (hasCls && !taxableOnly) ? cls.filter(a => a.counted && !a.roles.length) : [];
   const suspicious = unclaimed.filter(a =>
     /event|service charge|admin|gratuit|tip|delivery|shipping|freight|rental|misc|other|interest|wholesale/i.test(a.name || '')
     || !a.num);
