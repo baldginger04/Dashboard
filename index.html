@@ -6003,9 +6003,22 @@ function renderTaxList() {
   }).join('') || '<div class="empty">No tax clients configured.</div>';
 }
 
+// Rule tokens, in precedence order:
+//   "=Sales"  exact match on the account name (or number). Needed for
+//             accounts with NO account number whose name is a substring of
+//             other accounts — Nickel City ATX has an account named simply
+//             "Sales", and any substring of it also matches Food Sales,
+//             Liquor Sales and the rest, so no plain token can name it.
+//   "4310"    all digits: the account number, exactly or as a prefix.
+//   anything  case-insensitive substring of the account name.
 function taxMatch(rulesList, acct) {
   return (rulesList || []).some(p => {
-    const ps = String(p);
+    const ps = String(p).trim();
+    if (ps.startsWith('=')) {
+      const want = ps.slice(1).trim().toLowerCase();
+      return String(acct.name || '').trim().toLowerCase() === want
+          || String(acct.num || '').trim().toLowerCase() === want;
+    }
     if (/^\d+$/.test(ps)) return acct.num === ps || (acct.num && acct.num.startsWith(ps));
     return (acct.name || '').toLowerCase().includes(ps.toLowerCase());
   });
