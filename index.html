@@ -6235,6 +6235,10 @@ function taxChecks(cfg, r, prev) {
   const out = [];
   const add = (level, code, msg, detail) => out.push({ level, code, msg, detail });
   const cls = r.classified || [];
+  // Filings computed before the validation build carry no per-account
+  // classification. Checks that NEED it are skipped rather than reporting a
+  // false negative — an empty list is "unknown", not "nothing matched".
+  const hasCls = Array.isArray(r.classified) && r.classified.length > 0;
   const money = v => '$' + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const acctLabel = a => (a.num ? a.num + ' ' : '') + (a.name || '(unnamed)');
 
@@ -6242,9 +6246,12 @@ function taxChecks(cfg, r, prev) {
   // unnumbered "Sales" and Juniper's discounts were all invisible because
   // nothing said an account was unaccounted for.
   if (cfg.mb_enabled) {
-    const roles = ['mb_liquor', 'mb_beer', 'mb_wine'];
-    roles.forEach(role => {
-      if (!cls.some(a => a.roles.includes(role)))
+    // Without classification, fall back to the computed component itself: a
+    // role that matched nothing necessarily produces 0. That keeps this check
+    // working on older filings instead of firing on every one of them.
+    [['mb_liquor', r.liq], ['mb_beer', r.beer], ['mb_wine', r.wine]].forEach(([role, amt]) => {
+      const empty = hasCls ? !cls.some(a => a.roles.includes(role)) : (Number(amt) || 0) === 0;
+      if (empty)
         add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0.');
     });
     // A discount/comp account caught by a GROSS rule is the Murray's fault.
@@ -6263,7 +6270,7 @@ function taxChecks(cfg, r, prev) {
   // Accounts in the taxable base that no rule names at all. Not an error —
   // most income SHOULD be plain taxable — but listed so a new account can't
   // slip in unnoticed. Only flagged when it's material or looks non-taxable.
-  const unclaimed = cls.filter(a => a.counted && !a.roles.length);
+  const unclaimed = hasCls ? cls.filter(a => a.counted && !a.roles.length) : [];
   const suspicious = unclaimed.filter(a =>
     /event|service charge|admin|gratuit|tip|delivery|shipping|freight|rental|misc|other|interest|wholesale/i.test(a.name || '')
     || !a.num);
@@ -6274,7 +6281,7 @@ function taxChecks(cfg, r, prev) {
 
   // ---- 2. DOUBLE-CLAIMED. An account matched by two roles is counted twice
   // in one direction and once in the other; always a config error.
-  const dupes = cls.filter(a => a.roles.filter(x => x !== 'taxable_only').length > 1);
+  const dupes = hasCls ? cls.filter(a => a.roles.filter(x => x !== 'taxable_only').length > 1) : [];
   if (dupes.length)
     add('error', 'double_claimed', 'Account matched by more than one rule — it is being counted twice.',
         dupes.map(a => acctLabel(a) + '  \u2192 ' + a.roles.join(' + ')));
@@ -6301,7 +6308,7 @@ function taxChecks(cfg, r, prev) {
   // itself accrued for MB gross receipts tax, from its own P&L. Nickel City
   // ATX books 13,914.35 against our 13,914.29.
   if (cfg.mb_enabled) {
-    const accrual = cls.filter(a => /mixed\s*beverage|\bmb\b/i.test(a.name || '') && /tax/i.test(a.name || ''));
+    const accrual = hasCls ? cls.filter(a => /mixed\s*beverage|\bmb\b/i.test(a.name || '') && /tax/i.test(a.name || '')) : [];
     accrual.forEach(a => {
       const booked = Math.abs(a.amount);
       const d = booked - r.mbGrTax;
@@ -6787,7 +6794,10 @@ function renderTaxCard(cfg, r, filing) {
       + '<div id="taxFileConfirm_' + cid + '"></div>';
   }
   const note = cfg.notes ? '<div style="font-size:.75rem;color:#8a5a00;background:#fbf0dd;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u26a0\ufe0f ' + taxEsc(cfg.notes) + '</div>' : '';
-  const checks = renderTaxChecks(taxChecks(cfg, r, taxPrevResults(cfg)));
+  const checks = renderTaxChecks(taxChecks(cfg, r, taxPrevResults(cfg)))
+    + ((Array.isArray(r.classified) && r.classified.length)
+        ? ''
+        : '<div style="font-size:.72rem;color:var(--muted,#888);margin-top:.35rem">This filing was computed before the account-coverage checks existed \u2014 Recompute to enable them.</div>');
   return '<div style="padding:.2rem 1rem .9rem;border-top:1px solid var(--border)">' + mb + su + recon + stale + checks + stamp + note + '</div>';
 }
 window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth; window.markTaxFiled = markTaxFiled;
