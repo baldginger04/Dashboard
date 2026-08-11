@@ -6151,6 +6151,53 @@ async function runAllTax() {
 // confirmation — nothing is completed without being seen first.
 const TAX_TASK_RE = /sales\s*tax|mixed\s*beverage|comptroller|webfile|use\s*tax|occupancy|\bmb\b/i;
 
+// The figures a recompute could move. Compared before/after so a recompute
+// that changes nothing doesn't gratuitously un-file a filed month.
+function taxKeyFigures(r) {
+  r = r || {};
+  return {
+    mbTotal: r.mbTotal, mbGrTax: r.mbGrTax, mbStTax: r.mbStTax,
+    stBase: r.stBase, totalTexas: r.totalTexas, stTax: r.stTax,
+    stPayable: r.stPayable, collected: r.collected, expense: r.expense,
+  };
+}
+
+// Re-run computeTax over the income and GL lines ALREADY SAVED with this
+// filing — no QuickBooks call. That's the point: after a config edit or a
+// change to how collected lines are counted, this retests a month instantly
+// instead of re-pulling. If the inputs themselves are wrong, use Re-run.
+async function recomputeTax(clientId) {
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const period = taxPeriodKey(cfg);
+  const f = Tax.saved[clientId + '|' + period];
+  if (!f || !f.data) return;
+  const btn = document.getElementById('taxRecompute_' + clientId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Recomputing\u2026'; }
+  try {
+    const results = computeTax(cfg, f.data.income || [], f.data.gl || []);
+    const changed = JSON.stringify(taxKeyFigures(f.data.results)) !== JSON.stringify(taxKeyFigures(results));
+    // The config snapshot is refreshed too, so the saved record keeps
+    // explaining the figures it actually shows.
+    const data = Object.assign({}, f.data, {
+      results,
+      config: { rules: cfg.rules, alcohol_subtraction: cfg.alcohol_subtraction, mb_enabled: cfg.mb_enabled, timely_discount: cfg.timely_discount, liability_accounts: cfg.liability_accounts },
+      recomputed_at: new Date().toISOString(),
+      recomputed_by: getViewingUserName(),
+    });
+    const patch = { data };
+    // Same rule as a Re-run: changed numbers on a filed month deserve
+    // re-review. Unchanged numbers leave the filed stamp alone.
+    if (changed && f.status === 'filed') { patch.status = 'computed'; patch.filed_at = null; patch.filed_by = null; }
+    const { error } = await sb.from('tax_filings').update(patch).eq('client_id', clientId).eq('period', period);
+    if (error) throw error;
+    Object.assign(f, patch);
+    renderTaxList();
+  } catch (e) {
+    alert('Could not recompute: ' + (e.message || e));
+    if (btn) { btn.disabled = false; btn.textContent = 'Recompute'; }
+  }
+}
+
 async function markTaxFiled(clientId) {
   const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
   const period = taxPeriodKey(cfg);
@@ -6290,12 +6337,45 @@ function renderTaxCard(cfg, r, filing) {
     ].concat(a.st ? [['Total as filed:', '= ' + taxFmt(adj.stPayable), true]] : [])) + '</div>';
   const glRows = (r.counted || []).map(l => '<tr style="border-top:1px solid #f0f0f0"><td style="padding:3px 8px;white-space:nowrap">' + taxEsc(l.date) + '</td><td style="padding:3px 8px">' + taxEsc(l.type) + '</td><td style="padding:3px 8px">' + taxEsc(l.name) + '</td><td style="padding:3px 8px;color:#666">' + taxEsc(l.memo) + '</td><td style="padding:3px 8px;text-align:right">' + taxFmt(l.amount) + '</td></tr>').join('');
   const exNote = (r.excluded || []).length ? '<div style="font-size:.72rem;color:#888;margin-top:2px">' + r.excluded.length + ' payment-type line(s) excluded from Collected</div>' : '';
+  // Breakdown by transaction type, counted and excluded together. A collected
+  // figure that reads wrong is nearly always one type behaving unexpectedly,
+  // and this shows which — including whether a single type carries BOTH signs
+  // (the tell for both sides of a transaction arriving in one pull).
+  const byType = {};
+  (r.counted || []).forEach(l => { const k = l.type || '(no type)'; (byType[k] = byType[k] || { n: 0, sum: 0, pos: 0, neg: 0, counted: true }).n++; const v = Number(l.amount) || 0; byType[k].sum += v; if (v > 0) byType[k].pos += v; else byType[k].neg += v; });
+  (r.excluded || []).forEach(l => { const k = l.type || '(no type)'; (byType[k] = byType[k] || { n: 0, sum: 0, pos: 0, neg: 0, counted: false }).n++; const v = Number(l.amount) || 0; byType[k].sum += v; if (v > 0) byType[k].pos += v; else byType[k].neg += v; });
+  // Sorted by GROSS activity (credits + |debits|), not net. Sorting by net
+  // would bury a type whose debits and credits cancel — which is precisely
+  // the type worth looking at first.
+  const taxGross = t => t.pos - t.neg;
+  const typeKeys = Object.keys(byType).sort((x, y) => taxGross(byType[y]) - taxGross(byType[x]));
+  const TB_TH = 'style="text-align:left;padding:3px 8px;font-size:.7rem;color:#666;border-bottom:1px solid #ddd"';
+  const typeRows = typeKeys.map(k => {
+    const t = byType[k];
+    const bothSigns = t.pos > 0 && t.neg < 0;
+    return '<tr style="border-top:1px solid #f4f4f4">'
+      + '<td style="padding:3px 8px">' + taxEsc(k) + (bothSigns ? ' <span title="This type carries both debits and credits" style="color:#b26a00">\u26a0\ufe0f</span>' : '') + '</td>'
+      + '<td style="padding:3px 8px;text-align:right;color:#666">' + t.n + '</td>'
+      + '<td style="padding:3px 8px;text-align:right">' + taxFmt(t.pos) + '</td>'
+      + '<td style="padding:3px 8px;text-align:right">' + taxFmt(t.neg) + '</td>'
+      + '<td style="padding:3px 8px;text-align:right;font-weight:700">' + taxFmt(t.sum) + '</td>'
+      + '<td style="padding:3px 8px;font-size:.72rem;color:' + (t.counted ? '#1e7a45' : '#888') + '">' + (t.counted ? 'counted' : 'excluded') + '</td>'
+      + '</tr>';
+  }).join('');
+  const typeTable = typeKeys.length
+    ? '<table style="border-collapse:collapse;font-size:.78rem;margin:.3rem 0;width:100%">'
+      + '<tr><th ' + TB_TH + '>Transaction type</th><th ' + TB_TH + ' style="text-align:right">Lines</th><th ' + TB_TH + ' style="text-align:right">Credits</th><th ' + TB_TH + ' style="text-align:right">Debits</th><th ' + TB_TH + ' style="text-align:right">Net</th><th ' + TB_TH + '></th></tr>'
+      + typeRows + '</table>'
+    : '';
   // Reconciliation runs on the ADJUSTED figures — Sales Tax Expense has to
   // land on what was actually remitted.
   const recon = '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.8rem 0 .25rem">Reconciliation</div>'
     + '<div style="font-size:.85rem;line-height:1.7">'
     + '<details><summary style="cursor:pointer">Sales tax collected (liability activity): <b>' + taxFmt(r.collected) + '</b> \u00b7 ' + (r.counted || []).length + ' lines</summary>'
-    + '<table style="border-collapse:collapse;font-size:.78rem;margin:.3rem 0">' + glRows + '</table>' + exNote + '</details>'
+    + typeTable + exNote
+    + '<details style="margin-top:.3rem"><summary style="cursor:pointer;font-size:.78rem;color:#666">Every counted line</summary>'
+    + '<table style="border-collapse:collapse;font-size:.78rem;margin:.3rem 0">' + glRows + '</table></details>'
+    + '</details>'
     + (cfg.mb_enabled ? 'Less MB sales tax ' + taxFmt(adj.mbStTax) + ' \u2192 ' + taxFmt(adj.collectedLessMb) + '<br>' : '')
     + 'vs payable ' + taxFmt(adj.stPayable) + ' \u2192 <b style="color:' + (Math.abs(adj.expense) < 1 ? '#1e7a45' : (adj.expense > 0 ? '#b26a00' : '#b93232')) + '">Sales tax expense ' + taxFmt(adj.expense) + '</b>'
     + (adj.any ? '<span style="font-size:.72rem;color:var(--muted,#888)"> \u00b7 after rounding</span>' : '')
@@ -6311,9 +6391,11 @@ function renderTaxCard(cfg, r, filing) {
     const nTasks = (filing.filed_tasks || []).length;
     stamp = '<div style="display:flex;align-items:center;gap:.6rem;margin-top:.7rem;flex-wrap:wrap">'
       + '<span style="font-size:.75rem;color:var(--muted,#888)">Computed ' + d(filing.computed_at) + (filing.computed_by ? ' by ' + taxEsc(filing.computed_by) : '')
+      + (filing.data && filing.data.recomputed_at ? ' \u00b7 Recomputed ' + d(filing.data.recomputed_at) + (filing.data.recomputed_by ? ' by ' + taxEsc(filing.data.recomputed_by) : '') : '')
       + (adj.any && filing.adjusted_at ? ' \u00b7 Rounding set ' + d(filing.adjusted_at) + (filing.adjusted_by ? ' by ' + taxEsc(filing.adjusted_by) : '') : '')
       + (filing.status === 'filed' ? ' \u00b7 Filed ' + d(filing.filed_at) + (filing.filed_by ? ' by ' + taxEsc(filing.filed_by) : '') + (nTasks ? ' \u00b7 ' + nTasks + ' task' + (nTasks === 1 ? '' : 's') + ' completed' : '') : '') + '</span>'
       + '<div style="flex:1"></div>'
+      + '<button id="taxRecompute_' + cid + '" onclick="recomputeTax(\'' + cid + '\')" title="Recompute from the QuickBooks data already saved with this filing \u2014 no new pull" style="border:1px solid var(--border);background:#fff;color:#555;border-radius:7px;padding:.35rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">Recompute</button>'
       + '<button onclick="markTaxFiled(\'' + cid + '\')" style="border:1px solid ' + (filing.status === 'filed' ? 'var(--border);color:#555;background:white' : '#1e7a45;color:#1e7a45;background:white') + ';border-radius:7px;padding:.35rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">' + (filing.status === 'filed' ? 'Unmark filed' : 'Mark filed \u2713') + '</button>'
       + '</div>'
       + '<div id="taxFileConfirm_' + cid + '"></div>';
@@ -6323,6 +6405,7 @@ function renderTaxCard(cfg, r, filing) {
 }
 window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth; window.markTaxFiled = markTaxFiled;
 window.saveTaxAdjustment = saveTaxAdjustment; window.confirmTaxFiled = confirmTaxFiled; window.taxSetFiled = taxSetFiled; window.cancelTaxFileConfirm = cancelTaxFileConfirm;
+window.recomputeTax = recomputeTax;
 
 // ══════════════════════════════════════════════════════════
 // CLIENT ANALYSES — month-end review queue (team upload -> owner review)
