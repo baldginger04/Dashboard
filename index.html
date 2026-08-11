@@ -6160,15 +6160,26 @@ function computeTax(cfg, income, gl, detail) {
   // memo-matched transaction lines pulled from that account.
   const CD = R.comps_detail || null;
   const detailLines = detail || [];
+  // Four distinct states, kept apart so the card can say which one it is.
+  // The discovery workflow deliberately sets accounts with NO patterns, so
+  // "patterns not written yet" must not report as "no detail came back".
+  const cdPatterns = (CD && Array.isArray(CD.patterns)) ? CD.patterns : [];
   let comps, compsSource = 'accounts', compsMatched = [], compsUnmatched = [];
-  if (CD && Array.isArray(CD.patterns) && CD.patterns.length && detailLines.length) {
-    compsMatched = detailLines.filter(l => taxMemoMatch(CD.patterns, l.memo));
-    compsUnmatched = detailLines.filter(l => !taxMemoMatch(CD.patterns, l.memo));
+  if (CD && cdPatterns.length && detailLines.length) {
+    compsMatched = detailLines.filter(l => taxMemoMatch(cdPatterns, l.memo));
+    compsUnmatched = detailLines.filter(l => !taxMemoMatch(cdPatterns, l.memo));
     comps = Math.abs(compsMatched.reduce((s2, l) => s2 + (Number(l.amount) || 0), 0));
     compsSource = 'detail';
   } else {
     comps = Math.abs(sum(R.mb_comps));
-    if (CD) compsSource = 'detail_unavailable';   // configured but nothing came back
+    if (CD && !cdPatterns.length && detailLines.length) {
+      compsUnmatched = detailLines;                 // everything shows in the panel
+      compsSource = 'detail_pending';               // lines are here, patterns aren't
+    } else if (CD && !cdPatterns.length) {
+      compsSource = 'detail_no_lines';              // configured, nothing came back
+    } else if (CD) {
+      compsSource = 'detail_unavailable';           // patterns set, no lines
+    }
   }
   const grossAlc = liq + beer + wine;
   const ti = inc.reduce((s, a) => s + a.amount, 0);
@@ -6317,8 +6328,10 @@ function taxChecks(cfg, r, prev) {
     add('error', 'mb_total_mismatch', 'MB total does not equal liquor + beer + wine.');
   if (cfg.mb_enabled && r.mbTotal > 0 && r.comps / r.mbTotal > 0.35)
     add('warn', 'comps_ratio', 'Comps are ' + Math.round(r.comps / r.mbTotal * 100) + '% of gross alcohol — unusually high, check the comps rule.');
-  if (r.compsSource === 'detail_unavailable')
-    add('error', 'comps_detail_missing', 'Comps are configured to come from transaction detail, but no detail lines were returned \u2014 re-run this client (a Recompute cannot fetch them), and check comps_detail.accounts names the right account.');
+  if (r.compsSource === 'detail_pending')
+    add('warn', 'comps_detail_pending', 'Discount detail pulled but no memo patterns are set yet \\u2014 comps read 0. Open "Discount account detail" below, then set comps_detail.patterns.');
+  if (r.compsSource === 'detail_no_lines' || r.compsSource === 'detail_unavailable')
+    add('error', 'comps_detail_missing', 'Comps are configured to come from transaction detail, but no detail lines were returned \\u2014 Re-run this client (a Recompute cannot fetch them; a config change also needs the page reloaded before the Run picks it up), and check comps_detail.accounts names the right account.');
   if (r.compsSource === 'detail' && (r.compsMatched || []).length === 0)
     add('error', 'comps_detail_no_match', 'No transaction in the discount account matched the comps memo patterns \u2014 complimentary drinks would report as 0.');
   if (cfg.mb_enabled && r.comps === 0)
@@ -6741,6 +6754,7 @@ function renderTaxCard(cfg, r, filing) {
     detailPanel = '<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.8rem;font-weight:700;color:#1B2A4B">'
       + 'Discount account detail \u00b7 ' + (r.detailLines || []).length + ' lines'
       + (r.compsSource === 'detail' ? ' \u00b7 comps ' + taxFmt(r.comps) + ' from ' + (r.compsMatched || []).length + ' matched' : '')
+      + (r.compsSource === 'detail_pending' ? ' \u00b7 no patterns set yet' : '')
       + '</summary>'
       + '<table style="border-collapse:collapse;font-size:.78rem;margin:.3rem 0;width:100%">'
       + '<tr><th style="text-align:left;padding:3px 8px;font-size:.7rem;color:#666;border-bottom:1px solid #ddd">Memo</th>'
