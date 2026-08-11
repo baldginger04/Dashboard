@@ -6135,14 +6135,41 @@ function taxMatch(rulesList, acct) {
   });
 }
 
-function computeTax(cfg, income, gl) {
+// Memo matching for detail lines. Same token grammar as account rules, minus
+// the account-number case: '=X' is exact on the whole memo, anything else is
+// a case-insensitive substring.
+function taxMemoMatch(patterns, memo) {
+  const m = String(memo || '');
+  return (patterns || []).some(p => {
+    const ps = String(p).trim();
+    if (ps.startsWith('=')) return m.trim().toLowerCase() === ps.slice(1).trim().toLowerCase();
+    return m.toLowerCase().includes(ps.toLowerCase());
+  });
+}
+
+function computeTax(cfg, income, gl, detail) {
   const R = cfg.rules || {};
   // Other Income rows (tagged by qbo-tax) count ONLY when this client's
   // include_other rule names them — interest income etc. stays below the line.
   const inc = (income || []).filter(a => !a.other || taxMatch(R.include_other, a));
   const sum = (list) => inc.filter(a => taxMatch(list, a)).reduce((s, a) => s + a.amount, 0);
   const liq = sum(R.mb_liquor), beer = sum(R.mb_beer), wine = sum(R.mb_wine);
-  const comps = Math.abs(sum(R.mb_comps));
+  // Complimentary drinks. Normally the sum of the comps ACCOUNTS. But some
+  // clients (Bill's Oyster) book every discount to one combined account and
+  // distinguish comps only by memo, so comps_detail switches the source to
+  // memo-matched transaction lines pulled from that account.
+  const CD = R.comps_detail || null;
+  const detailLines = detail || [];
+  let comps, compsSource = 'accounts', compsMatched = [], compsUnmatched = [];
+  if (CD && Array.isArray(CD.patterns) && CD.patterns.length && detailLines.length) {
+    compsMatched = detailLines.filter(l => taxMemoMatch(CD.patterns, l.memo));
+    compsUnmatched = detailLines.filter(l => !taxMemoMatch(CD.patterns, l.memo));
+    comps = Math.abs(compsMatched.reduce((s2, l) => s2 + (Number(l.amount) || 0), 0));
+    compsSource = 'detail';
+  } else {
+    comps = Math.abs(sum(R.mb_comps));
+    if (CD) compsSource = 'detail_unavailable';   // configured but nothing came back
+  }
   const grossAlc = liq + beer + wine;
   const ti = inc.reduce((s, a) => s + a.amount, 0);
   const exempt = sum(R.exempt);
@@ -6190,7 +6217,7 @@ function computeTax(cfg, income, gl) {
     counted: !a.other || taxMatch(R.include_other, a),
     roles: roleOf(a),
   }));
-  return { liq, beer, wine, comps, grossAlc, ti, exempt, alcOut, stBase, totalTexas, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense, classified };
+  return { liq, beer, wine, comps, compsSource, compsMatched, compsUnmatched, detailLines, grossAlc, ti, exempt, alcOut, stBase, totalTexas, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense, classified };
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -6263,6 +6290,10 @@ function taxChecks(cfg, r, prev) {
     add('error', 'mb_total_mismatch', 'MB total does not equal liquor + beer + wine.');
   if (cfg.mb_enabled && r.mbTotal > 0 && r.comps / r.mbTotal > 0.35)
     add('warn', 'comps_ratio', 'Comps are ' + Math.round(r.comps / r.mbTotal * 100) + '% of gross alcohol — unusually high, check the comps rule.');
+  if (r.compsSource === 'detail_unavailable')
+    add('error', 'comps_detail_missing', 'Comps are configured to come from transaction detail, but no detail lines were returned \u2014 re-run this client (a Recompute cannot fetch them), and check comps_detail.accounts names the right account.');
+  if (r.compsSource === 'detail' && (r.compsMatched || []).length === 0)
+    add('error', 'comps_detail_no_match', 'No transaction in the discount account matched the comps memo patterns \u2014 complimentary drinks would report as 0.');
   if (cfg.mb_enabled && r.comps === 0)
     add('warn', 'no_comps', 'No complimentary drinks or alcohol discounts found. Correct for some clients, but verify.');
 
@@ -6414,18 +6445,22 @@ async function runTax(clientId) {
       to = taxKey(taxMonth) + '-' + String(new Date(y, m + 1, 0).getDate()).padStart(2, '0');
     }
     const { data, error } = await sb.functions.invoke('qbo-tax', {
-      body: { client_id: clientId, from, to, liability_accounts: cfg.liability_accounts || ['sales tax payable'] },
+      body: {
+        client_id: clientId, from, to,
+        liability_accounts: cfg.liability_accounts || ['sales tax payable'],
+        detail_accounts: ((cfg.rules || {}).comps_detail || {}).accounts || [],
+      },
     });
     if (error) throw new Error(error.message || 'request failed');
     if (data && data.error === 'not_connected') { card.innerHTML = '<div style="padding:.6rem 1rem;font-size:.82rem;color:#b26a00">QuickBooks isn\u2019t connected for this client yet.</div>'; return; }
     if (data && data.error === 'reauth_needed') { card.innerHTML = '<div style="padding:.6rem 1rem;font-size:.82rem;color:#b93232">QuickBooks needs to be reconnected.</div>'; return; }
     if (!data || !data.ok) throw new Error((data && (data.message || data.error)) || 'no result');
-    const results = computeTax(cfg, data.income || [], data.gl || []);
+    const results = computeTax(cfg, data.income || [], data.gl || [], data.detail || []);
     const period = taxPeriodKey(cfg);
     const filing = {
       client_id: clientId, period, cadence: cfg.cadence,
       data: {
-        income: data.income || [], gl: data.gl || [], results,
+        income: data.income || [], gl: data.gl || [], detail: data.detail || [], results,
         config: { rules: cfg.rules, alcohol_subtraction: cfg.alcohol_subtraction, mb_enabled: cfg.mb_enabled, timely_discount: cfg.timely_discount, liability_accounts: cfg.liability_accounts },
         range: { from, to },
       },
@@ -6493,7 +6528,7 @@ async function recomputeTax(clientId) {
   const btn = document.getElementById('taxRecompute_' + clientId);
   if (btn) { btn.disabled = true; btn.textContent = 'Recomputing\u2026'; }
   try {
-    const results = computeTax(cfg, f.data.income || [], f.data.gl || []);
+    const results = computeTax(cfg, f.data.income || [], f.data.gl || [], f.data.detail || []);
     const changed = JSON.stringify(taxKeyFigures(f.data.results)) !== JSON.stringify(taxKeyFigures(results));
     // The config snapshot is refreshed too, so the saved record keeps
     // explaining the figures it actually shows.
@@ -6654,6 +6689,38 @@ function renderTaxCard(cfg, r, filing) {
       ['Total Amount Due and Payable:', '= ' + taxFmt(r.stPayable), !a.st],
       ['Rounding adjustment:', taxAdjInput(cid, 'st', a.st)],
     ].concat(a.st ? [['Total as filed:', '= ' + taxFmt(adj.stPayable), true]] : [])) + '</div>';
+  // Memo breakdown for detail accounts. Grouped so the distinct memo strings
+  // are visible — which is how the comps patterns get written in the first
+  // place, and how a NEW memo variant gets noticed later.
+  let detailPanel = '';
+  if ((r.detailLines || []).length) {
+    const byMemo = {};
+    (r.detailLines || []).forEach(l => {
+      const k = (l.memo || '(no memo)').trim() || '(no memo)';
+      const isComp = (r.compsMatched || []).indexOf(l) >= 0;
+      (byMemo[k] = byMemo[k] || { n: 0, sum: 0, comp: isComp }).n++;
+      byMemo[k].sum += Number(l.amount) || 0;
+    });
+    const keys = Object.keys(byMemo).sort((x, y) => Math.abs(byMemo[y].sum) - Math.abs(byMemo[x].sum));
+    const rows = keys.map(k => '<tr style="border-top:1px solid #f4f4f4">'
+      + '<td style="padding:3px 8px">' + taxEsc(k) + '</td>'
+      + '<td style="padding:3px 8px;text-align:right;color:#666">' + byMemo[k].n + '</td>'
+      + '<td style="padding:3px 8px;text-align:right">' + taxFmt(byMemo[k].sum) + '</td>'
+      + '<td style="padding:3px 8px;font-size:.72rem;color:' + (byMemo[k].comp ? '#1e7a45' : '#888') + '">'
+      + (byMemo[k].comp ? 'counted as comps' : '\u2014') + '</td></tr>').join('');
+    const unm = (r.compsUnmatched || []).length;
+    detailPanel = '<details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.8rem;font-weight:700;color:#1B2A4B">'
+      + 'Discount account detail \u00b7 ' + (r.detailLines || []).length + ' lines'
+      + (r.compsSource === 'detail' ? ' \u00b7 comps ' + taxFmt(r.comps) + ' from ' + (r.compsMatched || []).length + ' matched' : '')
+      + '</summary>'
+      + '<table style="border-collapse:collapse;font-size:.78rem;margin:.3rem 0;width:100%">'
+      + '<tr><th style="text-align:left;padding:3px 8px;font-size:.7rem;color:#666;border-bottom:1px solid #ddd">Memo</th>'
+      + '<th style="text-align:right;padding:3px 8px;font-size:.7rem;color:#666;border-bottom:1px solid #ddd">Lines</th>'
+      + '<th style="text-align:right;padding:3px 8px;font-size:.7rem;color:#666;border-bottom:1px solid #ddd">Total</th>'
+      + '<th style="padding:3px 8px;border-bottom:1px solid #ddd"></th></tr>' + rows + '</table>'
+      + (unm ? '<div style="font-size:.72rem;color:#888">' + unm + ' line(s) not counted as comps \u2014 confirm each is a genuine non-comp discount.</div>' : '')
+      + '</details>';
+  }
   const glRows = (r.counted || []).map(l => '<tr style="border-top:1px solid #f0f0f0"><td style="padding:3px 8px;white-space:nowrap">' + taxEsc(l.date) + '</td><td style="padding:3px 8px">' + taxEsc(l.type) + '</td><td style="padding:3px 8px">' + taxEsc(l.name) + '</td><td style="padding:3px 8px;color:#666">' + taxEsc(l.memo) + '</td><td style="padding:3px 8px;text-align:right">' + taxFmt(l.amount) + '</td></tr>').join('');
   const exNote = (r.excluded || []).length ? '<div style="font-size:.72rem;color:#888;margin-top:2px">' + r.excluded.length + ' payment-type line(s) excluded from Collected</div>' : '';
   // Breakdown by transaction type, counted and excluded together. A collected
@@ -6688,7 +6755,7 @@ function renderTaxCard(cfg, r, filing) {
     : '';
   // Reconciliation runs on the ADJUSTED figures — Sales Tax Expense has to
   // land on what was actually remitted.
-  const recon = '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.8rem 0 .25rem">Reconciliation</div>'
+  const recon = detailPanel + '<div style="font-weight:800;font-size:.8rem;color:#1B2A4B;margin:.8rem 0 .25rem">Reconciliation</div>'
     + '<div style="font-size:.85rem;line-height:1.7">'
     + '<details><summary style="cursor:pointer">Sales tax collected (liability activity): <b>' + taxFmt(r.collected) + '</b> \u00b7 ' + (r.counted || []).length + ' lines</summary>'
     + typeTable + exNote
