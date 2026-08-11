@@ -6302,8 +6302,15 @@ function taxChecks(cfg, r, prev) {
     add('error', 'base_negative', 'Taxable base is negative (' + money(r.stBase) + ') — an exempt rule is almost certainly matching too much.');
   if (r.nontaxable && r.totalTexas < r.stBase - 0.5)
     add('error', 'total_below_taxable', 'Total Texas Sales ' + money(r.totalTexas) + ' is below Taxable Sales ' + money(r.stBase) + ' — nontaxable sales should only ever make Total larger.');
-  if (r.stBase > r.ti + 0.5)
-    add('error', 'base_over_income', 'Taxable base ' + money(r.stBase) + ' exceeds total income ' + money(r.ti) + '.');
+  // Ceiling is GROSS POSITIVE income, not net income. Exempting a negative
+  // (contra) account — Hoboken's third-party delivery fees, booked as
+  // negative income — correctly RAISES the base above net income, so
+  // comparing against net would fire on a perfectly good filing.
+  if (hasCls) {
+    const grossPositive = cls.filter(a => a.counted && a.amount > 0).reduce((s2, a) => s2 + a.amount, 0);
+    if (r.stBase > grossPositive + 0.5)
+      add('error', 'base_over_income', 'Taxable base ' + money(r.stBase) + ' exceeds gross positive income ' + money(grossPositive) + '.');
+  }
   if (r.stPayable > r.stTax + 0.005)
     add('error', 'payable_over_calc', 'Payable ' + money(r.stPayable) + ' exceeds tax calculated ' + money(r.stTax) + ' — the timely discount should make it lower.');
   if (cfg.mb_enabled && Math.abs(r.mbTotal - (Math.round(r.liq) + Math.round(r.beer) + Math.round(r.wine))) > 0.5)
