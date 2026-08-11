@@ -1027,6 +1027,9 @@
           <div id="taxMonthLabel" style="font-weight:800;min-width:130px;text-align:center"></div>
           <button onclick="taxShiftMonth(1)" style="width:30px;height:30px;border:1px solid var(--border);background:white;border-radius:7px;cursor:pointer">&#8250;</button>
           <div style="flex:1"></div>
+          <button onclick="taxCollapseDone()" title="Collapse everything that's filed or passing its checks" style="border:1px solid var(--border);background:white;border-radius:8px;padding:.5rem .9rem;font-weight:700;font-size:.8rem;cursor:pointer">Collapse done</button>
+          <button onclick="taxExpandAll(true)" style="border:1px solid var(--border);background:white;border-radius:8px;padding:.5rem .9rem;font-weight:700;font-size:.8rem;cursor:pointer">Expand all</button>
+          <button onclick="taxExpandAll(false)" style="border:1px solid var(--border);background:white;border-radius:8px;padding:.5rem .9rem;font-weight:700;font-size:.8rem;cursor:pointer">Collapse all</button>
           <button onclick="runAllTax()" style="border:0;background:#D85B31;color:#fff;border-radius:8px;padding:.5rem 1.1rem;font-weight:700;cursor:pointer">Run all</button>
         </div>
         <div id="taxSummary"></div>
@@ -5918,7 +5921,40 @@ function showTab(name) {
 // State: selected month (Date), loaded configs, computed results per client.
 // State: selected month (Date), loaded configs, saved filings, live results.
 let taxMonth = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d; })();
-const Tax = { cfgs: [], saved: {} };
+const Tax = { cfgs: [], saved: {}, open: {}, autoCollapse: true };
+
+// Which client cards are expanded. A card is open when the user has opened
+// it, OR — on first sight of a month — when it still wants attention.
+// The rule: a filing that is FILED, or whose checks pass with no rounding
+// work outstanding, collapses itself. Anything with an issue stays open,
+// because a warning nobody scrolls to is a warning that does nothing.
+function taxAutoOpen(cfg, filing) {
+  if (!filing || !filing.data || !filing.data.results) return true;  // not run yet
+  if (filing.status === 'filed') return false;
+  const checks = taxChecks(cfg, filing.data.results, taxPrevResults(cfg));
+  return checks.length > 0;
+}
+function taxIsOpen(cfg, filing) {
+  const k = cfg.client_id;
+  if (Object.prototype.hasOwnProperty.call(Tax.open, k)) return Tax.open[k];
+  return Tax.autoCollapse ? taxAutoOpen(cfg, filing) : true;
+}
+function toggleTaxCard(clientId) {
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const filing = Tax.saved[clientId + '|' + taxPeriodKey(cfg)];
+  Tax.open[clientId] = !taxIsOpen(cfg, filing);
+  renderTaxList();
+}
+function taxExpandAll(open) {
+  Tax.cfgs.forEach(c => { Tax.open[c.client_id] = open; });
+  renderTaxList();
+}
+// Forget every manual choice and fall back to the automatic rule.
+function taxCollapseDone() {
+  Tax.open = {};
+  Tax.autoCollapse = true;
+  renderTaxList();
+}
 // Transaction types that MOVE tax out of the liability account rather than
 // collect it. 'bill' is here because remittances are commonly accrued as a
 // Bill to the comptroller (Casa Bianca, July 2026: two Bills on the 31st for
@@ -5991,7 +6027,11 @@ async function loadTaxPage() {
   } catch (_) { /* table may not exist yet */ }
   renderTaxList();
 }
-function taxShiftMonth(d) { taxMonth = new Date(taxMonth.getFullYear(), taxMonth.getMonth() + d, 1); loadTaxPage(); }
+function taxShiftMonth(d) {
+  taxMonth = new Date(taxMonth.getFullYear(), taxMonth.getMonth() + d, 1);
+  Tax.open = {};   // a new month starts from the automatic rule again
+  loadTaxPage();
+}
 
 // Month-at-a-glance triage: every client with a saved filing, grouped by
 // how much attention it needs, so the sweep starts from the problems rather
@@ -6049,13 +6089,27 @@ function renderTaxList() {
         ? '<span style="font-size:.7rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.15rem .55rem">Filed \u2713</span>'
         : '<span style="font-size:.7rem;font-weight:700;color:#555;background:#eee;border-radius:999px;padding:.15rem .55rem">Computed</span>') : '',
     ].join(' ');
+    const open = taxIsOpen(cfg, filing);
+    // A one-line summary of the money, so a collapsed row still says
+    // something useful without being expanded.
+    let peek = '';
+    if (filing && filing.data && filing.data.results) {
+      const rr = filing.data.results;
+      const aa = taxAdjOf(filing);
+      const parts = [];
+      if (cfg.mb_enabled) parts.push('MB ' + taxFmt(rr.mbGrTax + aa.mb_gr) + ' / ' + taxFmt(rr.mbStTax + aa.mb_st));
+      parts.push('Sales & Use ' + taxFmt(rr.stPayable + aa.st));
+      peek = '<span style="font-size:.75rem;color:var(--muted,#888)">' + parts.join(' \u00b7 ') + '</span>';
+    }
     return '<div style="border:1px solid var(--border);border-radius:10px;margin-bottom:.6rem;background:white">'
       + '<div style="display:flex;align-items:center;gap:.6rem;padding:.7rem 1rem;flex-wrap:wrap">'
-      + '<div style="font-weight:700;flex:1;min-width:160px">' + taxEsc(name) + '</div>' + chips
+      + '<span onclick="toggleTaxCard(\'' + cfg.client_id + '\')" title="' + (open ? 'Collapse' : 'Expand') + '" style="cursor:pointer;user-select:none;font-size:.7rem;color:#888;width:14px;display:inline-block">' + (open ? '\u25be' : '\u25b8') + '</span>'
+      + '<div onclick="toggleTaxCard(\'' + cfg.client_id + '\')" style="font-weight:700;flex:1;min-width:160px;cursor:pointer">' + taxEsc(name) + '</div>' + chips
+      + (open ? '' : peek)
       + '<span style="font-size:.75rem;color:var(--muted,#888)">' + taxEsc(period) + '</span>'
       + '<button onclick="runTax(\'' + cfg.client_id + '\')" id="taxRun_' + cfg.client_id + '" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.4rem .9rem;font-size:.8rem;font-weight:700;cursor:pointer">' + (filing ? 'Re-run' : 'Run') + '</button>'
       + '</div>'
-      + '<div id="taxCard_' + cfg.client_id + '">' + (filing ? renderTaxCard(cfg, filing.data.results, filing) : '') + '</div>'
+      + '<div id="taxCard_' + cfg.client_id + '">' + (open && filing ? renderTaxCard(cfg, filing.data.results, filing) : '') + '</div>'
       + '</div>';
   }).join('') || '<div class="empty">No tax clients configured.</div>';
 }
@@ -6385,6 +6439,7 @@ async function runTax(clientId) {
     const prev = Tax.saved[clientId + '|' + period] || {};
     const up = await sb.from('tax_filings').upsert(filing, { onConflict: 'client_id,period' });
     if (up.error) throw new Error('computed, but saving failed: ' + up.error.message);
+    Tax.open[clientId] = true;   // a client you just ran stays open to be read
     Tax.saved[clientId + '|' + period] = Object.assign({}, filing, {
       adjustments: prev.adjustments || {},
       adjusted_at: prev.adjusted_at || null,
@@ -6399,10 +6454,15 @@ async function runTax(clientId) {
 }
 
 async function runAllTax() {
+  // Run all is a sweep, not a read: let the automatic rule decide what stays
+  // open at the end rather than leaving 26 expanded cards.
+  Tax.open = {};
   for (const cfg of Tax.cfgs) {
     if (cfg.cadence === 'quarterly' && (taxMonth.getMonth() % 3) !== 2) continue;
     await runTax(cfg.client_id);
+    delete Tax.open[cfg.client_id];   // undo runTax's stay-open, sweep-wide
   }
+  renderTaxList();
 }
 
 // Titles that read as a tax-filing task even if they were filed under another
@@ -6666,6 +6726,7 @@ function renderTaxCard(cfg, r, filing) {
 window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth; window.markTaxFiled = markTaxFiled;
 window.saveTaxAdjustment = saveTaxAdjustment; window.confirmTaxFiled = confirmTaxFiled; window.taxSetFiled = taxSetFiled; window.cancelTaxFileConfirm = cancelTaxFileConfirm;
 window.recomputeTax = recomputeTax;
+window.toggleTaxCard = toggleTaxCard; window.taxExpandAll = taxExpandAll; window.taxCollapseDone = taxCollapseDone;
 
 // ══════════════════════════════════════════════════════════
 // CLIENT ANALYSES — month-end review queue (team upload -> owner review)
