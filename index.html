@@ -5996,6 +5996,15 @@ function taxPeriodKey(cfg) {
   const q = taxQuarter(taxMonth);
   return taxKey(new Date(q.e.getFullYear(), q.e.getMonth(), 1));
 }
+// Round to whole cents. Every reported figure is rounded ONCE here and
+// every downstream figure is derived from the rounded value, so what the
+// card shows always foots. Rounding each figure independently at display
+// time instead makes the sum of the parts differ from the whole by a cent
+// — Ed caught exactly that on Dirdie Birdie (18,096.98 + 481.55 read
+// against a payable of 18,578.54). You cannot remit half a cent, so the
+// rounded figure IS the real one.
+function taxCents(v) { const n = Number(v); return isFinite(n) ? Math.round(n * 100) / 100 : 0; }
+
 function taxFmt(v) { return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function taxWhole(v) { return Math.round(v).toLocaleString('en-US'); }
 function taxEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
@@ -6204,11 +6213,11 @@ function computeTax(cfg, income, gl, detail) {
   // taxable base, exactly as before.
   const totalTexas = (R.taxable_only && R.taxable_only.length) ? ti : stBase + nontaxable;
   const mbTotal = Math.round(liq) + Math.round(wine) + Math.round(beer);
-  const mbGrTax = mbTotal * 0.067;
-  const mbStTax = mbTotal * 0.0825;
-  const stTax = Math.round(stBase) * 0.0825;
+  const mbGrTax = taxCents(mbTotal * 0.067);
+  const mbStTax = taxCents(mbTotal * 0.0825);
+  const stTax = taxCents(Math.round(stBase) * 0.0825);
   const disc = Number(cfg.timely_discount || 0.005);
-  const stPayable = stTax * (1 - disc);
+  const stPayable = taxCents(stTax * (1 - disc));
   // Collected = the total of the Sales Tax Payable lines that represent tax
   // COLLECTED — every line on the account except the ones that remit it.
   // Exclusion is by transaction type rather than by sign, so a refund or
@@ -6217,9 +6226,9 @@ function computeTax(cfg, income, gl, detail) {
   const exTypes = taxExcludedTypes(cfg);
   const counted = gl.filter(l => !exTypes.includes((l.type || '').toLowerCase()));
   const excluded = gl.filter(l => exTypes.includes((l.type || '').toLowerCase()));
-  const collected = counted.reduce((s, l) => s + l.amount, 0);
-  const collectedLessMb = cfg.mb_enabled ? collected - mbStTax : collected;
-  const expense = stPayable - collectedLessMb;
+  const collected = taxCents(counted.reduce((s, l) => s + l.amount, 0));
+  const collectedLessMb = taxCents(cfg.mb_enabled ? collected - mbStTax : collected);
+  const expense = taxCents(stPayable - collectedLessMb);
   // Per-account role assignment, kept so taxChecks() can find accounts that
   // no rule claims and accounts that two rules both claim.
   const roleOf = (a) => {
@@ -6329,6 +6338,17 @@ function taxChecks(cfg, r, prev) {
   }
   if (r.stPayable > r.stTax + 0.005)
     add('error', 'payable_over_calc', 'Payable ' + money(r.stPayable) + ' exceeds tax calculated ' + money(r.stTax) + ' — the timely discount should make it lower.');
+  // FOOTING. Every figure the card prints should reconcile against the
+  // others to the cent. This is a guard rather than a fix — the fix is that
+  // computeTax rounds once — but if a future change reintroduces
+  // independent rounding, this says so instead of leaving Ed to spot it.
+  const foot = (label, a2, b2) => {
+    if (Math.abs(taxCents(a2) - taxCents(b2)) > 0.005)
+      add('error', 'does_not_foot', label + ' does not foot: ' + money(a2) + ' vs ' + money(b2) + ' (off ' + money(Math.abs(a2 - b2)) + ').');
+  };
+  foot('Collected less MB plus sales tax expense, against payable', r.collectedLessMb + r.expense, r.stPayable);
+  foot('Tax less the timely discount, against payable', r.stTax - (r.stTax - r.stPayable), r.stPayable);
+  if (cfg.mb_enabled) foot('Collected less MB sales tax', r.collected - r.mbStTax, r.collectedLessMb);
   if (cfg.mb_enabled && Math.abs(r.mbTotal - (Math.round(r.liq) + Math.round(r.beer) + Math.round(r.wine))) > 0.5)
     add('error', 'mb_total_mismatch', 'MB total does not equal liquor + beer + wine.');
   if (cfg.mb_enabled && r.mbTotal > 0 && r.comps / r.mbTotal > 0.35)
@@ -6428,13 +6448,13 @@ function taxAdjOf(filing) {
 // adjusted figures on purpose: Sales Tax Expense has to reflect what was
 // actually remitted, not what the model produced before the nudge.
 function taxApply(cfg, r, a) {
-  const mbGrTax = r.mbGrTax + a.mb_gr;
-  const mbStTax = r.mbStTax + a.mb_st;
-  const stPayable = r.stPayable + a.st;
-  const collectedLessMb = cfg.mb_enabled ? r.collected - mbStTax : r.collected;
+  const mbGrTax = taxCents(r.mbGrTax + a.mb_gr);
+  const mbStTax = taxCents(r.mbStTax + a.mb_st);
+  const stPayable = taxCents(r.stPayable + a.st);
+  const collectedLessMb = taxCents(cfg.mb_enabled ? r.collected - mbStTax : r.collected);
   return {
     mbGrTax, mbStTax, stPayable, collectedLessMb,
-    expense: stPayable - collectedLessMb,
+    expense: taxCents(stPayable - collectedLessMb),
     any: !!(a.mb_gr || a.mb_st || a.st),
   };
 }
