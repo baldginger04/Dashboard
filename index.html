@@ -6173,15 +6173,25 @@ function computeTax(cfg, income, gl, detail) {
   const grossAlc = liq + beer + wine;
   const ti = inc.reduce((s, a) => s + a.amount, 0);
   const exempt = sum(R.exempt);
+  // NONTAXABLE = reported in Total Texas Sales, excluded from Taxable Sales.
+  // This is the comptroller's actual distinction: an exempt SALE is still a
+  // Texas sale and belongs in the Total box, it just isn't taxed. Hoboken's
+  // Bennu (wholesale) is the first use. Distinct from `exempt`, which drops
+  // an account from BOTH boxes — the right home for things that aren't sales
+  // at all, like third-party vendor fees and service charges.
+  const nontaxable = sum(R.nontaxable);
   const alcOut = cfg.alcohol_subtraction === 'net' ? grossAlc - comps : grossAlc;
   let stBase;
   if (R.taxable_only && R.taxable_only.length) stBase = sum(R.taxable_only);
-  else stBase = ti - (cfg.mb_enabled ? alcOut : 0) - exempt;
+  else stBase = ti - (cfg.mb_enabled ? alcOut : 0) - exempt - nontaxable;
   // Total Texas Sales mirrors what actually gets keyed into WebFile: the
   // taxable composition (food + N/A bev + merch + client specials, net of ALL
   // discounts incl. alcohol comps) — identical to the taxable base. Exception:
   // taxable_only clients (e.g. parts vs services) report full income as Total.
-  const totalTexas = (R.taxable_only && R.taxable_only.length) ? ti : stBase;
+  // Total Texas Sales carries the nontaxable sales back in — they are Texas
+  // sales, just untaxed. With no nontaxable rule this is identical to the
+  // taxable base, exactly as before.
+  const totalTexas = (R.taxable_only && R.taxable_only.length) ? ti : stBase + nontaxable;
   const mbTotal = Math.round(liq) + Math.round(wine) + Math.round(beer);
   const mbGrTax = mbTotal * 0.067;
   const mbStTax = mbTotal * 0.0825;
@@ -6208,6 +6218,7 @@ function computeTax(cfg, income, gl, detail) {
     if (taxMatch(R.mb_wine, a))   roles.push('mb_wine');
     if (taxMatch(R.mb_comps, a))  roles.push('mb_comps');
     if (taxMatch(R.exempt, a))    roles.push('exempt');
+    if (taxMatch(R.nontaxable, a)) roles.push('nontaxable');
     if (R.taxable_only && R.taxable_only.length && taxMatch(R.taxable_only, a)) roles.push('taxable_only');
     return roles;
   };
@@ -6217,7 +6228,7 @@ function computeTax(cfg, income, gl, detail) {
     counted: !a.other || taxMatch(R.include_other, a),
     roles: roleOf(a),
   }));
-  return { liq, beer, wine, comps, compsSource, compsMatched, compsUnmatched, detailLines, grossAlc, ti, exempt, alcOut, stBase, totalTexas, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense, classified };
+  return { liq, beer, wine, comps, compsSource, compsMatched, compsUnmatched, detailLines, grossAlc, ti, exempt, nontaxable, alcOut, stBase, totalTexas, mbTotal, mbGrTax, mbStTax, stTax, disc, stPayable, counted, excluded, collected, collectedLessMb, expense, classified };
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -6289,6 +6300,8 @@ function taxChecks(cfg, r, prev) {
   // ---- 3. STRUCTURAL INVARIANTS. Each maps to a way the maths can go wrong.
   if (r.stBase < 0)
     add('error', 'base_negative', 'Taxable base is negative (' + money(r.stBase) + ') — an exempt rule is almost certainly matching too much.');
+  if (r.nontaxable && r.totalTexas < r.stBase - 0.5)
+    add('error', 'total_below_taxable', 'Total Texas Sales ' + money(r.totalTexas) + ' is below Taxable Sales ' + money(r.stBase) + ' — nontaxable sales should only ever make Total larger.');
   if (r.stBase > r.ti + 0.5)
     add('error', 'base_over_income', 'Taxable base ' + money(r.stBase) + ' exceeds total income ' + money(r.ti) + '.');
   if (r.stPayable > r.stTax + 0.005)
@@ -6690,6 +6703,8 @@ function renderTaxCard(cfg, r, filing) {
   const su = '<div style="font-weight:800;font-size:.9rem;margin:.8rem 0 .3rem;font-family:Georgia,serif;color:#333">Sales and Use Tax</div>'
     + '<table style="border-collapse:collapse"><tr><th ' + WF_TH + '>Location</th><th ' + WF_TH + '>Total Texas Sales</th><th ' + WF_TH + '>Taxable Sales</th><th ' + WF_TH + '>Taxable Purchases</th></tr>'
     + '<tr><td ' + WF_TDL + '>' + taxEsc(name) + '</td><td ' + WF_TD + '>' + taxWhole(r.totalTexas) + '</td><td ' + WF_TD + '>' + taxWhole(r.stBase) + '</td><td ' + WF_TD + '>0</td></tr></table>'
+    + (r.nontaxable ? '<div style="font-size:.72rem;color:var(--muted,#888);margin-top:.25rem">Total Texas Sales includes '
+        + taxFmt(r.nontaxable) + ' of nontaxable sales, reported but not taxed.</div>' : '')
     + '<div style="margin:.4rem 0 .2rem">' + wfBlock([
       ['Tax (x .0825):', taxFmt(r.stTax)],
       ['Timely filing discount (' + (r.disc * 100).toFixed(1) + '%):', '\u2212 ' + taxFmt(r.stTax - r.stPayable)],
