@@ -5921,7 +5921,7 @@ function showTab(name) {
 // State: selected month (Date), loaded configs, computed results per client.
 // State: selected month (Date), loaded configs, saved filings, live results.
 let taxMonth = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d; })();
-const Tax = { cfgs: [], saved: {}, open: {}, autoCollapse: true };
+const Tax = { cfgs: [], saved: {}, open: {}, autoCollapse: true, dismissals: [] };
 
 // Which client cards are expanded. A card is open when the user has opened
 // it, OR — on first sight of a month — when it still wants attention.
@@ -5931,7 +5931,7 @@ const Tax = { cfgs: [], saved: {}, open: {}, autoCollapse: true };
 function taxAutoOpen(cfg, filing) {
   if (!filing || !filing.data || !filing.data.results) return true;  // not run yet
   if (filing.status === 'filed') return false;
-  const checks = taxChecks(cfg, filing.data.results, taxPrevResults(cfg));
+  const checks = taxActiveChecks(cfg, filing.data.results, taxPrevResults(cfg));
   return checks.length > 0;
 }
 function taxIsOpen(cfg, filing) {
@@ -6027,6 +6027,10 @@ async function loadTaxPage() {
       Tax.cfgs = (data || []).sort((a, b) => (a.clients?.name || '').localeCompare(b.clients?.name || ''));
     }
   }
+  try {
+    const { data: dis } = await sb.from('tax_check_dismissals').select('*');
+    Tax.dismissals = dis || [];
+  } catch (_) { Tax.dismissals = []; }   // table may not exist yet
   // Saved filings for every period visible under the selected month
   Tax.saved = {};
   const periods = [...new Set(Tax.cfgs.map(taxPeriodKey).concat(Tax.cfgs.map(taxPrevPeriodKey)))];
@@ -6052,7 +6056,7 @@ function renderTaxSummary() {
   Tax.cfgs.forEach(cfg => {
     const f = Tax.saved[cfg.client_id + '|' + taxPeriodKey(cfg)];
     if (!f || !f.data || !f.data.results) return;
-    const checks = taxChecks(cfg, f.data.results, taxPrevResults(cfg));
+    const checks = taxActiveChecks(cfg, f.data.results, taxPrevResults(cfg));
     rows.push({
       name: cfg.clients?.name || '(client)',
       errors: checks.filter(c => c.level === 'error').length,
@@ -6093,7 +6097,7 @@ function renderTaxList() {
       quarterly ? '<span style="font-size:.7rem;font-weight:700;color:#1B2A4B;background:#e8ecf5;border-radius:999px;padding:.15rem .55rem">Quarterly</span>' : '',
       cfg.mb_enabled ? '<span style="font-size:.7rem;font-weight:700;color:#6a4a8a;background:#efe8f7;border-radius:999px;padding:.15rem .55rem">MB</span>' : '',
       cfg.needs_review ? '<span title="' + taxEsc(cfg.notes || '') + '" style="font-size:.7rem;font-weight:700;color:#b26a00;background:#fbf0dd;border-radius:999px;padding:.15rem .55rem;cursor:help">Needs review</span>' : '',
-      filing && filing.data && filing.data.results ? taxCheckBadge(taxChecks(cfg, filing.data.results, taxPrevResults(cfg))) : '',
+      filing && filing.data && filing.data.results ? taxCheckBadge(taxActiveChecks(cfg, filing.data.results, taxPrevResults(cfg))) : '',
       filing ? (filing.status === 'filed'
         ? '<span style="font-size:.7rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.15rem .55rem">Filed \u2713</span>'
         : '<span style="font-size:.7rem;font-weight:700;color:#555;background:#eee;border-radius:999px;padding:.15rem .55rem">Computed</span>') : '',
@@ -6412,6 +6416,49 @@ function taxChecks(cfg, r, prev) {
   return out;
 }
 
+// ── Resolved findings ─────────────────────────────────────────────────
+// A dismissal hides a finding from the working list. It is never a delete:
+// every one is listed in the card's "Resolved" disclosure with who, when
+// and why, and can be undone. Errors can only be resolved FOR A PERIOD —
+// an error means something is actually broken, so silencing it forever
+// would defeat the engine; a warning is usually a standing judgment about
+// the client's chart and can be ignored permanently.
+function taxDismissalFor(cfg, code, period) {
+  return (Tax.dismissals || []).find(d =>
+    d.client_id === cfg.client_id && d.code === code && (!d.period || d.period === period));
+}
+function taxActiveChecks(cfg, r, prev) {
+  const period = taxPeriodKey(cfg);
+  return taxChecks(cfg, r, prev).filter(c => !taxDismissalFor(cfg, c.code, period));
+}
+function taxDismissedNow(cfg, r, prev) {
+  const period = taxPeriodKey(cfg);
+  return taxChecks(cfg, r, prev)
+    .map(c => ({ check: c, dismissal: taxDismissalFor(cfg, c.code, period) }))
+    .filter(x => x.dismissal);
+}
+async function dismissTaxCheck(clientId, code, scope) {
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const reason = prompt('Why is this resolved? (optional, kept on the record)') ;
+  if (reason === null) return;   // cancelled
+  const row = {
+    client_id: clientId,
+    period: scope === 'always' ? null : taxPeriodKey(cfg),
+    code, reason: reason || null,
+    created_by: getViewingUserName(),
+  };
+  const { data, error } = await sb.from('tax_check_dismissals').insert(row).select().maybeSingle();
+  if (error) { alert('Could not save that: ' + error.message); return; }
+  if (data) Tax.dismissals.push(data);
+  renderTaxList();
+}
+async function undismissTaxCheck(id) {
+  const { error } = await sb.from('tax_check_dismissals').delete().eq('id', id);
+  if (error) { alert('Could not undo that: ' + error.message); return; }
+  Tax.dismissals = (Tax.dismissals || []).filter(d => d.id !== id);
+  renderTaxList();
+}
+
 function taxCheckBadge(checks) {
   const e = checks.filter(c => c.level === 'error').length;
   const w = checks.filter(c => c.level === 'warn').length;
@@ -6420,17 +6467,40 @@ function taxCheckBadge(checks) {
   return '<span style="font-size:.7rem;font-weight:700;color:#1e7a45;background:#e7f3ec;border-radius:999px;padding:.15rem .55rem">Checks pass</span>';
 }
 
-function renderTaxChecks(checks) {
-  if (!checks.length)
-    return '<div style="font-size:.78rem;color:#1e7a45;background:#e7f3ec;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u2713 All validation checks pass.</div>';
-  return checks.map(c => {
+function renderTaxChecks(cfg, checks, resolved) {
+  const cid = cfg.client_id;
+  const period = taxPeriodKey(cfg);
+  const btn = (label, title, onclick) =>
+    '<button onclick="' + onclick + '" title="' + taxEsc(title) + '" style="border:1px solid currentColor;background:transparent;color:inherit;border-radius:6px;padding:.1rem .5rem;font-size:.7rem;font-weight:700;cursor:pointer;opacity:.75">' + label + '</button>';
+  const live = checks.map(c => {
     const err = c.level === 'error';
     const detail = (c.detail && c.detail.length)
       ? '<div style="margin-top:.25rem;font-size:.74rem;opacity:.85">' + c.detail.map(d => '\u00b7 ' + taxEsc(d)).join('<br>') + '</div>'
       : '';
+    // Errors: this period only. Warnings: this period, or always.
+    const actions = '<div style="display:flex;gap:.35rem;margin-top:.35rem;flex-wrap:wrap">'
+      + btn('Resolve for ' + taxEsc(period), 'Hide this finding for this filing period only', "dismissTaxCheck('" + cid + "','" + c.code + "','period')")
+      + (err ? '' : btn('Always ignore', 'Hide this finding for this client in every period', "dismissTaxCheck('" + cid + "','" + c.code + "','always')"))
+      + '</div>';
     return '<div style="font-size:.78rem;color:' + (err ? '#8a1f1f' : '#8a5a00') + ';background:' + (err ? '#fbe9e9' : '#fbf0dd')
-      + ';border-radius:6px;padding:.35rem .6rem;margin-top:.4rem">' + (err ? '\u26d4' : '\u26a0\ufe0f') + ' ' + taxEsc(c.msg) + detail + '</div>';
+      + ';border-radius:6px;padding:.35rem .6rem;margin-top:.4rem">' + (err ? '\u26d4' : '\u26a0\ufe0f') + ' ' + taxEsc(c.msg) + detail + actions + '</div>';
   }).join('');
+  const res = (resolved || []).length
+    ? '<details style="margin-top:.4rem"><summary style="cursor:pointer;font-size:.75rem;color:var(--muted,#888)">'
+      + (resolved.length) + ' resolved finding' + (resolved.length === 1 ? '' : 's') + ' hidden</summary>'
+      + resolved.map(x => '<div style="font-size:.74rem;color:var(--muted,#888);padding:.25rem .6rem;border-left:2px solid var(--border);margin-top:.25rem">'
+          + taxEsc(x.check.msg)
+          + '<br><span style="opacity:.8">' + (x.dismissal.period ? 'resolved for ' + taxEsc(x.dismissal.period) : 'always ignored')
+          + (x.dismissal.created_by ? ' by ' + taxEsc(x.dismissal.created_by) : '')
+          + (x.dismissal.reason ? ' \u2014 ' + taxEsc(x.dismissal.reason) : '') + '</span> '
+          + btn('Undo', 'Bring this finding back', "undismissTaxCheck('" + x.dismissal.id + "')")
+          + '</div>').join('')
+      + '</details>'
+    : '';
+  if (!checks.length)
+    return '<div style="font-size:.78rem;color:#1e7a45;background:#e7f3ec;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u2713 All validation checks pass.'
+      + ((resolved || []).length ? ' <span style="opacity:.8">(' + resolved.length + ' resolved)</span>' : '') + '</div>' + res;
+  return live + res;
 }
 
 // ── Rounding adjustments ───────────────────────────────────────────────
@@ -6855,7 +6925,7 @@ function renderTaxCard(cfg, r, filing) {
       + '<div id="taxFileConfirm_' + cid + '"></div>';
   }
   const note = cfg.notes ? '<div style="font-size:.75rem;color:#8a5a00;background:#fbf0dd;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u26a0\ufe0f ' + taxEsc(cfg.notes) + '</div>' : '';
-  const checks = renderTaxChecks(taxChecks(cfg, r, taxPrevResults(cfg)))
+  const checks = renderTaxChecks(cfg, taxActiveChecks(cfg, r, taxPrevResults(cfg)), taxDismissedNow(cfg, r, taxPrevResults(cfg)))
     + ((Array.isArray(r.classified) && r.classified.length)
         ? ''
         : '<div style="font-size:.72rem;color:var(--muted,#888);margin-top:.35rem">This filing was computed before the account-coverage checks existed \u2014 Recompute to enable them.</div>');
@@ -6864,6 +6934,7 @@ function renderTaxCard(cfg, r, filing) {
 window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth; window.markTaxFiled = markTaxFiled;
 window.saveTaxAdjustment = saveTaxAdjustment; window.confirmTaxFiled = confirmTaxFiled; window.taxSetFiled = taxSetFiled; window.cancelTaxFileConfirm = cancelTaxFileConfirm;
 window.recomputeTax = recomputeTax;
+window.dismissTaxCheck = dismissTaxCheck; window.undismissTaxCheck = undismissTaxCheck;
 window.toggleTaxCard = toggleTaxCard; window.taxExpandAll = taxExpandAll; window.taxCollapseDone = taxCollapseDone;
 
 // ══════════════════════════════════════════════════════════
