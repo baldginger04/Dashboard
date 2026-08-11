@@ -5918,7 +5918,19 @@ function showTab(name) {
 // State: selected month (Date), loaded configs, saved filings, live results.
 let taxMonth = (() => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d; })();
 const Tax = { cfgs: [], saved: {} };
-const TAX_EXCLUDED_GL_TYPES = ['sales tax payment', 'payment', 'bill payment', 'check', 'expense', 'transfer'];
+// Transaction types that MOVE tax out of the liability account rather than
+// collect it. 'bill' is here because remittances are commonly accrued as a
+// Bill to the comptroller (Casa Bianca, July 2026: two Bills on the 31st for
+// "Sales Tax" and "MB Sales Tax" that cancelled the month's credits exactly).
+// A client that records remittance some other way can override the whole list
+// per client via tax_client_config.rules.excluded_gl_types.
+const TAX_EXCLUDED_GL_TYPES = ['sales tax payment', 'payment', 'bill payment', 'bill', 'check', 'expense', 'transfer'];
+function taxExcludedTypes(cfg) {
+  const custom = cfg && cfg.rules && cfg.rules.excluded_gl_types;
+  return (Array.isArray(custom) && custom.length)
+    ? custom.map(t => String(t).toLowerCase())
+    : TAX_EXCLUDED_GL_TYPES;
+}
 
 function taxKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
 function taxLabel(d) { return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); }
@@ -5939,11 +5951,20 @@ function taxEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch =>
 async function loadTaxPage() {
   document.getElementById('taxMonthLabel').textContent = taxLabel(taxMonth);
   const list = document.getElementById('taxList');
-  if (!Tax.cfgs.length) {
-    list.innerHTML = '<div class="empty">Loading configs\u2026</div>';
+  // Configs are re-fetched on every page load and month change, not cached
+  // for the session. A rules edit made in SQL used to require a full browser
+  // refresh before Run or Recompute would see it.
+  const firstLoad = !Tax.cfgs.length;
+  if (firstLoad) list.innerHTML = '<div class="empty">Loading configs\u2026</div>';
+  {
     const { data, error } = await sb.from('tax_client_config').select('*, clients(name)').eq('enabled', true);
-    if (error) { list.innerHTML = '<div class="empty" style="color:var(--red)">Couldn\u2019t load tax configs \u2014 has tax-config-seed.sql been run?</div>'; return; }
-    Tax.cfgs = (data || []).sort((a, b) => (a.clients?.name || '').localeCompare(b.clients?.name || ''));
+    if (error) {
+      // On a refresh failure keep the configs already in hand rather than
+      // blanking a working page; only a cold load has nothing to fall back on.
+      if (firstLoad) { list.innerHTML = '<div class="empty" style="color:var(--red)">Couldn\u2019t load tax configs \u2014 has tax-config-seed.sql been run?</div>'; return; }
+    } else {
+      Tax.cfgs = (data || []).sort((a, b) => (a.clients?.name || '').localeCompare(b.clients?.name || ''));
+    }
   }
   // Saved filings for every period visible under the selected month
   Tax.saved = {};
@@ -6016,8 +6037,14 @@ function computeTax(cfg, income, gl) {
   const stTax = Math.round(stBase) * 0.0825;
   const disc = Number(cfg.timely_discount || 0.005);
   const stPayable = stTax * (1 - disc);
-  const counted = gl.filter(l => !TAX_EXCLUDED_GL_TYPES.includes((l.type || '').toLowerCase()));
-  const excluded = gl.filter(l => TAX_EXCLUDED_GL_TYPES.includes((l.type || '').toLowerCase()));
+  // Collected = the total of the Sales Tax Payable lines that represent tax
+  // COLLECTED — every line on the account except the ones that remit it.
+  // Exclusion is by transaction type rather than by sign, so a refund or
+  // void inside a daily sales journal entry still reduces collected, which
+  // is correct.
+  const exTypes = taxExcludedTypes(cfg);
+  const counted = gl.filter(l => !exTypes.includes((l.type || '').toLowerCase()));
+  const excluded = gl.filter(l => exTypes.includes((l.type || '').toLowerCase()));
   const collected = counted.reduce((s, l) => s + l.amount, 0);
   const collectedLessMb = cfg.mb_enabled ? collected - mbStTax : collected;
   const expense = stPayable - collectedLessMb;
