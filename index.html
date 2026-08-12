@@ -2374,22 +2374,37 @@ function bubbleCounts(rows, meName) {
     while (r.parent_message_id && byId.has(r.parent_message_id) && guard++ < 50) r = byId.get(r.parent_message_id);
     return r.id;
   };
-  const thread = new Map();   // rootId -> { latestAuthor, latestAt, client_id }
+  const thread = new Map();   // rootId -> { latestAuthor, latestAt, client_id, authors }
   for (const m of (rows || [])) {
     const rid = rootIdOf(m);
     let t = thread.get(rid);
-    if (!t) { t = { latestAuthor: null, latestAt: null, client_id: null }; thread.set(rid, t); }
+    if (!t) { t = { latestAuthor: null, latestAt: null, client_id: null, authors: new Set() }; thread.set(rid, t); }
     if (m.client_id != null) t.client_id = m.client_id;
+    if (m.author) t.authors.add(m.author);
     if (!t.latestAt || new Date(m.created_at) > new Date(t.latestAt)) { t.latestAt = m.created_at; t.latestAuthor = m.author; }
   }
   const perClient = {};
+  const threads = [];
   let total = 0;
   thread.forEach((t) => {
     if (t.latestAuthor === meName) return;   // I responded last → nothing waiting on me
     total++;
+    threads.push(t);
     if (t.client_id != null) perClient[t.client_id] = (perClient[t.client_id] || 0) + 1;
   });
-  return { total, perClient };
+  return { total, perClient, threads };
+}
+
+// A thread is visible to me when I own the client (preparer/reviewer) OR I have
+// posted in the thread myself. The second route is what makes a reply reach the
+// person who actually asked, on clients where they hold no role — without it,
+// anyone posting on a client they aren't assigned to never learns it was
+// answered. `owned` of null means no scoping applies (the owner, viewing as
+// himself), so everything is visible.
+function threadVisibleToMe(t, owned, meName) {
+  if (!owned) return true;
+  if (t.client_id != null && owned.has(t.client_id)) return true;
+  return !!(t.authors && t.authors.has(meName));
 }
 
 async function loadClientCommentCounts() {
@@ -2402,10 +2417,15 @@ async function loadClientCommentCounts() {
     // Internal-only: the Clients-list bubbles reflect internal team communication.
     // Client-facing conversations are surfaced by the Client Portal badge instead.
     const internalRows = (data || []).filter(m => m.is_internal);
-    const { perClient } = bubbleCounts(internalRows, getViewingUserName());
+    const me = getViewingUserName();
+    const { threads } = bubbleCounts(internalRows, me);
     const owned = myClientIdSet();
     const counts = {};
-    Object.keys(perClient).forEach((cid) => { if (!owned || owned.has(cid)) counts[cid] = perClient[cid]; });
+    threads.forEach((t) => {
+      if (t.client_id == null) return;
+      if (!threadVisibleToMe(t, owned, me)) return;
+      counts[t.client_id] = (counts[t.client_id] || 0) + 1;
+    });
     clientCommentCounts = counts;
   } catch (err) {
     console.error('loadClientCommentCounts error:', err);
@@ -2758,14 +2778,16 @@ async function loadPortalBadge() {
       // scope: 'clients' = non-firm rows only (owned filter applies);
       //        'firm'    = firm rows only (everyone sees the firm's notes);
       //        'all'     = legacy behavior (portal badge; firm has no client-facing threads anyway)
-      const { perClient } = bubbleCounts(rows, me);
+      const { threads } = bubbleCounts(rows, me);
       let c = 0;
-      Object.keys(perClient).forEach((cid) => {
+      threads.forEach((t) => {
+        const cid = t.client_id;
+        if (cid == null) return;
         const isFirm = firmIds.has(cid);
         if (scope === 'clients' && isFirm) return;
         if (scope === 'firm' && !isFirm) return;
-        if (scope !== 'firm' && owned && !owned.has(cid)) return;
-        c += perClient[cid];
+        if (scope !== 'firm' && !threadVisibleToMe(t, owned, me)) return;
+        c += 1;
       });
       return c;
     };
