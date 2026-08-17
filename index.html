@@ -649,6 +649,19 @@
     #page-vendoraudit .va-disp{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.15rem .5rem;white-space:nowrap}
     #page-vendoraudit .d-wont_fix{background:var(--yellow-bg);color:var(--yellow)}
     #page-vendoraudit .d-general{background:var(--blue-bg);color:var(--blue)}
+    /* ── NEW CLIENT modal (added 2026-08-17) ─────────────────────────
+       Scoped to #newClientModal so nothing here can reach another modal. */
+    #newClientModal .nc-clone{border:1px solid var(--border);border-radius:10px;padding:14px;margin-top:4px;background:var(--bg2,#faf9f6)}
+    #newClientModal .nc-clone.off{opacity:.55}
+    #newClientModal .nc-hint{font-size:12px;color:var(--text3);line-height:1.5;margin-top:6px}
+    #newClientModal .nc-preview{font-size:13px;color:var(--text2);margin-top:10px;line-height:1.6}
+    #newClientModal .nc-preview b{color:var(--navy)}
+    #newClientModal .nc-check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);margin-top:10px;cursor:pointer}
+    #newClientModal .nc-check input{width:15px;height:15px;cursor:pointer}
+    #newClientModal .nc-status{font-size:13px;margin-top:12px;min-height:18px}
+    #newClientModal .nc-status.err{color:var(--red)}
+    #newClientModal .nc-status.ok{color:var(--text2)}
+    #newClientModal .nc-warn{font-size:12px;color:var(--amber,#b26a00);margin-top:6px}
     #page-vendoraudit .va-cfg{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.75rem}
     #page-vendoraudit .va-cfg label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:.2rem}
     #page-vendoraudit .va-cfg input{width:100%}
@@ -883,6 +896,10 @@
           <div><div class="page-title">All Clients</div><div class="page-sub" id="clientsCount"></div></div>
           <!-- Bulk action: reset every client back to "Not Started" to kick off
                a new month's close cycle. Hard-confirm before running. -->
+          <!-- Owner-only: create a client row (revealed in showApp alongside the
+               Admin tab). Hidden by default so a non-owner never sees it. -->
+          <button class="btn btn-secondary" id="addClientBtn" style="display:none;margin-right:8px"
+                  onclick="window.NewClientOpen()">+ Add Client</button>
           <button class="btn btn-primary" id="startCloseAllBtn" onclick="startCloseForAllClients()">
             🔄 Start Close for All Clients
           </button>
@@ -1647,6 +1664,73 @@
 </div>
 
 <!-- ACCOUNT MODAL -->
+<!-- NEW CLIENT (owner-only) — added 2026-08-17 -->
+<div class="modal-overlay" id="newClientModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-hdr">
+      <div class="modal-title">Add Client</div>
+      <button class="modal-close" onclick="closeModal('newClientModal')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="form-label">Client Name</label>
+        <input type="text" class="form-input" id="ncName" placeholder="e.g. Dirdie Birdie Fort Worth" autocomplete="off" />
+        <div class="nc-warn" id="ncDupWarn" style="display:none"></div>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">Preparer</label>
+          <select class="form-select" id="ncPreparer"></select>
+        </div>
+        <div>
+          <label class="form-label">Reviewer</label>
+          <select class="form-select" id="ncReviewer"></select>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">Close Period</label>
+          <input type="text" class="form-input" id="ncPeriod" placeholder="e.g. July 2026" autocomplete="off" />
+        </div>
+        <div>
+          <label class="form-label">Close Due Date</label>
+          <input type="date" class="form-input" id="ncDue" />
+        </div>
+      </div>
+      <label class="nc-check" id="ncPortalWrap" style="display:none">
+        <input type="checkbox" id="ncPortal" /> <span>Enable the client portal for this client</span>
+      </label>
+
+      <div class="form-row" style="margin-top:1.1rem;margin-bottom:0">
+        <label class="form-label">Copy tasks from an existing client (optional)</label>
+        <select class="form-select" id="ncCloneFrom" onchange="window.NewClientPreview()"></select>
+      </div>
+      <div class="nc-clone off" id="ncCloneBox" style="margin-top:10px">
+        <label class="nc-check" style="margin-top:0">
+          <input type="checkbox" id="ncSkipOneTime" checked /> <span>Skip one-time tasks (copy recurring &amp; close tasks only)</span>
+        </label>
+        <label class="form-label" style="margin-top:12px">Assignees on copied tasks</label>
+        <select class="form-select" id="ncAssignMode">
+          <option value="keep">Keep each task's current assignee</option>
+          <option value="preparer">Assign all to the new client's preparer</option>
+        </select>
+        <div class="nc-preview" id="ncPreview">Choose a client above to see what would be copied.</div>
+        <div class="nc-hint">
+          Steps and their sequential order are copied with each task. Every copied task starts
+          at <b>Not Started</b>. Recurring due dates that have already passed roll forward on
+          their own cadence to the next occurrence from today; month-end close dates are copied
+          as-is, since the close lifecycle rolls those itself.
+        </div>
+      </div>
+      <div class="nc-status" id="ncStatus"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="ncCancel" onclick="closeModal('newClientModal')">Cancel</button>
+      <button class="btn btn-primary" id="ncSave" onclick="window.NewClientSave()">Create Client</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="accountModal">
   <div class="modal" style="max-width:400px">
     <div class="modal-hdr">
@@ -2275,7 +2359,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot();
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot();
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -9928,6 +10012,337 @@ init();
 
   // Keep the nav badge honest even when the tab has never been opened.
   window.VendorAuditBadgeBoot = refreshBadge;
+})();
+</script>
+<script>
+/* ============================================================
+   NEW CLIENT (owner-only) — added 2026-08-17
+
+   Creates a row in `clients` and, optionally, copies another
+   client's task set (tasks + subtasks, including the sequential
+   blocked_by chain) onto the new client.
+
+   Two deliberate design points:
+
+   1) COLUMN DISCOVERY. Nothing here hard-codes the shape of the
+      `clients` table. Before inserting, one existing row is read
+      with select('*') and only keys that actually exist on that
+      row are written. So a column this file has never heard of is
+      left to its own default, and a column that does not exist
+      (portal_enabled is portal-side, not referenced anywhere else
+      in Triple) can't produce a "column does not exist" error.
+
+   2) NO TRANSACTION. The client insert and the task copy are
+      separate round trips; Supabase gives us no transaction from
+      the browser. If the copy fails part way, the client row still
+      exists and we say so plainly rather than pretending to roll
+      back. Re-running the copy is a manual job from that point.
+   ============================================================ */
+(function(){
+  const $ = id => document.getElementById(id);
+  const TEAM = ['Ed Hattrup','Jennifer Mills','Jen Crane','Lydia Hattrup'];
+  let clientCols = null;   // Set of column names discovered on `clients`
+  let previewCache = {};   // source client id -> { close, recurring, oneTime, steps }
+  let busy = false;
+
+  function setStatus(msg, kind){
+    const el = $('ncStatus'); if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'nc-status' + (kind ? ' ' + kind : '');
+  }
+
+  // ── Column discovery ───────────────────────────────────────
+  // Read one client row and remember its keys. Cached for the session.
+  async function loadClientCols(){
+    if (clientCols) return clientCols;
+    const { data, error } = await sb.from('clients').select('*').limit(1);
+    if (error) throw new Error('Could not read the clients table: ' + (error.message || 'unknown error'));
+    if (!data || !data.length) throw new Error('The clients table is empty, so the column list could not be read.');
+    clientCols = new Set(Object.keys(data[0]));
+    return clientCols;
+  }
+
+  // ── Open ───────────────────────────────────────────────────
+  window.NewClientOpen = async function(){
+    if (busy) return;
+    $('ncName').value = '';
+    $('ncDue').value  = '';
+    $('ncDupWarn').style.display = 'none';
+    $('ncSkipOneTime').checked = true;
+    $('ncAssignMode').value = 'keep';
+    $('ncPreview').textContent = 'Choose a client above to see what would be copied.';
+    $('ncCloneBox').classList.add('off');
+    setStatus('');
+    $('ncSave').disabled = false;
+    $('ncSave').textContent = 'Create Client';
+
+    // Preparer / reviewer pickers. Reviewer may legitimately be empty —
+    // 15 of Ed's clients are deliberately solo (see the 8/12 role audit).
+    $('ncPreparer').innerHTML = '<option value="">— none —</option>' +
+      TEAM.map(n => '<option>' + n + '</option>').join('');
+    $('ncReviewer').innerHTML = '<option value="">— none —</option>' +
+      TEAM.map(n => '<option>' + n + '</option>').join('');
+
+    // Close period defaults to whatever most existing clients are on, so a
+    // new client lands in step with the rest of the firm instead of blank.
+    const periods = {};
+    (allClients || []).forEach(c => { if (c && c.close_period) periods[c.close_period] = (periods[c.close_period] || 0) + 1; });
+    const common = Object.keys(periods).sort((a,b) => periods[b] - periods[a])[0] || '';
+    $('ncPeriod').value = common;
+
+    // Clone source list: real clients only, never the firm space.
+    const opts = (allClients || []).filter(c => c && !c.is_firm)
+      .sort((a,b) => (a.name||'').localeCompare(b.name||''))
+      .map(c => '<option value="' + c.id + '">' + (c.name || '(unnamed)') + '</option>').join('');
+    $('ncCloneFrom').innerHTML = '<option value="">— Don\'t copy any tasks —</option>' + opts;
+
+    // The portal checkbox only appears if the column is really there.
+    try {
+      const cols = await loadClientCols();
+      $('ncPortalWrap').style.display = cols.has('portal_enabled') ? '' : 'none';
+      if (cols.has('portal_enabled')) $('ncPortal').checked = false;
+    } catch (e) {
+      $('ncPortalWrap').style.display = 'none';
+      setStatus(e.message, 'err');
+    }
+
+    $('newClientModal').classList.add('open');
+    $('ncName').focus();
+  };
+
+  // ── Duplicate-name warning (advisory, never blocking) ──────
+  function checkDup(){
+    const v = ($('ncName').value || '').trim().toLowerCase();
+    const hit = (allClients || []).find(c => c && (c.name || '').trim().toLowerCase() === v && v);
+    const w = $('ncDupWarn');
+    if (hit) { w.textContent = 'A client named "' + hit.name + '" already exists. Creating this makes a second, separate client.'; w.style.display = ''; }
+    else w.style.display = 'none';
+  }
+
+  // ── Clone preview ──────────────────────────────────────────
+  window.NewClientPreview = async function(){
+    const src = $('ncCloneFrom').value;
+    const box = $('ncCloneBox'), pv = $('ncPreview');
+    if (!src) {
+      box.classList.add('off');
+      pv.textContent = 'Choose a client above to see what would be copied.';
+      return;
+    }
+    box.classList.remove('off');
+    if (previewCache[src]) { renderPreview(previewCache[src]); return; }
+    pv.textContent = 'Counting…';
+    try {
+      const [tRes, sRes] = await Promise.all([
+        sb.from('tasks').select('id,category,frequency').eq('client_id', src),
+        sb.from('subtasks').select('id').eq('client_id', src)
+      ]);
+      if (tRes.error) throw tRes.error;
+      const tasks = tRes.data || [];
+      const counts = {
+        close:     tasks.filter(t => CLOSE_CATS.includes(t.category)).length,
+        oneTime:   tasks.filter(t => !CLOSE_CATS.includes(t.category) && t.frequency === 'one_time').length,
+        recurring: tasks.filter(t => !CLOSE_CATS.includes(t.category) && t.frequency !== 'one_time').length,
+        steps:     (sRes.data || []).length
+      };
+      previewCache[src] = counts;
+      renderPreview(counts);
+    } catch (e) {
+      pv.textContent = 'Could not count that client\'s tasks — ' + (e.message || 'try again.');
+    }
+  };
+
+  function renderPreview(c){
+    const skip = $('ncSkipOneTime').checked;
+    const total = c.close + c.recurring + (skip ? 0 : c.oneTime);
+    $('ncPreview').innerHTML =
+      'Would copy <b>' + total + '</b> task' + (total === 1 ? '' : 's') +
+      ' — ' + c.close + ' month-end close, ' + c.recurring + ' recurring' +
+      (skip
+        ? (c.oneTime ? ', skipping ' + c.oneTime + ' one-time' : '')
+        : ', ' + c.oneTime + ' one-time') +
+      ' — plus <b>' + c.steps + '</b> step' + (c.steps === 1 ? '' : 's') + ' across them.';
+  }
+
+  // ── Due-date handling on copied tasks ──────────────────────
+  // A copied task carrying a past next_due would show up overdue and then
+  // catch up one occurrence at a time (computeNextDue is deliberately
+  // catch-up, not skip-ahead — Ed's call on 6/8). So non-close tasks are
+  // rolled forward on their own cadence to the first occurrence at or after
+  // today, which preserves the weekday / day-of-month anchor. Close-category
+  // tasks are left exactly as they are: rollCloseDatesForward owns those.
+  function rollDue(t, today){
+    if (!t.next_due) return null;
+    if (CLOSE_CATS.includes(t.category)) return t.next_due;
+    if (t.next_due >= today) return t.next_due;
+    if (t.frequency === 'one_time') return today;
+    let nd = t.next_due, guard = 0;
+    while (nd && nd < today && guard++ < 600) {
+      nd = computeNextDue(t.frequency, t.frequency_day, t.frequency_dow, t.frequency_month, nd, t.frequency_interval);
+    }
+    return nd;
+  }
+
+  // ── Save ───────────────────────────────────────────────────
+  window.NewClientSave = async function(){
+    if (busy) return;
+    const name = ($('ncName').value || '').trim();
+    if (!name) { setStatus('Please enter a client name.', 'err'); $('ncName').focus(); return; }
+
+    const preparer = $('ncPreparer').value;
+    const reviewer = $('ncReviewer').value;
+    const period   = ($('ncPeriod').value || '').trim();
+    const due      = $('ncDue').value;
+    const cloneId  = $('ncCloneFrom').value;
+    const skipOne  = $('ncSkipOneTime').checked;
+    const assignTo = $('ncAssignMode').value === 'preparer' ? (preparer || null) : null;
+
+    if ($('ncAssignMode').value === 'preparer' && !preparer) {
+      setStatus('Pick a preparer, or switch the copied tasks back to keeping their current assignees.', 'err');
+      return;
+    }
+
+    busy = true;
+    $('ncSave').disabled = true; $('ncCancel').disabled = true;
+    $('ncSave').textContent = 'Creating…';
+    setStatus('Creating the client row…', 'ok');
+
+    let newId = null;
+    try {
+      const cols = await loadClientCols();
+      // Candidate values; only the ones whose column exists get written.
+      const candidates = {
+        name: name,
+        preparer: preparer || null,
+        reviewer: reviewer || null,
+        close_period: period || null,
+        close_due_date: due || null,
+        close_status: 'Not Started',
+        is_firm: false,
+        portal_enabled: $('ncPortal') ? !!$('ncPortal').checked : false
+      };
+      const row = {};
+      Object.keys(candidates).forEach(k => { if (cols.has(k)) row[k] = candidates[k]; });
+
+      const created = await writeOrThrow(sb.from('clients').insert(row), 'Create client');
+      newId = created && created[0] && created[0].id;
+      if (!newId) throw new Error('The client was created but no id came back, so tasks were not copied.');
+    } catch (err) {
+      setStatus((err.message || 'The client could not be created.') + ' Nothing was saved.', 'err');
+      busy = false;
+      $('ncSave').disabled = false; $('ncCancel').disabled = false;
+      $('ncSave').textContent = 'Create Client';
+      return;
+    }
+
+    // ---- optional task copy -------------------------------------------
+    let copied = 0, steps = 0, copyError = null;
+    if (cloneId) {
+      try {
+        const today = tzToday();
+        const [tRes, sRes] = await Promise.all([
+          sb.from('tasks')
+            .select('id,category,title,assigned_to,notes,frequency,frequency_interval,frequency_day,frequency_dow,frequency_month,starts_on,next_due,sort_order')
+            .eq('client_id', cloneId).order('sort_order'),
+          sb.from('subtasks')
+            .select('id,task_id,title,assigned_to,sort_order,blocked_by')
+            .eq('client_id', cloneId).order('sort_order')
+        ]);
+        if (tRes.error) throw tRes.error;
+        if (sRes.error) throw sRes.error;
+
+        let tasks = tRes.data || [];
+        if (skipOne) tasks = tasks.filter(t => CLOSE_CATS.includes(t.category) || t.frequency !== 'one_time');
+
+        // Group steps under their source task, in sort order.
+        const subsBy = {};
+        (sRes.data || []).forEach(s => { (subsBy[s.task_id] = subsBy[s.task_id] || []).push(s); });
+        Object.keys(subsBy).forEach(k => subsBy[k].sort((a,b) => (a.sort_order||0) - (b.sort_order||0)));
+
+        for (let i = 0; i < tasks.length; i++) {
+          const t = tasks[i];
+          $('ncSave').textContent = 'Copying ' + (i + 1) + ' of ' + tasks.length + '…';
+          const nd = rollDue(t, today);
+          const payload = {
+            client_id: newId,
+            category: t.category,
+            title: t.title,
+            assigned_to: assignTo !== null ? assignTo : (t.assigned_to || null),
+            notes: t.notes || null,
+            frequency: t.frequency,
+            frequency_interval: t.frequency_interval || 1,
+            frequency_day: t.frequency_day,
+            frequency_dow: t.frequency_dow,
+            frequency_month: t.frequency_month,
+            // starts_on tracks the rolled date so the pair stays coherent;
+            // an unrolled task keeps whatever the source had.
+            starts_on: (nd && nd !== t.next_due) ? nd : (t.starts_on || null),
+            next_due: nd,
+            sort_order: t.sort_order,
+            status: 'Not Started',
+            updated_at: new Date().toISOString()
+          };
+          const ins = await sb.from('tasks').insert(payload).select().single();
+          if (ins.error) throw new Error('task "' + t.title + '": ' + ins.error.message);
+          const newTaskId = ins.data && ins.data.id;
+          if (!newTaskId) throw new Error('task "' + t.title + '" did not return an id.');
+          copied++;
+
+          // Steps, in order, rebuilding the sequential chain against the NEW
+          // ids. A source step with blocked_by set chains to the step before
+          // it here — same shape saveTask() writes.
+          const kids = subsBy[t.id] || [];
+          let prevId = null;
+          for (let j = 0; j < kids.length; j++) {
+            const k = kids[j];
+            const sub = {
+              task_id: newTaskId,
+              client_id: newId,
+              title: k.title,
+              assigned_to: assignTo !== null ? assignTo : (k.assigned_to || null),
+              status: 'Not Started',
+              sort_order: j,
+              blocked_by: (k.blocked_by && j > 0) ? prevId : null
+            };
+            const sIns = await sb.from('subtasks').insert(sub).select().single();
+            if (sIns.error) throw new Error('step "' + k.title + '": ' + sIns.error.message);
+            prevId = sIns.data && sIns.data.id;
+            steps++;
+          }
+        }
+      } catch (e) {
+        copyError = e.message || 'unknown error';
+      }
+    }
+
+    // ---- finish -------------------------------------------------------
+    try { await loadClients(); filterClients(); } catch (e) {}
+
+    busy = false;
+    $('ncSave').disabled = false; $('ncCancel').disabled = false;
+    $('ncSave').textContent = 'Create Client';
+
+    if (copyError) {
+      // The client exists. Say so rather than implying a rollback.
+      setStatus('Client "' + name + '" was created, but copying stopped after ' + copied +
+                ' task' + (copied === 1 ? '' : 's') + ' and ' + steps + ' step' + (steps === 1 ? '' : 's') +
+                ' — ' + copyError + '. The client is on the list; finish the remaining tasks by hand.', 'err');
+      return;
+    }
+
+    closeModal('newClientModal');
+    if (typeof openClient === 'function') openClient(newId);
+  };
+
+  // Wire the name field's duplicate check and keep the preview honest when the
+  // one-time checkbox changes.
+  document.addEventListener('DOMContentLoaded', function(){
+    const n = $('ncName'); if (n) n.addEventListener('input', checkDup);
+    const s = $('ncSkipOneTime');
+    if (s) s.addEventListener('change', function(){
+      const src = $('ncCloneFrom').value;
+      if (src && previewCache[src]) renderPreview(previewCache[src]);
+    });
+  });
 })();
 </script>
 </body>
