@@ -2968,6 +2968,32 @@ async function fetchAllRows(build, pageSize) {
   return out;
 }
 
+// Is every step BEFORE this one complete?
+//
+// The old test looked only at the immediate predecessor, so ticking a later
+// step out of order unlocked the one after it while earlier steps were still
+// open. Confirmed live on 2026-08-17: Bill's Oyster "Payroll" had steps 1-3
+// Not Started, step 4 "Add Dylan's Bonus" ticked by hand, and step 5 "Process
+// Payroll" therefore surfaced in My Week with three unfinished steps ahead of
+// it. This walks the blocked_by chain all the way back instead.
+//
+// Fail-open on an unknown blocker is deliberate and matches the old
+// behaviour: better to show a step we can't prove is blocked than to hide
+// real work. With the widened fetch above, the chain should always resolve.
+function subtaskChainUnblocked(sub, byId) {
+  let cur = sub;
+  const seen = new Set([sub && sub.id]);
+  for (let guard = 0; cur && cur.blocked_by && guard < 100; guard++) {
+    const blocker = byId.get(cur.blocked_by);
+    if (!blocker) return true;                  // can't resolve → show it
+    if (blocker.status !== 'Done') return false; // an earlier step is open
+    if (seen.has(blocker.id)) break;             // cycle guard
+    seen.add(blocker.id);
+    cur = blocker;
+  }
+  return true;
+}
+
 // The gating slice of the subtasks table. Replaces an unbounded select over
 // every subtask the firm has ever created — which is what truncated. Only
 // two narrow sets are actually needed:
@@ -2984,7 +3010,14 @@ async function gatingSubtasks(tasks, subtasks) {
     for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
     return out;
   };
-  const taskIds   = [...new Set((tasks    || []).map(t => t && t.id).filter(Boolean))];
+  // Union of: tasks assigned to this user, AND the parent tasks of this
+  // user's own subtasks. The second half is what makes a full chain walk
+  // possible — without it we only ever see the user's own steps and their
+  // direct blockers, not the earlier steps those blockers depend on.
+  const taskIds   = [...new Set([
+    ...(tasks    || []).map(t => t && t.id),
+    ...(subtasks || []).map(s => s && s.task_id)
+  ].filter(Boolean))];
   const blockerIds = [...new Set((subtasks || []).map(s => s && s.blocked_by).filter(Boolean))];
 
   const jobs = [];
@@ -3035,6 +3068,7 @@ async function loadMyDay() {
     let tasks = tasksRes;
     const subtasks = subsRes;
     const allSubs = await gatingSubtasks(tasks, subtasks);
+    const allSubsById = new Map(allSubs.map(s => [s.id, s]));
     const reviewGates = reviewGateRes.data || [];
     // client_id -> close_status, so close tasks can be gated on the close lifecycle.
     const closeStatus = Object.fromEntries((closeRes.data || []).map(c => [c.id, c.close_status]));
@@ -3067,8 +3101,7 @@ async function loadMyDay() {
 
     const mySubs = (subtasks || []).filter(s => {
       if (!s.blocked_by) return true;
-      const blocker = allSubs.find(x => x.id === s.blocked_by);
-      return !blocker || blocker.status === 'Done';
+      return subtaskChainUnblocked(s, allSubsById);
     }).filter(s => {
       // Subtasks of a close task follow the close lifecycle AND the parent's
       // due date — hidden until the close is active and the parent is due.
@@ -3136,6 +3169,7 @@ async function loadMyWeek() {
     let tasks = tasksRes;
     const subtasks = subsRes;
     const allSubs = await gatingSubtasks(tasks, subtasks);
+    const allSubsById = new Map(allSubs.map(s => [s.id, s]));
     const reviewGates = reviewGateRes.data || [];
     const closeStatus = Object.fromEntries((closeRes.data || []).map(c => [c.id, c.close_status]));
     const closeActive = (clientId) => closeStatus[clientId] === 'In Progress';
@@ -3166,8 +3200,7 @@ async function loadMyWeek() {
 
     const weekSubs = (subtasks || []).filter(s => {
       if (!s.blocked_by) return true;
-      const blocker = allSubs.find(x => x.id === s.blocked_by);
-      return !blocker || blocker.status === 'Done';
+      return subtaskChainUnblocked(s, allSubsById);
     }).filter(s => {
       // Subtasks of a close task follow the close lifecycle, not the due date.
       if (isCloseCat(s.tasks?.category)) return closeActive(s.tasks?.client_id);
@@ -4790,7 +4823,18 @@ async function deleteTaskFromModal() {
 }
 
 // ── TASK MODAL ───────────────────────────────────────────
+// What the task looked like when the modal opened. saveTask used to write
+// next_due = starts_on on EVERY save, so re-opening a long-running recurring
+// task and pressing Save dragged its due date back to the original start date
+// — and because computeNextDue is catch-up rather than skip-ahead, it would
+// then crawl forward one occurrence at a time. Keeping the original lets an
+// edit preserve the schedule unless the user actually changes Starts on.
+let tmOrigStartsOn = null;
+let tmOrigNextDue  = null;
+
 function openTaskModal(clientId, category, taskId) {
+  tmOrigStartsOn = null;
+  tmOrigNextDue  = null;
   subRows = [];
   document.getElementById('subRows').innerHTML = '';
   document.getElementById('tmTitle').value = '';
@@ -4839,7 +4883,8 @@ function openTaskModal(clientId, category, taskId) {
       document.getElementById('tmNotes').value = task.notes || '';
       if (task.starts_on) document.getElementById('tmStartsOn').value = task.starts_on;
       else if (task.next_due) document.getElementById('tmStartsOn').value = task.next_due;
-      // next_due (hidden field) is kept in sync with starts_on at save time.
+      tmOrigStartsOn = task.starts_on || null;
+      tmOrigNextDue  = task.next_due  || null;
       document.getElementById('tmNextDue').value = task.next_due || task.starts_on || tzToday();
       if (task.frequency) {
         document.getElementById('freqType').value = task.frequency;
@@ -4902,13 +4947,17 @@ function renderFreqPreview() {
     document.getElementById('tmNextDue').value = startsOn;
     return;
   }
+  // Anchor the preview on the task's ACTUAL next due date when the user hasn't
+  // touched Starts on. Otherwise an existing task previews its original start
+  // date as the "Next reminder", which reads as a date in the past.
+  const anchor = (tmOrigNextDue && startsOn === tmOrigStartsOn) ? tmOrigNextDue : startsOn;
   const interval = Math.max(1, parseInt(document.getElementById('freqInterval').value, 10) || 1);
   const fDay   = parseInt(document.getElementById('freqDay').value, 10)   || null;
   const fDow   = parseInt(document.getElementById('freqDow').value, 10)   || null;
   const fMonth = parseInt(document.getElementById('freqMonth').value, 10) || null;
-  // First reminder = starts_on. Then 2 more steps forward.
-  const dates = [startsOn];
-  let cur = startsOn;
+  // First reminder = the anchor above. Then 2 more steps forward.
+  const dates = [anchor];
+  let cur = anchor;
   for (let i = 0; i < 3; i++) {
     cur = computeNextDue(freq, fDay, fDow, fMonth, cur, interval);
     dates.push(cur);
@@ -4918,8 +4967,7 @@ function renderFreqPreview() {
     <div class="freq-preview-head">Schedule preview</div>
     <div class="freq-preview-next">Next reminder: ${fmt(dates[0])}</div>
     <div class="freq-preview-then">Then: ${fmt(dates[1])}<br>${fmt(dates[2])}<br>${fmt(dates[3])}</div>`;
-  // Keep the hidden next_due in sync with starts_on for save logic.
-  document.getElementById('tmNextDue').value = startsOn;
+  document.getElementById('tmNextDue').value = anchor;
 }
 
 function addSubRow(title='', assignedTo='') {
@@ -4983,9 +5031,13 @@ async function saveTask() {
     frequency: freq, frequency_interval: freqInterval,
     frequency_day: freqDay, frequency_dow: freqDow,
     frequency_month: freqMonth, starts_on: startsOn || null,
-    // next_due = starts_on for a new/edited task. From there it advances via
-    // computeNextDue each time the task is marked Done.
-    next_due: startsOn || null, updated_at: new Date().toISOString()
+    // A NEW task starts at starts_on. An EDIT keeps whatever the task was
+    // already due on, unless the user deliberately changed Starts on — in
+    // which case re-anchoring is exactly what they asked for.
+    next_due: (taskId && tmOrigNextDue && startsOn === tmOrigStartsOn)
+      ? tmOrigNextDue
+      : (startsOn || null),
+    updated_at: new Date().toISOString()
   };
 
   let savedId = taskId;
