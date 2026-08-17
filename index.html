@@ -5724,8 +5724,12 @@ async function loadTeamChatBadge() {
   const badge = document.getElementById('teamChatBadge');
   if (!badge) return;
   try {
-    const { data, error } = await sb.from('team_messages').select('id, parent_message_id, author, created_at').eq('cleared', false);
-    if (error) throw error;
+    // Paged. Bounded by OPEN messages only, so this is the safer of the two
+    // team_messages reads — but it is the same class of bug as the subtasks
+    // one, and a truncated count would quietly under-report the badge.
+    const data = await fetchAllRows(() => sb.from('team_messages')
+      .select('id, parent_message_id, author, created_at')
+      .eq('cleared', false));
     const count = bubbleCounts(data || [], getViewingUserName()).total;
     if (count > 0) { badge.textContent = count > 99 ? '99+' : String(count); badge.style.display = ''; }
     else badge.style.display = 'none';
@@ -5737,9 +5741,25 @@ async function loadTeamChatBadge() {
 async function loadTeamMessages() {
   loadTeamChatBadge();
   const showCleared = document.getElementById('showClearedTeamToggle')?.checked;
-  let q = sb.from('team_messages').select('*');
-  if (!showCleared) q = q.eq('cleared', false);
-  const { data } = await q.order('created_at');
+  // Paged. This one is the real exposure: with "Show cleared" on there is no
+  // filter at all, and the sort is created_at ASCENDING — so when PostgREST's
+  // max-rows cap trims the response it keeps the OLDEST messages and discards
+  // the newest. Recent chat would silently disappear while ancient threads
+  // stayed, and any reply whose parent fell outside the kept rows would be
+  // promoted to a standalone card by the presentIds fallback below.
+  const buildTeamQuery = () => {
+    let q = sb.from('team_messages').select('*');
+    if (!showCleared) q = q.eq('cleared', false);
+    return q.order('created_at');
+  };
+  let data;
+  try {
+    data = await fetchAllRows(buildTeamQuery);
+  } catch (err) {
+    // Matches the previous behaviour, which ignored the error object entirely.
+    console.error('loadTeamMessages error:', err);
+    data = [];
+  }
   currentTeamMessages = data || [];
   const list = document.getElementById('teamMsgList');
   if (!data || !data.length) {
