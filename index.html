@@ -10193,6 +10193,37 @@ init();
   let previewCache = {};   // source client id -> { close, recurring, oneTime, steps }
   let busy = false;
 
+  // Recurring tasks in Triple accumulate ONE ROW PER OCCURRENCE. Completing
+  // one INSERTS a fresh task row and leaves the old one sitting at status
+  // 'Done' forever — Bill's Oyster alone has 12 rows titled "Payroll". The
+  // first version of this clone had no status filter, so it copied every
+  // historical instance of every recurring task and reset them all to Not
+  // Started, then rolled them onto the same week. This collapses a source
+  // client's task list to ONE row per distinct task before anything is copied.
+  //
+  // Close-category tasks are exempt: they are never respawned (the close
+  // lifecycle resets them in place), so there is exactly one row each and its
+  // status legitimately cycles through Done. Filtering those on status would
+  // drop a client's entire close checklist whenever the clone ran mid-close.
+  function currentInstances(rows){
+    const out = [], byKey = new Map();
+    (rows || []).forEach(t => {
+      if (!t) return;
+      if (CLOSE_CATS.includes(t.category)) { out.push(t); return; }
+      const key = (t.category || '') + '|' + (t.title || '');
+      const prev = byKey.get(key);
+      if (!prev || preferInstance(t, prev)) byKey.set(key, t);
+    });
+    return out.concat([...byKey.values()]);
+  }
+  // Prefer an OPEN instance over a completed one; between two of the same
+  // kind, prefer the one due furthest out — that is the live one.
+  function preferInstance(a, b){
+    const aOpen = a.status !== 'Done', bOpen = b.status !== 'Done';
+    if (aOpen !== bOpen) return aOpen;
+    return (a.next_due || '') > (b.next_due || '');
+  }
+
   function setStatus(msg, kind){
     const el = $('ncStatus'); if (!el) return;
     el.textContent = msg || '';
@@ -10280,17 +10311,18 @@ init();
     if (previewCache[src]) { renderPreview(previewCache[src]); return; }
     pv.textContent = 'Counting…';
     try {
-      const [tRes, sRes] = await Promise.all([
-        sb.from('tasks').select('id,category,frequency').eq('client_id', src),
-        sb.from('subtasks').select('id').eq('client_id', src)
-      ]);
-      if (tRes.error) throw tRes.error;
-      const tasks = tRes.data || [];
+      // Paged, and deduped to current instances — the preview must count
+      // exactly what the copy will actually create, or the number on screen
+      // is a promise the save can't keep.
+      const allTasks = await fetchAllRows(() => sb.from('tasks')
+        .select('id,category,title,frequency,status,next_due').eq('client_id', src));
+      const tasks = currentInstances(allTasks);
+      const stepRows = await subtasksForTasks(tasks.map(t => t.id));
       const counts = {
         close:     tasks.filter(t => CLOSE_CATS.includes(t.category)).length,
         oneTime:   tasks.filter(t => !CLOSE_CATS.includes(t.category) && t.frequency === 'one_time').length,
         recurring: tasks.filter(t => !CLOSE_CATS.includes(t.category) && t.frequency !== 'one_time').length,
-        steps:     (sRes.data || []).length
+        steps:     stepRows.length
       };
       previewCache[src] = counts;
       renderPreview(counts);
@@ -10309,6 +10341,26 @@ init();
         ? (c.oneTime ? ', skipping ' + c.oneTime + ' one-time' : '')
         : ', ' + c.oneTime + ' one-time') +
       ' — plus <b>' + c.steps + '</b> step' + (c.steps === 1 ? '' : 's') + ' across them.';
+  }
+
+  // Steps for a specific set of tasks. Scoped and paged: fetching every
+  // subtask a client has ever had could itself cross the PostgREST row cap
+  // (12 instances x 5 steps is 60 rows from ONE weekly task), and a truncated
+  // read would silently copy tasks with their steps missing.
+  async function subtasksForTasks(taskIds){
+    const ids = [...new Set((taskIds || []).filter(Boolean))];
+    if (!ids.length) return [];
+    const jobs = [];
+    for (let i = 0; i < ids.length; i += 50) {
+      const slice = ids.slice(i, i + 50);
+      jobs.push(fetchAllRows(() => sb.from('subtasks')
+        .select('id,task_id,title,assigned_to,sort_order,blocked_by')
+        .in('task_id', slice)));
+    }
+    const batches = await Promise.all(jobs);
+    const byId = new Map();
+    batches.forEach(rows => (rows || []).forEach(r => { if (r && r.id != null) byId.set(r.id, r); }));
+    return [...byId.values()];
   }
 
   // ── Due-date handling on copied tasks ──────────────────────
@@ -10387,23 +10439,20 @@ init();
     if (cloneId) {
       try {
         const today = tzToday();
-        const [tRes, sRes] = await Promise.all([
-          sb.from('tasks')
-            .select('id,category,title,assigned_to,notes,frequency,frequency_interval,frequency_day,frequency_dow,frequency_month,starts_on,next_due,sort_order')
-            .eq('client_id', cloneId).order('sort_order'),
-          sb.from('subtasks')
-            .select('id,task_id,title,assigned_to,sort_order,blocked_by')
-            .eq('client_id', cloneId).order('sort_order')
-        ]);
-        if (tRes.error) throw tRes.error;
-        if (sRes.error) throw sRes.error;
+        const allSourceTasks = await fetchAllRows(() => sb.from('tasks')
+          .select('id,category,title,assigned_to,notes,frequency,frequency_interval,frequency_day,frequency_dow,frequency_month,starts_on,next_due,sort_order,status')
+          .eq('client_id', cloneId).order('sort_order'));
 
-        let tasks = tRes.data || [];
+        // One row per distinct task, not one per historical occurrence.
+        let tasks = currentInstances(allSourceTasks);
         if (skipOne) tasks = tasks.filter(t => CLOSE_CATS.includes(t.category) || t.frequency !== 'one_time');
+        tasks.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+        const stepRows = await subtasksForTasks(tasks.map(t => t.id));
 
         // Group steps under their source task, in sort order.
         const subsBy = {};
-        (sRes.data || []).forEach(s => { (subsBy[s.task_id] = subsBy[s.task_id] || []).push(s); });
+        stepRows.forEach(s => { (subsBy[s.task_id] = subsBy[s.task_id] || []).push(s); });
         Object.keys(subsBy).forEach(k => subsBy[k].sort((a,b) => (a.sort_order||0) - (b.sort_order||0)));
 
         for (let i = 0; i < tasks.length; i++) {
