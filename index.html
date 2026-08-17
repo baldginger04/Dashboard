@@ -3156,8 +3156,12 @@ async function loadMyWeek() {
       // Close tasks ignore cadence — they appear only during an active close.
       if (isCloseCat(t.category)) return closeActive(t.client_id);
       if (dailyFreqs.includes(t.frequency)) return true;
+      // A task with NO due date is treated as due today rather than dropped.
+      // This is what kept undated ad-hoc work — most visibly on the Bald
+      // Ginger firm space — out of My Week entirely while it sat in My Day.
+      if (!t.next_due) return true;
       // include overdue rolled-up to today, plus tasks due during the window
-      return t.next_due && t.next_due <= weekEndStr;
+      return t.next_due <= weekEndStr;
     });
 
     const weekSubs = (subtasks || []).filter(s => {
@@ -3234,6 +3238,13 @@ function renderMyWeek(tasks, subs, todayStr, weekEndStr) {
       });
       return;
     }
+    // No due date at all -> due today. Two things land here: undated tasks
+    // (now admitted by the filter above), and steps whose parent task has no
+    // due date. Those steps already passed loadMyWeek's filter but matched
+    // none of the buckets below, so they were silently dropped at render
+    // while STILL counting toward the My Week badge — which is why the badge
+    // could read higher than the number of cards on screen.
+    if (!item.due) { days[0].items.push(item); return; }
     // Tasks overdue (due before today) bucket into Today
     if (item.due && item.due < todayStr) {
       days[0].items.push({ ...item, isOverdue: true, daysOverdue: daysBetween(todayStr, item.due) });
