@@ -2940,6 +2940,69 @@ function handleMyRealtimeChange(_payload) {
   }, 250);
 }
 
+// ── ROW-CAP SAFE FETCHING ────────────────────────────────
+// PostgREST caps every response at the project's "max rows" setting and
+// gives NO error when it truncates — it just returns fewer rows. On
+// 2026-08-17 the subtasks table crossed that cap (measured at exactly
+// 1000) and two things broke at once in My Day and My Week: parentTaskIds
+// went incomplete, so parent tasks stopped being hidden beside their own
+// steps, and the blocker lookup below FAILS OPEN, so every sequential
+// step became visible at the same time.
+//
+// fetchAllRows pages until a short page comes back, so a capped response
+// can never be mistaken for the whole table. Paging needs a stable sort or
+// rows can repeat or vanish between pages, hence the .order('id') — it is
+// appended after any ordering the caller already applied, so it acts as a
+// tiebreaker rather than replacing intent.
+async function fetchAllRows(build, pageSize) {
+  const size = pageSize || 1000;
+  const out = [];
+  for (let from = 0; ; from += size) {
+    const { data, error } = await build().order('id').range(from, from + size - 1);
+    if (error) throw error;
+    const rows = data || [];
+    out.push(...rows);
+    if (rows.length < size) break;
+    if (from > 200000) break; // hard stop; nothing here should approach this
+  }
+  return out;
+}
+
+// The gating slice of the subtasks table. Replaces an unbounded select over
+// every subtask the firm has ever created — which is what truncated. Only
+// two narrow sets are actually needed:
+//   1. subtasks belonging to one of THIS user's tasks, so a parent task with
+//      steps can be hidden and only the actionable steps shown;
+//   2. subtasks named as a blocker by one of THIS user's subtasks, so the
+//      sequential chain can be resolved.
+// Both are bounded by one person's workload instead of the whole history.
+// Task ids are chunked so a long .in() list can't blow past URL limits, and
+// each chunk is itself paged, so no chunk can be silently capped either.
+async function gatingSubtasks(tasks, subtasks) {
+  const chunk = (arr, n) => {
+    const out = [];
+    for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+    return out;
+  };
+  const taskIds   = [...new Set((tasks    || []).map(t => t && t.id).filter(Boolean))];
+  const blockerIds = [...new Set((subtasks || []).map(s => s && s.blocked_by).filter(Boolean))];
+
+  const jobs = [];
+  chunk(taskIds, 50).forEach(ids => jobs.push(
+    fetchAllRows(() => sb.from('subtasks').select('id,task_id,status,blocked_by').in('task_id', ids))
+  ));
+  chunk(blockerIds, 100).forEach(ids => jobs.push(
+    fetchAllRows(() => sb.from('subtasks').select('id,task_id,status,blocked_by').in('id', ids))
+  ));
+
+  // Dedupe by id — a subtask can arrive from both queries (it belongs to one
+  // of the user's tasks AND blocks another of their steps).
+  const byId = new Map();
+  const batches = await Promise.all(jobs);
+  batches.forEach(rows => (rows || []).forEach(r => { if (r && r.id != null) byId.set(r.id, r); }));
+  return [...byId.values()];
+}
+
 async function loadMyDay() {
   // Either the user themselves OR (when Ed is impersonating) the chosen team
   // member. Filters every query in this function.
@@ -2952,25 +3015,26 @@ async function loadMyDay() {
     // clients. We need it to gate the three review tasks (P&L, Balance Sheet,
     // Statement of Cash Flows) — those should be hidden until "Ready for
     // Review" is Done for the same client.
-    const [tasksRes, subsRes, allSubsRes, reviewGateRes, closeRes] = await Promise.all([
-      sb.from('tasks')
+    const [tasksRes, subsRes, reviewGateRes, closeRes] = await Promise.all([
+      // Paged: a person's own open work can outgrow the row cap too, and a
+      // truncated list here would silently hide real work.
+      fetchAllRows(() => sb.from('tasks')
         .select('*, clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done')
-        .order('next_due'),
-      sb.from('subtasks')
+        .order('next_due')),
+      fetchAllRows(() => sb.from('subtasks')
         .select('*, tasks(title,next_due,client_id,category,frequency), clients(name)')
         .eq('assigned_to', name)
-        .neq('status', 'Done'),
-      sb.from('subtasks').select('id,task_id,status,blocked_by'),
+        .neq('status', 'Done')),
       sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
       sb.from('clients').select('id,close_status'),
     ]);
-    if (tasksRes.error) throw tasksRes.error;
-    if (subsRes.error)  throw subsRes.error;
-    let tasks = tasksRes.data;
-    const subtasks = subsRes.data;
-    const allSubs = allSubsRes.data || [];
+    // fetchAllRows throws on error rather than returning { data, error };
+    // the surrounding try/catch already renders the failure state.
+    let tasks = tasksRes;
+    const subtasks = subsRes;
+    const allSubs = await gatingSubtasks(tasks, subtasks);
     const reviewGates = reviewGateRes.data || [];
     // client_id -> close_status, so close tasks can be gated on the close lifecycle.
     const closeStatus = Object.fromEntries((closeRes.data || []).map(c => [c.id, c.close_status]));
@@ -3051,26 +3115,27 @@ async function loadMyWeek() {
 
   try {
     // Fire all queries in parallel
-    const [tasksRes, subsRes, allSubsRes, reviewGateRes, closeRes] = await Promise.all([
-      sb.from('tasks')
+    const [tasksRes, subsRes, reviewGateRes, closeRes] = await Promise.all([
+      // Paged: a person's own open work can outgrow the row cap too, and a
+      // truncated list here would silently hide real work.
+      fetchAllRows(() => sb.from('tasks')
         .select('*, clients(name)')
         .eq('assigned_to', name)
         .neq('status', 'Done')
-        .order('next_due'),
-      sb.from('subtasks')
+        .order('next_due')),
+      fetchAllRows(() => sb.from('subtasks')
         .select('*, tasks(title,next_due,client_id,category,frequency), clients(name)')
         .eq('assigned_to', name)
-        .neq('status', 'Done'),
-      sb.from('subtasks').select('id,task_id,status,blocked_by'),
+        .neq('status', 'Done')),
       // "Ready for Review" gate — see loadMyDay for the explanation.
       sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
       sb.from('clients').select('id,close_status'),
     ]);
-    if (tasksRes.error) throw tasksRes.error;
-    if (subsRes.error)  throw subsRes.error;
-    let tasks = tasksRes.data;
-    const subtasks = subsRes.data;
-    const allSubs = allSubsRes.data || [];
+    // fetchAllRows throws on error rather than returning { data, error };
+    // the surrounding try/catch already renders the failure state.
+    let tasks = tasksRes;
+    const subtasks = subsRes;
+    const allSubs = await gatingSubtasks(tasks, subtasks);
     const reviewGates = reviewGateRes.data || [];
     const closeStatus = Object.fromEntries((closeRes.data || []).map(c => [c.id, c.close_status]));
     const closeActive = (clientId) => closeStatus[clientId] === 'In Progress';
