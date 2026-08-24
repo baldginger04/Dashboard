@@ -1203,6 +1203,7 @@
             <div class="page-sub" id="mapSub">Every client with a location, plus who to call.</div>
           </div>
           <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" id="mapLogoToggle" onclick="window.ClientMap.toggleLogos()">■ Logos</button>
             <button class="btn btn-secondary btn-sm" id="mapListToggle" onclick="window.ClientMap.toggleList()">◀ Hide list</button>
             <button class="btn btn-secondary btn-sm" id="mapPullBtn" onclick="window.ClientMap.pullAll()">⟳ Fill addresses &amp; pins</button>
           </div>
@@ -11209,7 +11210,13 @@ init();
     // Per-session on purpose: collapsing a section is a "right now I want more
     // map" choice, not a durable preference worth persisting.
     shut: { placed: false, unplaced: false },
-    listHidden: false
+    listHidden: false,
+    // Logos are OFF by default: a first paint of 38 plain pins is instant,
+    // and turning them on is one click.
+    showLogos: false,
+    // client_id -> data URI, or null once we know there is no usable logo.
+    // Cached for the page's life so a toggle doesn't refetch 38 images.
+    logos: {}
   };
 
   const $ = id => document.getElementById(id);
@@ -11418,7 +11425,73 @@ init();
     }
   }
 
-  // ── Map + markers ────────────────────────────────────────────────
+  // ── Logos ────────────────────────────────────────────────────────
+  // Source is Google's favicon service, which takes a domain and returns the
+  // site's icon. Most businesses serve their real logo there; some serve a
+  // 16px blob and some a platform default, so quality varies by client and
+  // there is no way to know which without looking.
+  function faviconUrl(c) {
+    const u = siteUrl(c);
+    if (!u) return null;
+    let host;
+    try { host = new URL(u).hostname; } catch (_) { return null; }
+    if (!host) return null;
+    return 'https://www.google.com/s2/favicons?sz=128&domain=' + encodeURIComponent(host);
+  }
+
+  // The image has to be INLINED as base64 before it can go in the marker.
+  // A Google Maps marker icon is an <img>, and an SVG loaded that way is not
+  // permitted to pull in external resources — so an <image href="https://...">
+  // inside the pin would silently render blank. Fetching it ourselves and
+  // embedding the bytes is what makes the round crop possible at all.
+  //
+  // If the favicon service does not allow a cross-origin fetch, this throws,
+  // we record null, and that client keeps its plain coloured pin. Nothing
+  // breaks; some clients just stay as pins.
+  async function loadLogo(c) {
+    if (Object.prototype.hasOwnProperty.call(S.logos, c.id)) return S.logos[c.id];
+    const url = faviconUrl(c);
+    if (!url) { S.logos[c.id] = null; return null; }
+    try {
+      const res = await fetch(url, { mode: 'cors' });
+      if (!res.ok) throw new Error('http ' + res.status);
+      const blob = await res.blob();
+      // A 1x1 or empty response means the service had nothing for that domain.
+      if (!blob.size || blob.size < 80) throw new Error('empty icon');
+      const dataUri = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = () => reject(new Error('read failed'));
+        fr.readAsDataURL(blob);
+      });
+      S.logos[c.id] = dataUri;
+      return dataUri;
+    } catch (_) {
+      S.logos[c.id] = null;
+      return null;
+    }
+  }
+
+  // ── Map + markers ────────────────────────────────────────────────────
+  // The logo pin: a white disc with the logo clipped into it, ringed in the
+  // client's industry colour so the colour coding survives.
+  function logoIcon(dataUri, colour) {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="46" height="56" viewBox="0 0 46 56">' +
+        '<defs><clipPath id="c"><circle cx="23" cy="21" r="15"/></clipPath></defs>' +
+        '<path d="M23 55 L15 33 h16 z" fill="' + colour + '"/>' +
+        '<circle cx="23" cy="21" r="20" fill="' + colour + '"/>' +
+        '<circle cx="23" cy="21" r="16.5" fill="#ffffff"/>' +
+        '<image href="' + dataUri + '" x="8" y="6" width="30" height="30" ' +
+               'preserveAspectRatio="xMidYMid slice" clip-path="url(#c)"/>' +
+      '</svg>';
+    return {
+      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg),
+      scaledSize: new google.maps.Size(34, 41),
+      anchor: new google.maps.Point(17, 41)
+    };
+  }
+
   function markerIcon(colour) {
     return {
       path: 'M 0,0 C -2.5,-8 -9,-10 -9,-17 a 9,9 0 1,1 18,0 c 0,7 -6.5,9 -9,17 z',
@@ -11477,7 +11550,38 @@ init();
 
     if (n > 1) S.map.fitBounds(bounds, 60);
     else if (n === 1) { S.map.setCenter(bounds.getCenter()); S.map.setZoom(14); }
+
+    if (S.showLogos) applyLogos();
   }
+
+  // Deliberately fire-and-forget per client rather than awaiting all 38: the
+  // map is already drawn and usable, and each pin upgrades itself the moment
+  // its image arrives. One slow or missing favicon never holds up the rest.
+  function applyLogos() {
+    S.clients.filter(hasCoords).forEach(c => {
+      loadLogo(c).then(uri => {
+        // Guard: the user may have toggled back to pins, or the markers may
+        // have been rebuilt, while this fetch was in flight.
+        if (!S.showLogos) return;
+        const m = S.markers[c.id];
+        if (m && uri) m.setIcon(logoIcon(uri, pinColour(c)));
+      });
+    });
+  }
+
+  function applyPins() {
+    S.clients.filter(hasCoords).forEach(c => {
+      const m = S.markers[c.id];
+      if (m) m.setIcon(markerIcon(pinColour(c)));
+    });
+  }
+
+  window.ClientMap.toggleLogos = function () {
+    S.showLogos = !S.showLogos;
+    const btn = $('mapLogoToggle');
+    if (btn) btn.textContent = S.showLogos ? '\u25cf Pins' : '\u25a0 Logos';
+    if (S.showLogos) applyLogos(); else applyPins();
+  };
 
   async function saveManualPin(id, lat, lng) {
     const c = S.clients.find(x => x.id === id);
@@ -11663,7 +11767,12 @@ init();
       if (error) throw new Error(error.message);
       c.industry = value;
       const m = S.markers[c.id];
-      if (m) m.setIcon(markerIcon(pinColour(c)));
+      // Changing industry recolours the RING when logos are showing, and the
+      // whole pin when they are not.
+      if (m) {
+        const uri = S.showLogos ? S.logos[c.id] : null;
+        m.setIcon(uri ? logoIcon(uri, pinColour(c)) : markerIcon(pinColour(c)));
+      }
       renderList();
     } catch (e) {
       c.industry = previous;
