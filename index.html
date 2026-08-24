@@ -11136,16 +11136,36 @@ init();
 // and GM contacts; clicking opens an editable panel for the address and
 // the contact list; dragging a pin sets its position by hand.
 //
-// The browser key below is restricted in Google Cloud to the Maps
-// JavaScript API and to the referrer https://triple.baldginger.com/*.
-// It is meant to be visible — every site using Google Maps ships its key
-// in the page. Restriction is the protection, not secrecy. The SERVER
-// key (geocoding, Places) is a different key and lives only in Supabase.
+// The browser Maps key is fetched at runtime from the map-key Edge
+// Function rather than being written into this file, because this repo
+// is public. It is still restricted in Google Cloud to the Maps
+// JavaScript API and to https://triple.baldginger.com/* — that
+// restriction, not secrecy, is what actually protects it. The SERVER key
+// (geocoding, Places) is a different key and never leaves Supabase.
 // ═══════════════════════════════════════════════════════════════════
 (function () {
   'use strict';
 
-  const MAPS_BROWSER_KEY = 'AIzaSyB0Eh7as4OMpZgENdQMnEcSpUV65KgERXQ';
+  // The browser Maps key is NOT in this file. It is a Supabase secret
+  // (MAPS_BROWSER_KEY) handed out by the map-key Edge Function to signed-in
+  // team members only, so it never lands in the public repo or its history.
+  // Cached for the life of the page: one call per session, not per open.
+  let mapsKey = null;
+  async function getMapsKey() {
+    if (mapsKey) return mapsKey;
+    const { data, error } = await sb.functions.invoke('map-key', { body: {} });
+    if (error) throw new Error('Could not fetch the map key: ' + error.message);
+    if (!data || !data.ok || !data.key) {
+      throw new Error(
+        data && data.error === 'map_key_not_configured'
+          ? 'The MAPS_BROWSER_KEY secret is not set on the Supabase project.'
+          : data && data.error === 'not_team_member'
+          ? 'The map is team-only.'
+          : 'The map key could not be fetched.');
+    }
+    mapsKey = data.key;
+    return mapsKey;
+  }
 
   // Austin, roughly. Only used when no client has coordinates yet, so the
   // first-ever open doesn't land in the middle of the Atlantic.
@@ -11181,12 +11201,18 @@ init();
   function loadGoogle() {
     if (window.google && window.google.maps) return Promise.resolve();
     if (googlePromise) return googlePromise;
-    googlePromise = new Promise((resolve, reject) => {
+    googlePromise = (async () => {
+      // Fetch the key first. A failure here must NOT be cached as a permanent
+      // failure, so googlePromise is cleared on the way out and the next open
+      // retries — otherwise a single cold-start blip would kill the tab until
+      // a page reload.
+      const key = await getMapsKey();
+      return new Promise((resolve, reject) => {
       const cbName = '__tripleMapReady';
       window[cbName] = () => { try { delete window[cbName]; } catch (_) {} resolve(); };
       const s = document.createElement('script');
       s.src = 'https://maps.googleapis.com/maps/api/js?key=' +
-              encodeURIComponent(MAPS_BROWSER_KEY) +
+              encodeURIComponent(key) +
               '&callback=' + cbName + '&loading=async&v=weekly';
       s.async = true;
       s.onerror = () => reject(new Error('The Google Maps script could not be loaded.'));
@@ -11197,7 +11223,8 @@ init();
       window.gm_authFailure = () => reject(new Error(
         'Google rejected the map key. Check that the referrer restriction includes ' +
         'https://triple.baldginger.com/* and that Maps JavaScript API is enabled.'));
-    });
+      });
+    })().catch(err => { googlePromise = null; throw err; });
     return googlePromise;
   }
 
