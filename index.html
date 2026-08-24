@@ -644,6 +644,66 @@
     #page-flbz .flbz-empty.err{color:var(--red)}
     #page-flbz .flbz-note{font-size:11.5px;color:var(--text3)}
     #page-flbz .flbz-secthead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:700;margin:1.2rem 0 .5rem}
+    /* ── CLIENT MAP ────────────────────────────────────── */
+    #page-map .cm-wrap{display:flex;gap:1rem;align-items:stretch;height:calc(100vh - 190px);min-height:460px}
+    #page-map .cm-side{width:310px;flex:0 0 310px;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--bg2);overflow:hidden}
+    #page-map .cm-side-head{padding:.6rem .75rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:.5rem}
+    #page-map .cm-search{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'Inter',sans-serif;background:#fff;color:var(--text);outline:none}
+    #page-map .cm-search:focus{border-color:var(--accent)}
+    #page-map .cm-list{flex:1;overflow:auto;padding:.35rem}
+    #page-map .cm-secthead{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:700;margin:.7rem .5rem .3rem}
+    #page-map .cm-row{padding:.45rem .55rem;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:.5rem;font-size:13px;color:var(--text)}
+    #page-map .cm-row:hover{background:var(--bg3)}
+    #page-map .cm-row.sel{background:var(--navy);color:#fff}
+    #page-map .cm-row.sel .cm-sub{color:rgba(255,255,255,.7)}
+    #page-map .cm-dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px}
+    #page-map .cm-nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #page-map .cm-sub{font-size:11px;color:var(--text3)}
+    #page-map .cm-canvas{flex:1;border:1px solid var(--border);border-radius:10px;overflow:hidden;position:relative;background:var(--bg3)}
+    #page-map .cm-canvas-inner{position:absolute;inset:0}
+    #page-map .cm-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text3);text-align:center;padding:2rem}
+    #page-map .cm-panel{width:340px;flex:0 0 340px;display:flex;flex-direction:column;border:1px solid var(--border);border-radius:10px;background:var(--bg2);overflow:hidden}
+    #page-map .cm-panel.off{display:none}
+    #page-map .cm-panel-head{padding:.7rem .85rem;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
+    #page-map .cm-panel-title{font-family:'Hanken Grotesk',serif;font-size:17px;color:var(--navy);line-height:1.25}
+    #page-map .cm-panel-body{flex:1;overflow:auto;padding:.85rem}
+    #page-map .cm-x{border:none;background:none;cursor:pointer;color:var(--text3);font-size:15px;line-height:1;padding:2px 4px}
+    #page-map .cm-x:hover{color:var(--text)}
+    #page-map .cm-lbl{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin:.75rem 0 .25rem}
+    #page-map .cm-lbl:first-child{margin-top:0}
+    #page-map .cm-in{width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;background:#fff;color:var(--text);outline:none}
+    #page-map .cm-in:focus{border-color:var(--accent)}
+    #page-map .cm-grid3{display:grid;grid-template-columns:1fr 62px 84px;gap:.4rem}
+    #page-map .cm-btnrow{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.75rem}
+    #page-map .cm-note{font-size:11.5px;color:var(--text3);margin-top:.5rem;line-height:1.5}
+    #page-map .cm-note.err{color:var(--red)}
+    #page-map .cm-note.ok{color:var(--green)}
+    #page-map .cm-contact{border:1px solid var(--border);border-radius:8px;padding:.55rem .65rem;margin-bottom:.5rem;background:#fff}
+    #page-map .cm-contact.unv{border-color:var(--yellow-border);background:var(--yellow-bg)}
+    #page-map .cm-c-top{display:flex;align-items:center;gap:.4rem;margin-bottom:.3rem}
+    #page-map .cm-c-nm{font-weight:600;font-size:13px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #page-map .cm-role{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding:2px 6px;border-radius:999px;background:var(--bg3);color:var(--text2)}
+    #page-map .cm-role.owner{background:var(--navy);color:#fff}
+    #page-map .cm-role.gm{background:var(--accent2);color:var(--navy)}
+    #page-map .cm-c-line{font-size:12px;color:var(--text2);display:flex;gap:.35rem;align-items:center}
+    #page-map .cm-c-line a{color:var(--blue);text-decoration:none}
+    #page-map .cm-c-line a:hover{text-decoration:underline}
+    #page-map .cm-c-acts{display:flex;gap:.35rem;margin-top:.4rem}
+    #page-map .cm-mini{font:inherit;font-size:11px;padding:2px 8px;border:1px solid var(--border2);border-radius:6px;background:#fff;cursor:pointer;color:var(--text2)}
+    #page-map .cm-mini:hover{border-color:var(--accent);color:var(--accent)}
+    #page-map .cm-mini.warn:hover{border-color:var(--red);color:var(--red)}
+    #page-map .cm-legend{display:flex;gap:.9rem;flex-wrap:wrap;font-size:11.5px;color:var(--text3);margin-bottom:.75rem;align-items:center}
+    #page-map .cm-legend span{display:flex;align-items:center;gap:.3rem}
+    #page-map .cm-iw{font-family:'Inter',sans-serif;font-size:12.5px;color:#2C2C2A;max-width:250px;line-height:1.45}
+    #page-map .cm-iw b{font-family:'Hanken Grotesk',serif;font-size:14.5px;color:#1B2A4B;display:block;margin-bottom:2px}
+    #page-map .cm-iw .r{margin-top:5px;padding-top:5px;border-top:1px solid #e2e5ea}
+    #page-map .cm-iw .t{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:#9aa0aa;font-weight:700}
+    #page-map .cm-iw a{color:#1a5fa8;text-decoration:none}
+    @media (max-width:1100px){
+      #page-map .cm-wrap{flex-direction:column;height:auto}
+      #page-map .cm-side,#page-map .cm-panel{width:100%;flex:none;max-height:290px}
+      #page-map .cm-canvas{height:420px;flex:none}
+    }
     /* ── VENDOR CODING AUDIT ───────────────────────────── */
     #page-vendoraudit .va-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
     #page-vendoraudit .va-chip[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
@@ -859,6 +919,7 @@
           <span>📅</span> My Week <span class="nav-badge" id="myweekBadge" style="display:none">0</span>
         </div>
         <div class="nav-item" onclick="showPage('clients')" id="nav-clients"><span>◎</span> Clients <span class="nav-badge" id="clientsBadge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="showPage('map')" id="nav-map"><span>🗺️</span> Client Map</div>
         <div class="nav-item" onclick="openFirmSpace()" id="nav-firm"><span>🏢</span> Bald Ginger <span class="nav-badge" id="firmBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('analyses')" id="nav-analyses"><span>📋</span> Analyses <span class="nav-badge" id="analysesBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
@@ -1120,6 +1181,44 @@
             <button class="flbz-ghost" id="flbzSelfTest">Check configuration</button>
           </div>
           <div id="flbzEntries" style="margin-top:.9rem"></div>
+        </div>
+      </div>
+
+      <!-- CLIENT MAP -->
+      <div class="page" id="page-map">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Client Map</div>
+            <div class="page-sub" id="mapSub">Every client with a location, plus who to call.</div>
+          </div>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" id="mapPullBtn" onclick="window.ClientMap.pullAll()">⟳ Fill addresses &amp; pins</button>
+          </div>
+        </div>
+        <div class="cm-legend">
+          <span><span class="cm-dot" style="background:#1B2A4B"></span> Has contacts</span>
+          <span><span class="cm-dot" style="background:#EFA02A"></span> No contact on file</span>
+          <span><span class="cm-dot" style="background:#b93232"></span> Needs an address</span>
+          <span style="color:var(--text3)">Hover a pin for contacts · click to edit · drag to reposition</span>
+        </div>
+        <div class="cm-wrap">
+          <div class="cm-side">
+            <div class="cm-side-head">
+              <input class="cm-search" id="mapSearch" type="text" placeholder="Filter clients…" autocomplete="off" oninput="window.ClientMap.filter(this.value)" />
+            </div>
+            <div class="cm-list" id="mapList"><div class="empty"><span class="spinner"></span></div></div>
+          </div>
+          <div class="cm-canvas">
+            <div class="cm-canvas-inner" id="mapCanvas"></div>
+            <div class="cm-loading" id="mapLoading">Loading the map…</div>
+          </div>
+          <div class="cm-panel off" id="mapPanel">
+            <div class="cm-panel-head">
+              <div class="cm-panel-title" id="mapPanelName"></div>
+              <button class="cm-x" onclick="window.ClientMap.closePanel()" title="Close">✕</button>
+            </div>
+            <div class="cm-panel-body" id="mapPanelBody"></div>
+          </div>
         </div>
       </div>
 
@@ -1770,6 +1869,32 @@
       <label class="nc-check" id="ncPortalWrap" style="display:none">
         <input type="checkbox" id="ncPortal" /> <span>Enable the client portal for this client</span>
       </label>
+
+      <div class="form-row">
+        <label class="form-label">Street address <span style="font-weight:400;color:var(--text3)">(optional — QuickBooks can fill this later)</span></label>
+        <input type="text" class="form-input" id="ncAddr1" placeholder="e.g. 1200 E 6th St" autocomplete="off" />
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">City</label>
+          <input type="text" class="form-input" id="ncCity" placeholder="Austin" autocomplete="off" />
+        </div>
+        <div>
+          <label class="form-label">State / ZIP</label>
+          <div style="display:grid;grid-template-columns:70px 1fr;gap:.4rem">
+            <input type="text" class="form-input" id="ncState" placeholder="TX" autocomplete="off" />
+            <input type="text" class="form-input" id="ncZip" placeholder="78702" autocomplete="off" />
+          </div>
+        </div>
+      </div>
+      <label class="nc-check" id="ncOnMapWrap">
+        <input type="checkbox" id="ncOnMap" checked /> <span>Show this client on the Client Map</span>
+      </label>
+      <div class="nc-hint" style="margin-top:.4rem">
+        Leave this on for anywhere with a storefront. Turn it off for holding
+        entities, individuals, and one-off engagements &mdash; they have no
+        location to pin.
+      </div>
 
       <div class="form-row" style="margin-top:1.1rem;margin-bottom:0">
         <label class="form-label">Copy tasks from an existing client (optional)</label>
@@ -4206,6 +4331,7 @@ async function openClient(id) {
     return;
   }
   document.getElementById('detailName').textContent = c.name;
+  attachClientRename(c);
   renderDetailMeta(c);
   // Clickable status badge — cycles Not Started -> In Progress -> Done -> Not Started.
   // The cycleCloseStatus() function handles the warn-if-tasks-incomplete check
@@ -6231,6 +6357,7 @@ function showPage(name) {
   if (name === 'salestax') loadTaxPage();
   if (name === 'flbz' && window.FlbzOpen) window.FlbzOpen();
   if (name === 'vendoraudit' && window.VendorAuditOpen) window.VendorAuditOpen();
+  if (name === 'map' && window.ClientMap) window.ClientMap.open();
   if (name === 'prospects' && window.TxProspectsOpen) window.TxProspectsOpen();
 }
 function showTab(name) {
@@ -7888,6 +8015,74 @@ function fmtCloseDue(v) {
   if (!v) return '—';
   if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return v;
   return tzFormatDate(v, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Click-to-edit on the client's NAME, matching how the close period and due
+// date already work just below it. Everything in Triple joins clients on id,
+// never on the name string, so a rename is safe inside this app — but anything
+// OUTSIDE it that keys on the name (Apps Script, Skyvern workflows, a QBO
+// company name) will not follow, which is what the confirm below is for.
+function attachClientRename(c) {
+  const el = document.getElementById('detailName');
+  if (!el || !c) return;
+  el.title = 'Click to rename';
+  el.style.cursor = 'pointer';
+  el.onclick = function () {
+    if (el.querySelector('input')) return;       // already editing
+    const before = c.name || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = before;
+    input.style.cssText = "font-family:'Hanken Grotesk',serif;font-size:26px;color:var(--navy);" +
+      'border:1px solid var(--border2);border-radius:6px;padding:1px 6px;width:min(460px,70vw);' +
+      "background:#fff;outline:none;font-weight:inherit";
+    el.textContent = '';
+    el.appendChild(input);
+    input.focus();
+    input.select();
+
+    let done = false;
+    const finish = async (commit) => {
+      if (done) return;
+      done = true;
+      const after = (input.value || '').trim();
+      if (!commit || !after || after === before) {
+        el.textContent = before;
+        attachClientRename(c);
+        return;
+      }
+      const clash = (allClients || []).find(x => x && x.id !== c.id &&
+        (x.name || '').trim().toLowerCase() === after.toLowerCase());
+      const warn = 'Rename "' + before + '" to "' + after + '"?' +
+        (clash ? '\n\nAnother client is already called that.' : '') +
+        '\n\nTriple links everything by id, so tasks, messages, documents and QBO stay attached. ' +
+        'Anything outside Triple that matches on the name — Apps Script, Skyvern, a spreadsheet — will not follow.';
+      if (!confirm(warn)) { el.textContent = before; attachClientRename(c); return; }
+
+      el.textContent = 'Saving…';
+      try {
+        const { error } = await sb.from('clients').update({ name: after }).eq('id', c.id);
+        if (error) throw new Error(error.message);
+        c.name = after;
+        const cached = (allClients || []).find(x => x && x.id === c.id);
+        if (cached) cached.name = after;
+        el.textContent = after;
+        attachClientRename(c);
+        populateClientSwitcher(c.id);
+        if (typeof renderClientsTable === 'function' && Array.isArray(allClients)) renderClientsTable(allClients);
+      } catch (e) {
+        el.textContent = before;
+        attachClientRename(c);
+        alert('The client was NOT renamed: ' + (e.message || e));
+      }
+    };
+
+    input.onkeydown = ev => {
+      if (ev.key === 'Enter') { ev.preventDefault(); finish(true); }
+      if (ev.key === 'Escape') { ev.preventDefault(); finish(false); }
+    };
+    input.onblur = () => finish(true);
+  };
 }
 
 // Client detail header: "06-2026 · Due Jul 12, 2026". Both parts are
@@ -10317,6 +10512,10 @@ init();
     if (busy) return;
     $('ncName').value = '';
     $('ncDue').value  = '';
+    ['ncAddr1','ncCity','ncState','ncZip'].forEach(k => { const el = $(k); if (el) el.value = ''; });
+    // Defaults ON: a new client that belongs nowhere is the exception, and a
+    // missing pin is easier to notice than a stray one.
+    if ($('ncOnMap')) $('ncOnMap').checked = true;
     $('ncDupWarn').style.display = 'none';
     $('ncSkipOneTime').checked = true;
     $('ncAssignMode').value = 'keep';
@@ -10351,6 +10550,17 @@ init();
       const cols = await loadClientCols();
       $('ncPortalWrap').style.display = cols.has('portal_enabled') ? '' : 'none';
       if (cols.has('portal_enabled')) $('ncPortal').checked = false;
+      // Same discovery rule as the portal checkbox: the map prompt only shows
+      // if client-map.sql has actually been run against this database.
+      const hasMap = cols.has('show_on_map');
+      const mw = $('ncOnMapWrap'); if (mw) mw.style.display = hasMap ? '' : 'none';
+      const mh = mw && mw.nextElementSibling; if (mh) mh.style.display = hasMap ? '' : 'none';
+      const hasAddr = cols.has('address_line1');
+      ['ncAddr1','ncCity','ncState','ncZip'].forEach(k => {
+        const el = $(k); if (!el) return;
+        const rowEl = el.closest('.form-row') || el.closest('.form-row-2');
+        if (rowEl) rowEl.style.display = hasAddr ? '' : 'none';
+      });
     } catch (e) {
       $('ncPortalWrap').style.display = 'none';
       setStatus(e.message, 'err');
@@ -10489,7 +10699,12 @@ init();
         close_due_date: due || null,
         close_status: 'Not Started',
         is_firm: false,
-        portal_enabled: $('ncPortal') ? !!$('ncPortal').checked : false
+        portal_enabled: $('ncPortal') ? !!$('ncPortal').checked : false,
+        show_on_map: $('ncOnMap') ? !!$('ncOnMap').checked : true,
+        address_line1: ($('ncAddr1') && $('ncAddr1').value.trim()) || null,
+        city:          ($('ncCity')  && $('ncCity').value.trim())  || null,
+        state:         ($('ncState') && $('ncState').value.trim()) || null,
+        postal_code:   ($('ncZip')   && $('ncZip').value.trim())   || null
       };
       const row = {};
       Object.keys(candidates).forEach(k => { if (cols.has(k)) row[k] = candidates[k]; });
@@ -10911,6 +11126,545 @@ init();
     const cs = $('flbzRangeCsv'); if (cs) cs.addEventListener('click', rangeCsv);
     const st = $('flbzSelfTest'); if (st) st.addEventListener('click', selfTest);
   });
+})();
+</script>
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// CLIENT MAP  (window.ClientMap)
+// ───────────────────────────────────────────────────────────────────
+// Pins every client flagged show_on_map. Hovering a pin shows the owner
+// and GM contacts; clicking opens an editable panel for the address and
+// the contact list; dragging a pin sets its position by hand.
+//
+// The browser key below is restricted in Google Cloud to the Maps
+// JavaScript API and to the referrer https://triple.baldginger.com/*.
+// It is meant to be visible — every site using Google Maps ships its key
+// in the page. Restriction is the protection, not secrecy. The SERVER
+// key (geocoding, Places) is a different key and lives only in Supabase.
+// ═══════════════════════════════════════════════════════════════════
+(function () {
+  'use strict';
+
+  const MAPS_BROWSER_KEY = 'AIzaSyB0Eh7as4OMpZgENdQMnEcSpUV65KgERXQ';
+
+  // Austin, roughly. Only used when no client has coordinates yet, so the
+  // first-ever open doesn't land in the middle of the Atlantic.
+  const HOME = { lat: 30.2672, lng: -97.7431 };
+
+  const PIN_NAVY  = '#1B2A4B';
+  const PIN_AMBER = '#EFA02A';
+
+  const S = {
+    booted: false,
+    loading: false,
+    map: null,
+    info: null,
+    clients: [],
+    contacts: {},        // client_id -> [contact rows]
+    markers: {},         // client_id -> google.maps.Marker
+    selected: null,
+    filter: '',
+    editingContact: null // contact id, or 'new'
+  };
+
+  const $ = id => document.getElementById(id);
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ── Google Maps loader ───────────────────────────────────────────
+  // Loaded on first open rather than at boot: a Dynamic Maps billing event
+  // fires per map instantiation, so a teammate who never opens this tab
+  // never costs anything.
+  let googlePromise = null;
+  function loadGoogle() {
+    if (window.google && window.google.maps) return Promise.resolve();
+    if (googlePromise) return googlePromise;
+    googlePromise = new Promise((resolve, reject) => {
+      const cbName = '__tripleMapReady';
+      window[cbName] = () => { try { delete window[cbName]; } catch (_) {} resolve(); };
+      const s = document.createElement('script');
+      s.src = 'https://maps.googleapis.com/maps/api/js?key=' +
+              encodeURIComponent(MAPS_BROWSER_KEY) +
+              '&callback=' + cbName + '&loading=async&v=weekly';
+      s.async = true;
+      s.onerror = () => reject(new Error('The Google Maps script could not be loaded.'));
+      document.head.appendChild(s);
+      // Google reports auth failures (bad key, wrong referrer) through this
+      // global rather than through onerror, so it needs its own hook or the
+      // tab just sits on "Loading the map…" forever.
+      window.gm_authFailure = () => reject(new Error(
+        'Google rejected the map key. Check that the referrer restriction includes ' +
+        'https://triple.baldginger.com/* and that Maps JavaScript API is enabled.'));
+    });
+    return googlePromise;
+  }
+
+  // ── Data ─────────────────────────────────────────────────────────
+  async function loadData() {
+    const [cRes, ctRes] = await Promise.all([
+      sb.from('clients')
+        .select('id,name,address_line1,address_line2,city,state,postal_code,latitude,longitude,geocode_source,geocoded_at,geocode_error,location_note,show_on_map,archived_at,is_firm,preparer,reviewer')
+        .eq('show_on_map', true).is('archived_at', null).order('name'),
+      sb.from('client_contacts')
+        .select('*').is('archived_at', null).order('sort_order').order('name')
+    ]);
+    if (cRes.error) throw new Error('Could not load clients: ' + cRes.error.message);
+    if (ctRes.error) throw new Error('Could not load contacts: ' + ctRes.error.message);
+
+    S.clients = cRes.data || [];
+    S.contacts = {};
+    (ctRes.data || []).forEach(r => {
+      (S.contacts[r.client_id] = S.contacts[r.client_id] || []).push(r);
+    });
+    // Owner first, then GM, then everyone else — the order you'd want to
+    // read them in when you're deciding who to call.
+    const rank = { owner: 0, gm: 1, other: 2 };
+    Object.keys(S.contacts).forEach(k => {
+      S.contacts[k].sort((a, b) => (rank[a.role] ?? 3) - (rank[b.role] ?? 3));
+    });
+  }
+
+  function hasCoords(c) { return c.latitude != null && c.longitude != null; }
+  function contactsFor(id) { return S.contacts[id] || []; }
+  function pinColour(c) { return contactsFor(c.id).length ? PIN_NAVY : PIN_AMBER; }
+
+  function addrLine(c) {
+    const a = [c.address_line1, c.address_line2].filter(Boolean).join(', ');
+    const b = [c.city, [c.state, c.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return [a, b].filter(Boolean).join(' · ');
+  }
+
+  // ── Sidebar list ─────────────────────────────────────────────────
+  function renderList() {
+    const box = $('mapList');
+    if (!box) return;
+    const f = S.filter.trim().toLowerCase();
+    const match = c => !f || (c.name || '').toLowerCase().includes(f) ||
+                       (c.city || '').toLowerCase().includes(f) ||
+                       contactsFor(c.id).some(x => (x.name || '').toLowerCase().includes(f));
+
+    const placed  = S.clients.filter(c => hasCoords(c) && match(c));
+    const missing = S.clients.filter(c => !hasCoords(c) && match(c));
+
+    const row = c => {
+      const n = contactsFor(c.id).length;
+      const colour = hasCoords(c) ? pinColour(c) : '#b93232';
+      const sub = hasCoords(c)
+        ? (n ? n + (n === 1 ? ' contact' : ' contacts') : 'no contact yet')
+        : (c.address_line1 ? 'address, no pin' : 'no address');
+      return '<div class="cm-row' + (S.selected === c.id ? ' sel' : '') + '" data-id="' + c.id + '">' +
+               '<span class="cm-dot" style="background:' + colour + '"></span>' +
+               '<span class="cm-nm">' + esc(c.name) +
+                 '<div class="cm-sub">' + esc(sub) + '</div></span>' +
+             '</div>';
+    };
+
+    let html = '';
+    if (placed.length)  html += '<div class="cm-secthead">On the map (' + placed.length + ')</div>' + placed.map(row).join('');
+    if (missing.length) html += '<div class="cm-secthead">Not placed yet (' + missing.length + ')</div>' + missing.map(row).join('');
+    if (!html) html = '<div class="cm-secthead">No matches</div>';
+    box.innerHTML = html;
+
+    box.querySelectorAll('.cm-row').forEach(el => {
+      el.onclick = () => select(el.getAttribute('data-id'), true);
+    });
+
+    const sub = $('mapSub');
+    if (sub) {
+      const noContacts = S.clients.filter(c => !contactsFor(c.id).length).length;
+      sub.textContent = S.clients.length + ' clients on the map · ' + placed.length +
+        ' placed · ' + missing.length + ' waiting for a location · ' +
+        noContacts + ' with no contact on file';
+    }
+  }
+
+  // ── Map + markers ────────────────────────────────────────────────
+  function markerIcon(colour) {
+    return {
+      path: 'M 0,0 C -2.5,-8 -9,-10 -9,-17 a 9,9 0 1,1 18,0 c 0,7 -6.5,9 -9,17 z',
+      fillColor: colour, fillOpacity: 1,
+      strokeColor: '#ffffff', strokeWeight: 1.6,
+      scale: 1.05, anchor: new google.maps.Point(0, 0)
+    };
+  }
+
+  function infoHtml(c) {
+    const list = contactsFor(c.id);
+    let h = '<div class="cm-iw"><b>' + esc(c.name) + '</b>';
+    const a = addrLine(c);
+    if (a) h += '<div style="color:#5a6070">' + esc(a) + '</div>';
+    if (c.location_note) h += '<div style="color:#9aa0aa;font-size:11.5px">' + esc(c.location_note) + '</div>';
+    if (!list.length) {
+      h += '<div class="r" style="color:#9aa0aa">No contact on file yet.</div>';
+    } else {
+      list.forEach(p => {
+        const role = p.role === 'owner' ? 'Owner' : p.role === 'gm' ? 'GM' : (p.title || 'Contact');
+        h += '<div class="r"><div class="t">' + esc(role) + (p.verified ? '' : ' · unconfirmed') + '</div>' +
+             '<div style="font-weight:600">' + esc(p.name) + '</div>';
+        if (p.phone) h += '<div><a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + esc(p.phone) + '</a></div>';
+        if (p.email) h += '<div><a href="mailto:' + esc(p.email) + '">' + esc(p.email) + '</a></div>';
+        h += '</div>';
+      });
+    }
+    return h + '</div>';
+  }
+
+  function drawMarkers() {
+    Object.keys(S.markers).forEach(k => { S.markers[k].setMap(null); });
+    S.markers = {};
+    const bounds = new google.maps.LatLngBounds();
+    let n = 0;
+
+    S.clients.filter(hasCoords).forEach(c => {
+      const m = new google.maps.Marker({
+        position: { lat: Number(c.latitude), lng: Number(c.longitude) },
+        map: S.map,
+        title: c.name,
+        draggable: true,
+        icon: markerIcon(pinColour(c))
+      });
+      m.addListener('mouseover', () => { S.info.setContent(infoHtml(c)); S.info.open(S.map, m); });
+      m.addListener('mouseout', () => { if (S.selected !== c.id) S.info.close(); });
+      m.addListener('click', () => select(c.id, false));
+      m.addListener('dragend', ev => saveManualPin(c.id, ev.latLng.lat(), ev.latLng.lng()));
+      S.markers[c.id] = m;
+      bounds.extend(m.getPosition());
+      n++;
+    });
+
+    if (n > 1) S.map.fitBounds(bounds, 60);
+    else if (n === 1) { S.map.setCenter(bounds.getCenter()); S.map.setZoom(14); }
+  }
+
+  async function saveManualPin(id, lat, lng) {
+    const c = S.clients.find(x => x.id === id);
+    try {
+      const { error } = await sb.from('clients').update({
+        latitude: lat, longitude: lng,
+        geocode_source: 'manual',
+        geocoded_at: new Date().toISOString(),
+        geocode_error: null
+      }).eq('id', id);
+      if (error) throw new Error(error.message);
+      if (c) { c.latitude = lat; c.longitude = lng; c.geocode_source = 'manual'; c.geocode_error = null; }
+      if (S.selected === id) renderPanel();
+    } catch (e) {
+      alert('The pin could not be saved: ' + (e.message || e) +
+            '\n\nIt will jump back to its stored position on the next refresh.');
+    }
+  }
+
+  // ── Selection + detail panel ─────────────────────────────────────
+  function select(id, pan) {
+    S.selected = id;
+    S.editingContact = null;
+    renderList();
+    renderPanel();
+    const m = S.markers[id];
+    if (m && S.map) {
+      if (pan) { S.map.panTo(m.getPosition()); if (S.map.getZoom() < 13) S.map.setZoom(15); }
+      S.info.setContent(infoHtml(S.clients.find(c => c.id === id)));
+      S.info.open(S.map, m);
+    }
+  }
+
+  window.ClientMap = window.ClientMap || {};
+
+  window.ClientMap.closePanel = function () {
+    S.selected = null;
+    S.editingContact = null;
+    if (S.info) S.info.close();
+    $('mapPanel').classList.add('off');
+    renderList();
+  };
+
+  window.ClientMap.filter = function (v) { S.filter = v || ''; renderList(); };
+
+  function renderPanel() {
+    const c = S.clients.find(x => x.id === S.selected);
+    const panel = $('mapPanel');
+    if (!c) { panel.classList.add('off'); return; }
+    panel.classList.remove('off');
+    $('mapPanelName').textContent = c.name;
+
+    const src = c.geocode_source === 'manual'
+      ? 'Pin placed by hand — the geocoder will not move it.'
+      : c.geocode_source === 'geocode'
+      ? 'Pin from the geocoder. Drag it to correct it.'
+      : 'No pin yet.';
+
+    let h = '';
+    h += '<label class="cm-lbl">Street</label>' +
+         '<input class="cm-in" id="cmA1" value="' + esc(c.address_line1) + '" placeholder="1234 E 6th St">';
+    h += '<label class="cm-lbl">Suite / unit</label>' +
+         '<input class="cm-in" id="cmA2" value="' + esc(c.address_line2) + '" placeholder="Ste 200">';
+    h += '<label class="cm-lbl">City / state / ZIP</label>' +
+         '<div class="cm-grid3">' +
+           '<input class="cm-in" id="cmCity" value="' + esc(c.city) + '" placeholder="Austin">' +
+           '<input class="cm-in" id="cmState" value="' + esc(c.state) + '" placeholder="TX">' +
+           '<input class="cm-in" id="cmZip" value="' + esc(c.postal_code) + '" placeholder="78702">' +
+         '</div>';
+    h += '<label class="cm-lbl">Note on the card</label>' +
+         '<input class="cm-in" id="cmNote" value="' + esc(c.location_note) + '" placeholder="Park in the back lot">';
+    h += '<div class="cm-btnrow">' +
+           '<button class="btn btn-primary btn-sm" onclick="window.ClientMap.saveAddress()">Save address</button>' +
+           '<button class="btn btn-secondary btn-sm" onclick="window.ClientMap.placeOne()">Place pin from address</button>' +
+         '</div>';
+    h += '<div class="cm-note" id="cmAddrMsg">' + esc(src) +
+         (c.geocode_error ? ' Last attempt: ' + esc(c.geocode_error) : '') + '</div>';
+    if (c.geocode_source === 'manual') {
+      h += '<div class="cm-btnrow"><button class="cm-mini" onclick="window.ClientMap.releasePin()">' +
+           'Hand this pin back to the geocoder</button></div>';
+    }
+
+    h += '<label class="cm-lbl" style="margin-top:1.2rem">Contacts</label>';
+    const list = contactsFor(c.id);
+    if (!list.length && S.editingContact !== 'new') {
+      h += '<div class="cm-note">Nothing on file. Add the owner or GM below.</div>';
+    }
+    list.forEach(p => {
+      h += (S.editingContact === p.id) ? contactForm(p) : contactCard(p);
+    });
+    if (S.editingContact === 'new') h += contactForm(null);
+    else h += '<div class="cm-btnrow"><button class="cm-mini" onclick="window.ClientMap.addContact()">+ Add a contact</button></div>';
+
+    $('mapPanelBody').innerHTML = h;
+  }
+
+  function contactCard(p) {
+    const roleCls = p.role === 'owner' ? ' owner' : p.role === 'gm' ? ' gm' : '';
+    const roleTxt = p.role === 'owner' ? 'Owner' : p.role === 'gm' ? 'GM' : 'Other';
+    let h = '<div class="cm-contact' + (p.verified ? '' : ' unv') + '">' +
+            '<div class="cm-c-top"><span class="cm-c-nm">' + esc(p.name) + '</span>' +
+            '<span class="cm-role' + roleCls + '">' + esc(roleTxt) + '</span></div>';
+    if (p.title) h += '<div class="cm-c-line">' + esc(p.title) + '</div>';
+    if (p.phone) h += '<div class="cm-c-line">📞 <a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + esc(p.phone) + '</a></div>';
+    if (p.email) h += '<div class="cm-c-line">✉ <a href="mailto:' + esc(p.email) + '">' + esc(p.email) + '</a></div>';
+    if (p.notes) h += '<div class="cm-c-line" style="color:var(--text3)">' + esc(p.notes) + '</div>';
+    if (!p.verified) {
+      h += '<div class="cm-c-line" style="color:var(--yellow);font-size:11px;margin-top:.3rem">' +
+           'Unconfirmed' + (p.source && p.source !== 'manual' ? ' · from ' + esc(p.source) : '') + '</div>';
+    }
+    h += '<div class="cm-c-acts">';
+    if (!p.verified) h += '<button class="cm-mini" onclick="window.ClientMap.verify(\'' + p.id + '\')">✓ Confirm</button>';
+    h += '<button class="cm-mini" onclick="window.ClientMap.editContact(\'' + p.id + '\')">Edit</button>' +
+         '<button class="cm-mini warn" onclick="window.ClientMap.removeContact(\'' + p.id + '\')">Remove</button>' +
+         '</div></div>';
+    return h;
+  }
+
+  function contactForm(p) {
+    const v = p || { name: '', role: 'owner', title: '', email: '', phone: '', notes: '' };
+    const sel = r => v.role === r ? ' selected' : '';
+    return '<div class="cm-contact">' +
+      '<input class="cm-in" id="cmCName" placeholder="Name" value="' + esc(v.name) + '" style="margin-bottom:.35rem">' +
+      '<select class="cm-in" id="cmCRole" style="margin-bottom:.35rem">' +
+        '<option value="owner"' + sel('owner') + '>Owner</option>' +
+        '<option value="gm"' + sel('gm') + '>General Manager</option>' +
+        '<option value="other"' + sel('other') + '>Other</option>' +
+      '</select>' +
+      '<input class="cm-in" id="cmCTitle" placeholder="Title (optional)" value="' + esc(v.title) + '" style="margin-bottom:.35rem">' +
+      '<input class="cm-in" id="cmCPhone" placeholder="Phone" value="' + esc(v.phone) + '" style="margin-bottom:.35rem">' +
+      '<input class="cm-in" id="cmCEmail" placeholder="Email" value="' + esc(v.email) + '" style="margin-bottom:.35rem">' +
+      '<input class="cm-in" id="cmCNotes" placeholder="Note (optional)" value="' + esc(v.notes) + '">' +
+      '<div class="cm-c-acts">' +
+        '<button class="cm-mini" onclick="window.ClientMap.saveContact(' + (p ? "'" + p.id + "'" : 'null') + ')">Save</button>' +
+        '<button class="cm-mini" onclick="window.ClientMap.cancelContact()">Cancel</button>' +
+      '</div></div>';
+  }
+
+  // ── Panel actions ────────────────────────────────────────────────
+  function msg(text, kind) {
+    const el = $('cmAddrMsg');
+    if (el) { el.textContent = text; el.className = 'cm-note' + (kind ? ' ' + kind : ''); }
+  }
+
+  window.ClientMap.saveAddress = async function () {
+    const c = S.clients.find(x => x.id === S.selected);
+    if (!c) return;
+    const patch = {
+      address_line1: ($('cmA1').value || '').trim() || null,
+      address_line2: ($('cmA2').value || '').trim() || null,
+      city:          ($('cmCity').value || '').trim() || null,
+      state:         ($('cmState').value || '').trim() || null,
+      postal_code:   ($('cmZip').value || '').trim() || null,
+      location_note: ($('cmNote').value || '').trim() || null
+    };
+    msg('Saving…');
+    try {
+      const { error } = await sb.from('clients').update(patch).eq('id', c.id);
+      if (error) throw new Error(error.message);
+      Object.assign(c, patch);
+      msg('Saved. Use “Place pin from address” to move the pin.', 'ok');
+      renderList();
+    } catch (e) { msg('Not saved: ' + (e.message || e), 'err'); }
+  };
+
+  window.ClientMap.placeOne = async function () {
+    const c = S.clients.find(x => x.id === S.selected);
+    if (!c) return;
+    if (c.geocode_source === 'manual') {
+      msg('This pin was placed by hand. Hand it back to the geocoder first.', 'err');
+      return;
+    }
+    msg('Looking up the address…');
+    try {
+      const { data, error } = await sb.functions.invoke('client-geocode',
+        { body: { client_id: c.id, mode: 'both', force: true } });
+      if (error) throw new Error(error.message);
+      if (!data || !data.ok) throw new Error((data && data.error) || 'the lookup failed');
+      const r = (data.results || [])[0] || {};
+      await refresh();
+      select(c.id, true);
+      const rough = r.status === 'placed_roughly';
+      msg(r.status === 'ok' ? 'Placed.' :
+          rough ? 'Placed, but only roughly — Google matched the area, not the building. Drag the pin if it is off.' :
+          'Nothing placed: ' + (r.actions || []).join(', '),
+          r.status === 'ok' ? 'ok' : rough ? '' : 'err');
+    } catch (e) { msg('Lookup failed: ' + (e.message || e), 'err'); }
+  };
+
+  window.ClientMap.releasePin = async function () {
+    const c = S.clients.find(x => x.id === S.selected);
+    if (!c) return;
+    if (!confirm('Hand this pin back to the geocoder? Its hand-placed position will be replaced the next time addresses are filled.')) return;
+    try {
+      const { error } = await sb.from('clients').update({ geocode_source: null }).eq('id', c.id);
+      if (error) throw new Error(error.message);
+      c.geocode_source = null;
+      renderPanel();
+    } catch (e) { msg('Could not change it: ' + (e.message || e), 'err'); }
+  };
+
+  window.ClientMap.addContact    = function () { S.editingContact = 'new'; renderPanel(); };
+  window.ClientMap.editContact   = function (id) { S.editingContact = id; renderPanel(); };
+  window.ClientMap.cancelContact = function () { S.editingContact = null; renderPanel(); };
+
+  window.ClientMap.saveContact = async function (id) {
+    const c = S.clients.find(x => x.id === S.selected);
+    if (!c) return;
+    const name = ($('cmCName').value || '').trim();
+    if (!name) { alert('A contact needs a name.'); return; }
+    const row = {
+      client_id: c.id,
+      name: name,
+      role: $('cmCRole').value,
+      title: ($('cmCTitle').value || '').trim() || null,
+      phone: ($('cmCPhone').value || '').trim() || null,
+      email: ($('cmCEmail').value || '').trim() || null,
+      notes: ($('cmCNotes').value || '').trim() || null,
+      // Typed by a human here, so it is confirmed by definition.
+      verified: true,
+      updated_at: new Date().toISOString()
+    };
+    try {
+      if (id) {
+        await writeOrThrow(sb.from('client_contacts').update(row).eq('id', id), 'Save contact');
+      } else {
+        row.source = 'manual';
+        row.created_by = currentUser ? currentUser.id : null;
+        await writeOrThrow(sb.from('client_contacts').insert(row), 'Add contact');
+      }
+      S.editingContact = null;
+      await refresh();
+      select(c.id, false);
+    } catch (e) {
+      alert((e.message || e) +
+        (/duplicate key|unique/i.test(e.message || '')
+          ? '\n\nThat email is already on this client — edit the existing contact instead.' : ''));
+    }
+  };
+
+  window.ClientMap.verify = async function (id) {
+    try {
+      await writeOrThrow(sb.from('client_contacts')
+        .update({ verified: true, updated_at: new Date().toISOString() }).eq('id', id), 'Confirm contact');
+      await refresh();
+      select(S.selected, false);
+    } catch (e) { alert(e.message || e); }
+  };
+
+  // Archived, not deleted — a GM who leaves and comes back, or a contact
+  // removed by mistake, is still in the table.
+  window.ClientMap.removeContact = async function (id) {
+    if (!confirm('Remove this contact from the card?')) return;
+    try {
+      await writeOrThrow(sb.from('client_contacts')
+        .update({ archived_at: new Date().toISOString() }).eq('id', id), 'Remove contact');
+      await refresh();
+      select(S.selected, false);
+    } catch (e) { alert(e.message || e); }
+  };
+
+  // ── Bulk fill ────────────────────────────────────────────────────
+  window.ClientMap.pullAll = async function () {
+    const btn = $('mapPullBtn');
+    const missing = S.clients.filter(c => !hasCoords(c)).length;
+    if (!confirm('Pull business addresses from QuickBooks where they are missing, then place a pin for every client that still needs one?\n\n' +
+                 missing + ' client' + (missing === 1 ? '' : 's') + ' currently have no pin. ' +
+                 'Pins you placed by hand are never moved.')) return;
+    btn.disabled = true; btn.textContent = 'Working…';
+    try {
+      const { data, error } = await sb.functions.invoke('client-geocode', { body: { mode: 'both' } });
+      if (error) throw new Error(error.message);
+      if (!data || !data.ok) throw new Error((data && data.error) || 'the run failed');
+      const s = data.summary || {};
+      await refresh();
+      const stuck = (data.results || []).filter(r => r.status === 'failed' || r.status === 'needs_address');
+      let out = 'Done.\n\n' +
+        (s.addresses_filled_from_qbo || 0) + ' address' + ((s.addresses_filled_from_qbo || 0) === 1 ? '' : 'es') + ' pulled from QuickBooks\n' +
+        (s.geocoded || 0) + ' pin' + ((s.geocoded || 0) === 1 ? '' : 's') + ' placed\n' +
+        (s.skipped_manual || 0) + ' left alone (placed by hand)\n' +
+        (s.failed || 0) + ' failed';
+      if (stuck.length) {
+        out += '\n\nStill needing attention:\n' +
+          stuck.slice(0, 20).map(r => '· ' + r.name + ' — ' + (r.actions || []).join(', ')).join('\n');
+        if (stuck.length > 20) out += '\n…and ' + (stuck.length - 20) + ' more.';
+      }
+      alert(out);
+    } catch (e) {
+      alert('The run did not finish: ' + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = '⟳ Fill addresses & pins';
+    }
+  };
+
+  async function refresh() {
+    await loadData();
+    renderList();
+    if (S.map) drawMarkers();
+  }
+
+  // ── Open ─────────────────────────────────────────────────────────
+  window.ClientMap.open = async function () {
+    if (S.loading) return;
+    S.loading = true;
+    try {
+      await loadData();
+      renderList();
+      await loadGoogle();
+      const el = $('mapCanvas');
+      if (!S.map) {
+        S.map = new google.maps.Map(el, {
+          center: HOME, zoom: 10,
+          mapTypeControl: true, streetViewControl: true, fullscreenControl: true,
+          mapTypeId: 'roadmap'
+        });
+        S.info = new google.maps.InfoWindow();
+      }
+      const load = $('mapLoading');
+      if (load) load.style.display = 'none';
+      drawMarkers();
+      S.booted = true;
+    } catch (e) {
+      const load = $('mapLoading');
+      if (load) { load.style.display = ''; load.textContent = (e && e.message) || 'The map could not be loaded.'; }
+    } finally {
+      S.loading = false;
+    }
+  };
 })();
 </script>
 </body>
