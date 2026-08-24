@@ -11311,7 +11311,7 @@ init();
     return '<a class="cm-site" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer"' +
            (extraStyle ? ' style="' + extraStyle + '"' : '') +
            ' title="' + esc(u) + '" onclick="event.stopPropagation()">' +
-           esc(siteLabel(u)) + ' \u2197</a>';
+           esc(siteLabel(u)) + '</a>';
   }
   function pinColour(c) { return INDUSTRY[industryOf(c)].colour; }
 
@@ -11343,7 +11343,7 @@ init();
         : ind + ' · ' + (c.address_line1 ? 'address, no pin' : 'no address');
       return '<div class="cm-row' + (S.selected === c.id ? ' sel' : '') + '" data-id="' + c.id + '">' +
                '<span class="cm-dot" style="background:' + colour + '"></span>' +
-               '<span class="cm-nm">' + esc(c.name) + siteLinkTight(c) +
+               '<span class="cm-nm">' + esc(c.name) +
                  '<div class="cm-sub">' + esc(sub) + siteLink(c) + '</div></span>' +
              '</div>';
     };
@@ -11491,16 +11491,6 @@ init();
   };
 
   window.ClientMap.filter = function (v) { S.filter = v || ''; renderList(); };
-
-  // The sidebar is 310px wide, so a full hostname beside a long client name
-  // would push the name into an ellipsis. The name line gets the arrow alone
-  // with the URL as its tooltip; the readable hostname sits on the sub-line.
-  function siteLinkTight(c) {
-    const u = siteUrl(c);
-    if (!u) return '';
-    return '<a class="cm-site" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer"' +
-           ' title="' + esc(u) + '" onclick="event.stopPropagation()">\u2197</a>';
-  }
 
   window.ClientMap.toggleList = function () {
     S.listHidden = !S.listHidden;
