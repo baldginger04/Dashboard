@@ -602,6 +602,48 @@
     #page-prospects .txs-field input:focus{outline:2px solid var(--accent);outline-offset:1px}
     #page-prospects #txsZips{width:300px}
     #page-prospects #txsSearch{width:170px}
+    /* ── FIRST LIGHT BOOKS Z-TAPES ─────────────────────── */
+    #page-flbz .flbz-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+    #page-flbz .flbz-drop{border:2px dashed var(--border2);border-radius:10px;padding:1.6rem 1rem;text-align:center;cursor:pointer;color:var(--text2);font-size:13px;transition:all .15s}
+    #page-flbz .flbz-drop:hover,#page-flbz .flbz-drop.over{border-color:var(--accent);color:var(--accent);background:rgba(216,91,49,.05)}
+    #page-flbz .flbz-drop b{display:block;font-size:14px;color:var(--text);margin-bottom:.25rem}
+    #page-flbz .flbz-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;margin-top:.9rem}
+    #page-flbz .flbz-field{display:flex;flex-direction:column;gap:.25rem}
+    #page-flbz .flbz-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-flbz input[type=date]{font:inherit;font-size:13px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text)}
+    #page-flbz .flbz-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1.05rem;cursor:pointer}
+    #page-flbz .flbz-btn:hover{filter:brightness(.93)}
+    #page-flbz .flbz-ghost{font:inherit;font-weight:500;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.45rem .85rem;cursor:pointer}
+    #page-flbz .flbz-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    #page-flbz button:disabled{opacity:.45;cursor:default}
+    #page-flbz .flbz-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-flbz .flbz-status.err{color:var(--red)}
+    #page-flbz .flbz-card{background:var(--bg2);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:9px;padding:.85rem 1rem;margin-bottom:.7rem}
+    #page-flbz .flbz-card.is-error{border-left-color:var(--red)}
+    #page-flbz .flbz-head{display:flex;gap:.55rem;align-items:baseline;flex-wrap:wrap}
+    #page-flbz .flbz-title{font-size:14px;font-weight:600;color:var(--text);flex:1;min-width:220px}
+    #page-flbz .flbz-badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.15rem .55rem;white-space:nowrap}
+    #page-flbz .b-ok{background:var(--green-bg);color:var(--green)}
+    #page-flbz .b-error{background:var(--red-bg);color:var(--red)}
+    #page-flbz .b-pending{background:var(--yellow-bg);color:var(--yellow)}
+    #page-flbz .flbz-meta{font-size:11.5px;color:var(--text3);margin-top:.35rem}
+    #page-flbz .flbz-src{opacity:.75}
+    #page-flbz .flbz-warn{margin:.5rem 0 0;padding-left:1.1rem;font-size:12px;color:var(--yellow)}
+    #page-flbz .flbz-err{font-size:12.5px;color:var(--red);margin-top:.35rem;white-space:pre-wrap}
+    #page-flbz .flbz-details{margin-top:.6rem}
+    #page-flbz .flbz-details summary{font-size:12px;color:var(--text2);cursor:pointer}
+    #page-flbz .flbz-table{width:100%;border-collapse:collapse;margin-top:.5rem;font-size:12px}
+    #page-flbz .flbz-table th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);border-bottom:1px solid var(--border);padding:.3rem .4rem}
+    #page-flbz .flbz-table td{padding:.28rem .4rem;border-bottom:1px solid var(--border);color:var(--text2)}
+    #page-flbz .flbz-table .num{text-align:right;font-variant-numeric:tabular-nums}
+    #page-flbz .flbz-acts{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.7rem}
+    #page-flbz .flbz-result{font-size:12px;margin-top:.5rem}
+    #page-flbz .flbz-result.ok{color:var(--green)}
+    #page-flbz .flbz-result.err{color:var(--red);white-space:pre-wrap}
+    #page-flbz .flbz-empty{font-size:12.5px;color:var(--text3);padding:.5rem 0}
+    #page-flbz .flbz-empty.err{color:var(--red)}
+    #page-flbz .flbz-note{font-size:11.5px;color:var(--text3)}
+    #page-flbz .flbz-secthead{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:700;margin:1.2rem 0 .5rem}
     /* ── VENDOR CODING AUDIT ───────────────────────────── */
     #page-vendoraudit .va-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
     #page-vendoraudit .va-chip[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
@@ -829,6 +871,7 @@
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
+        <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes</div>
         <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('prospects')" id="nav-prospects" style="display:none"><span>🎯</span> Prospects <span class="nav-badge" id="prospectsBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
@@ -1053,6 +1096,33 @@
         <div id="taxList"><div class="empty">Loading&#8230;</div></div>
       </div>
       <!-- VENDOR CODING AUDIT -->
+      <div class="page" id="page-flbz">
+        <div class="page-header"><div><div class="page-title">First Light Books — Z-Tapes</div><div class="page-sub">Upload a Booklog Z-Tape, review the entry, post it to QuickBooks</div></div></div>
+
+        <div class="flbz-panel">
+          <div class="flbz-drop" id="flbzDrop">
+            <b>Drop Z-Tape PDFs here, or click to choose</b>
+            Each tape becomes one balanced journal entry. Nothing posts until you say so.
+          </div>
+          <input type="file" id="flbzFile" accept="application/pdf,.pdf" multiple style="display:none">
+          <div class="flbz-status" id="flbzStatus"></div>
+        </div>
+
+        <div id="flbzParsed"></div>
+
+        <div class="flbz-secthead">History</div>
+        <div class="flbz-panel">
+          <div class="flbz-controls">
+            <div class="flbz-field"><label for="flbzFrom">From</label><input type="date" id="flbzFrom"></div>
+            <div class="flbz-field"><label for="flbzTo">To</label><input type="date" id="flbzTo"></div>
+            <button class="flbz-ghost" id="flbzRefresh">Refresh</button>
+            <button class="flbz-ghost" id="flbzRangeCsv">Download CSV for range</button>
+            <button class="flbz-ghost" id="flbzSelfTest">Check configuration</button>
+          </div>
+          <div id="flbzEntries" style="margin-top:.9rem"></div>
+        </div>
+      </div>
+
       <div class="page" id="page-vendoraudit">
         <div class="page-header"><div><div class="page-title">Vendor Audit</div><div class="page-sub">Vendor coding consistency, checked against QuickBooks</div></div></div>
         <div class="va-views">
@@ -6159,6 +6229,7 @@ function showPage(name) {
   if (name === 'invoices') InvLoad();
   if (name === 'analyses') loadAnalyses();
   if (name === 'salestax') loadTaxPage();
+  if (name === 'flbz' && window.FlbzOpen) window.FlbzOpen();
   if (name === 'vendoraudit' && window.VendorAuditOpen) window.VendorAuditOpen();
   if (name === 'prospects' && window.TxProspectsOpen) window.TxProspectsOpen();
 }
@@ -10539,6 +10610,306 @@ init();
       const src = $('ncCloneFrom').value;
       if (src && previewCache[src]) renderPreview(previewCache[src]);
     });
+  });
+})();
+</script>
+<script>
+// ══════════════════════════════════════════════════════════
+// FIRST LIGHT BOOKS — Z-TAPE → QuickBooks
+// Upload a Booklog Z-Tape PDF, review the parsed journal entry, post it.
+// All parsing and posting happens in the flb-ztape Edge Function; this file
+// only uploads, renders and asks. Never re-derive the entry here.
+// ══════════════════════════════════════════════════════════
+(function () {
+  const BUCKET = 'z-tapes';
+  const FN = 'flb-ztape';
+  const $ = id => document.getElementById(id);
+
+  const S = { parsed: [], entries: [], busy: false };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function money(n) {
+    const v = Number(n || 0);
+    return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function setStatus(msg, isErr) {
+    const el = $('flbzStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.classList.toggle('err', !!isErr);
+  }
+  function call(body) {
+    return sb.functions.invoke(FN, { body });
+  }
+  // The function returns structured errors with a non-2xx status, which the
+  // supabase client surfaces as `error` with the body swallowed. Read it back.
+  async function invoke(body) {
+    const res = await call(body);
+    if (res.error) {
+      let detail = res.error.message || 'the function call failed';
+      try {
+        const ctx = res.error.context;
+        if (ctx && typeof ctx.json === 'function') {
+          const j = await ctx.json();
+          if (j && j.error) detail = j.error;
+        }
+      } catch (_) { /* keep the generic message */ }
+      throw new Error(detail);
+    }
+    if (res.data && res.data.ok === false) throw new Error(res.data.error || 'the request failed');
+    return res.data;
+  }
+
+  function download(name, text, mime) {
+    const blob = new Blob([text], { type: mime || 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  // ---------------------------------------------------------------- upload
+
+  async function handleFiles(files) {
+    const list = Array.from(files || []).filter(f => /\.pdf$/i.test(f.name));
+    if (!list.length) { setStatus('Pick one or more Z-Tape PDFs.', true); return; }
+    if (S.busy) return;
+    S.busy = true;
+    $('flbzFile').disabled = true;
+
+    let done = 0;
+    for (const file of list) {
+      setStatus('Uploading and parsing ' + file.name + ' (' + (done + 1) + ' of ' + list.length + ')\u2026');
+      const safe = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+      const path = 'flb/' + Date.now() + '-' + safe;
+      try {
+        const up = await sb.storage.from(BUCKET).upload(path, file, { contentType: 'application/pdf' });
+        if (up.error) throw new Error('upload failed \u2014 ' + up.error.message);
+        const data = await invoke({ action: 'parse', path: path });
+        S.parsed = S.parsed.filter(p => p.sales_date !== data.sales_date);
+        S.parsed.push(Object.assign({ file: file.name }, data));
+      } catch (err) {
+        S.parsed = S.parsed.filter(p => p.file !== file.name);
+        S.parsed.push({ file: file.name, failed: true, error: err.message || String(err) });
+      }
+      done++;
+      renderParsed();
+    }
+
+    S.parsed.sort((a, b) => String(a.sales_date || '').localeCompare(String(b.sales_date || '')));
+    renderParsed();
+    const bad = S.parsed.filter(p => p.failed).length;
+    setStatus(bad
+      ? (list.length - bad) + ' parsed, ' + bad + ' failed \u2014 see below. Nothing has been posted.'
+      : list.length + (list.length === 1 ? ' tape parsed.' : ' tapes parsed.') + ' Nothing has been posted yet.',
+      !!bad);
+    S.busy = false;
+    $('flbzFile').disabled = false;
+    $('flbzFile').value = '';
+    loadEntries();
+  }
+
+  // ---------------------------------------------------------------- render
+
+  function lineRows(lines) {
+    return (lines || []).map(l =>
+      '<tr>' +
+      '<td>' + esc(l.account) + '</td>' +
+      '<td>' + esc(l.description) + '</td>' +
+      '<td class="num">' + (l.debit == null ? '' : money(l.debit)) + '</td>' +
+      '<td class="num">' + (l.credit == null ? '' : money(l.credit)) + '</td>' +
+      '<td>' + esc(l.name || '') + '</td>' +
+      '</tr>').join('');
+  }
+
+  function renderParsed() {
+    const host = $('flbzParsed');
+    if (!host) return;
+    if (!S.parsed.length) { host.innerHTML = ''; return; }
+
+    host.innerHTML = S.parsed.map((p, i) => {
+      if (p.failed) {
+        return '<div class="flbz-card is-error">' +
+          '<div class="flbz-head"><div class="flbz-title">' + esc(p.file) + '</div>' +
+          '<span class="flbz-badge b-error">not parsed</span></div>' +
+          '<div class="flbz-err">' + esc(p.error) + '</div></div>';
+      }
+      const bal = p.balanced;
+      const warn = (p.warnings || []).map(w => '<li>' + esc(w) + '</li>').join('');
+      return '<div class="flbz-card">' +
+        '<div class="flbz-head">' +
+          '<div class="flbz-title">' + esc(p.journal_date) + ' \u00b7 ' + esc(p.journal_no) + '</div>' +
+          '<span class="flbz-badge ' + (bal ? 'b-ok' : 'b-error') + '">' +
+            (bal ? 'balanced' : 'DOES NOT BALANCE') + '</span>' +
+          '<span class="flbz-badge b-pending" id="flbzState' + i + '">awaiting review</span>' +
+        '</div>' +
+        '<div class="flbz-meta">' +
+          'Items in Transit <b>' + money(p.items_in_transit) + '</b> \u00b7 ' +
+          'debits ' + money(p.debits) + ' \u00b7 credits ' + money(p.credits) + ' \u00b7 ' +
+          (p.lines || []).length + ' lines \u00b7 <span class="flbz-src">' + esc(p.file) + '</span>' +
+        '</div>' +
+        (warn ? '<ul class="flbz-warn">' + warn + '</ul>' : '') +
+        '<details class="flbz-details"><summary>Show the ' + (p.lines || []).length + ' lines</summary>' +
+          '<table class="flbz-table"><thead><tr><th>Account</th><th>Description</th>' +
+          '<th class="num">Debit</th><th class="num">Credit</th><th>Name</th></tr></thead>' +
+          '<tbody>' + lineRows(p.lines) + '</tbody></table>' +
+        '</details>' +
+        '<div class="flbz-acts">' +
+          '<button class="flbz-btn" data-post="' + esc(p.sales_date) + '"' + (bal ? '' : ' disabled') + '>' +
+            'Post to QuickBooks</button>' +
+          '<button class="flbz-ghost" data-csv="' + esc(p.sales_date) + '">Download CSV</button>' +
+        '</div>' +
+        '<div class="flbz-result" id="flbzResult' + i + '"></div>' +
+      '</div>';
+    }).join('');
+
+    host.querySelectorAll('[data-post]').forEach(b =>
+      b.addEventListener('click', () => postOne(b.getAttribute('data-post'), b)));
+    host.querySelectorAll('[data-csv]').forEach(b =>
+      b.addEventListener('click', () => csvOne(b.getAttribute('data-csv'))));
+  }
+
+  function csvOne(date) {
+    const p = S.parsed.find(x => x.sales_date === date);
+    if (p && p.csv) { download('FLB_JE_' + date + '.csv', p.csv); return; }
+    invoke({ action: 'csv', sales_date: date })
+      .then(d => download('FLB_JE_' + date + '.csv', d.csv))
+      .catch(e => setStatus('CSV failed: ' + e.message, true));
+  }
+
+  async function postOne(date, btn) {
+    const p = S.parsed.find(x => x.sales_date === date);
+    const idx = S.parsed.indexOf(p);
+    if (!confirm('Post ' + date + ' to First Light Books\u2019 QuickBooks?\n\n' +
+      'Items in Transit ' + money(p && p.items_in_transit) + ', ' +
+      ((p && p.lines || []).length) + ' lines, total ' + money(p && p.debits) + '.\n\n' +
+      'This creates a real journal entry.')) return;
+
+    btn.disabled = true;
+    const prev = btn.textContent;
+    btn.textContent = 'Posting\u2026';
+    const state = $('flbzState' + idx);
+    const out = $('flbzResult' + idx);
+    try {
+      const d = await invoke({ action: 'post', sales_date: date });
+      if (state) { state.textContent = 'posted'; state.className = 'flbz-badge b-ok'; }
+      let msg = 'Posted as journal entry ' + esc(d.qbo_je_id) + ' (' + esc(d.doc_number) + '), ' +
+        d.line_count + ' lines.';
+      if (d.token_store_warning) msg += '<br><b>' + esc(d.token_store_warning) + '</b>';
+      if (d.log_write_warning) msg += '<br><b>' + esc(d.log_write_warning) + '</b>';
+      if (out) { out.innerHTML = msg; out.className = 'flbz-result ok'; }
+      btn.textContent = 'Posted';
+      setStatus('');
+    } catch (err) {
+      if (state) { state.textContent = 'error'; state.className = 'flbz-badge b-error'; }
+      if (out) { out.textContent = err.message || String(err); out.className = 'flbz-result err'; }
+      btn.disabled = false;
+      btn.textContent = prev;
+    }
+    loadEntries();
+  }
+
+  // ---------------------------------------------------------------- history
+
+  function renderEntries() {
+    const host = $('flbzEntries');
+    if (!host) return;
+    if (!S.entries.length) {
+      host.innerHTML = '<div class="flbz-empty">Nothing stored yet.</div>';
+      return;
+    }
+    host.innerHTML =
+      '<table class="flbz-table"><thead><tr><th>Date</th><th>Status</th>' +
+      '<th class="num">Total</th><th>QBO entry</th><th>Note</th></tr></thead><tbody>' +
+      S.entries.map(e => {
+        const t = e.totals || {};
+        const cls = e.status === 'posted' ? 'b-ok' : (e.status === 'error' ? 'b-error' : 'b-pending');
+        return '<tr>' +
+          '<td>' + esc(e.sales_date) + '</td>' +
+          '<td><span class="flbz-badge ' + cls + '">' + esc(e.status) + '</span></td>' +
+          '<td class="num">' + money(t.debits) + '</td>' +
+          '<td>' + esc(e.qbo_je_id || '') + '</td>' +
+          '<td class="flbz-note">' + esc(e.error_message || (t.warnings && t.warnings.length ? t.warnings.length + ' warning(s)' : '')) + '</td>' +
+          '</tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  async function loadEntries() {
+    try {
+      const from = $('flbzFrom') && $('flbzFrom').value;
+      const to = $('flbzTo') && $('flbzTo').value;
+      const d = await invoke({ action: 'list', from: from || null, to: to || null });
+      S.entries = d.entries || [];
+      renderEntries();
+    } catch (err) {
+      const host = $('flbzEntries');
+      if (host) host.innerHTML = '<div class="flbz-empty err">' + esc(err.message) + '</div>';
+    }
+  }
+
+  async function rangeCsv() {
+    const from = $('flbzFrom') && $('flbzFrom').value;
+    const to = $('flbzTo') && $('flbzTo').value;
+    if (!from || !to) { setStatus('Set both dates for a range CSV.', true); return; }
+    try {
+      const d = await invoke({ action: 'csv', from: from, to: to });
+      download('FLB_JE_' + from + '_to_' + to + '.csv', d.csv);
+      setStatus(d.days + ' day(s) exported.');
+    } catch (err) { setStatus('CSV failed: ' + err.message, true); }
+  }
+
+  async function selfTest() {
+    setStatus('Checking configuration\u2026');
+    try {
+      const d = await invoke({ action: 'whoami' });
+      const s = d.intuit_secrets || {};
+      const c = d.qbo_connection;
+      setStatus(
+        'Signed in OK. Intuit secrets: ' + (s.found ? 'found (' + s.id_var + ')' : 'NOT FOUND') +
+        '. QuickBooks: ' + (c ? 'connected, realm ' + c.realm_id : 'NOT CONNECTED') +
+        '. Stored entries: ' + d.stored_entries + '.',
+        !s.found || !c);
+    } catch (err) { setStatus('Self-test failed: ' + err.message, true); }
+  }
+
+  // ---------------------------------------------------------------- boot
+
+  function defaults() {
+    const to = new Date();
+    const from = new Date(to.getTime() - 60 * 86400000);
+    const iso = d => d.toISOString().slice(0, 10);
+    if ($('flbzFrom') && !$('flbzFrom').value) $('flbzFrom').value = iso(from);
+    if ($('flbzTo') && !$('flbzTo').value) $('flbzTo').value = iso(to);
+  }
+
+  window.FlbzOpen = function () {
+    defaults();
+    renderParsed();
+    loadEntries();
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const f = $('flbzFile');
+    if (f) f.addEventListener('change', e => handleFiles(e.target.files));
+    const drop = $('flbzDrop');
+    if (drop) {
+      ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault(); drop.classList.add('over');
+      }));
+      ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => {
+        e.preventDefault(); drop.classList.remove('over');
+      }));
+      drop.addEventListener('drop', e => handleFiles(e.dataTransfer && e.dataTransfer.files));
+      drop.addEventListener('click', () => f && f.click());
+    }
+    const r = $('flbzRefresh'); if (r) r.addEventListener('click', loadEntries);
+    const cs = $('flbzRangeCsv'); if (cs) cs.addEventListener('click', rangeCsv);
+    const st = $('flbzSelfTest'); if (st) st.addEventListener('click', selfTest);
   });
 })();
 </script>
