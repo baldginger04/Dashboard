@@ -11219,6 +11219,11 @@ init();
     logos: {}
   };
 
+  // Created HERE, before anything assigns to it. This previously lived
+  // further down the module, so any exported handler defined above it threw
+  // on load and took the whole module with it.
+  window.ClientMap = window.ClientMap || {};
+
   const $ = id => document.getElementById(id);
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
