@@ -685,6 +685,7 @@
     #page-map .cm-role{font-size:10px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding:2px 6px;border-radius:999px;background:var(--bg3);color:var(--text2)}
     #page-map .cm-role.owner{background:var(--navy);color:#fff}
     #page-map .cm-role.gm{background:var(--accent2);color:var(--navy)}
+    #page-map .cm-role.chef{background:var(--green);color:#fff}
     #page-map .cm-c-line{font-size:12px;color:var(--text2);display:flex;gap:.35rem;align-items:center}
     #page-map .cm-c-line a{color:var(--blue);text-decoration:none}
     #page-map .cm-c-line a:hover{text-decoration:underline}
@@ -11247,7 +11248,7 @@ init();
     });
     // Owner first, then GM, then everyone else — the order you'd want to
     // read them in when you're deciding who to call.
-    const rank = { owner: 0, gm: 1, other: 2 };
+    const rank = { owner: 0, gm: 1, chef: 2, other: 3 };
     Object.keys(S.contacts).forEach(k => {
       S.contacts[k].sort((a, b) => (rank[a.role] ?? 3) - (rank[b.role] ?? 3));
     });
@@ -11327,7 +11328,8 @@ init();
       h += '<div class="r" style="color:#9aa0aa">No contact on file yet.</div>';
     } else {
       list.forEach(p => {
-        const role = p.role === 'owner' ? 'Owner' : p.role === 'gm' ? 'GM' : (p.title || 'Contact');
+        const role = p.role === 'owner' ? 'Owner' : p.role === 'gm' ? 'GM'
+                   : p.role === 'chef' ? 'Chef' : (p.title || 'Contact');
         h += '<div class="r"><div class="t">' + esc(role) + (p.verified ? '' : ' · unconfirmed') + '</div>' +
              '<div style="font-weight:600">' + esc(p.name) + '</div>';
         if (p.phone) h += '<div><a href="tel:' + esc(p.phone.replace(/[^\d+]/g, '')) + '">' + esc(p.phone) + '</a></div>';
@@ -11461,8 +11463,10 @@ init();
   }
 
   function contactCard(p) {
-    const roleCls = p.role === 'owner' ? ' owner' : p.role === 'gm' ? ' gm' : '';
-    const roleTxt = p.role === 'owner' ? 'Owner' : p.role === 'gm' ? 'GM' : 'Other';
+    const roleCls = p.role === 'owner' ? ' owner' : p.role === 'gm' ? ' gm'
+                  : p.role === 'chef' ? ' chef' : '';
+    const roleTxt = p.role === 'owner' ? 'Owner' : p.role === 'gm' ? 'GM'
+                  : p.role === 'chef' ? 'Chef' : 'Other';
     let h = '<div class="cm-contact' + (p.verified ? '' : ' unv') + '">' +
             '<div class="cm-c-top"><span class="cm-c-nm">' + esc(p.name) + '</span>' +
             '<span class="cm-role' + roleCls + '">' + esc(roleTxt) + '</span></div>';
@@ -11490,6 +11494,7 @@ init();
       '<select class="cm-in" id="cmCRole" style="margin-bottom:.35rem">' +
         '<option value="owner"' + sel('owner') + '>Owner</option>' +
         '<option value="gm"' + sel('gm') + '>General Manager</option>' +
+        '<option value="chef"' + sel('chef') + '>Chef</option>' +
         '<option value="other"' + sel('other') + '>Other</option>' +
       '</select>' +
       '<input class="cm-in" id="cmCTitle" placeholder="Title (optional)" value="' + esc(v.title) + '" style="margin-bottom:.35rem">' +
