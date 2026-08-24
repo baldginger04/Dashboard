@@ -11257,7 +11257,7 @@ init();
   async function loadData() {
     const [cRes, ctRes] = await Promise.all([
       sb.from('clients')
-        .select('id,name,address_line1,address_line2,city,state,postal_code,latitude,longitude,geocode_source,geocoded_at,geocode_error,location_note,show_on_map,archived_at,is_firm,preparer,reviewer,industry,website')
+        .select('id,name,address_line1,address_line2,city,state,postal_code,latitude,longitude,geocode_source,geocoded_at,geocode_error,location_note,show_on_map,archived_at,is_firm,preparer,reviewer,industry,website,instagram')
         .eq('show_on_map', true).is('archived_at', null).order('name'),
       sb.from('client_contacts')
         .select('*').is('archived_at', null).order('sort_order').order('name')
@@ -11303,6 +11303,36 @@ init();
     catch (_) { return u.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0]; }
   }
 
+  // Instagram is stored as a HANDLE, not a URL, so it renders as @name and
+  // can't drift into half-URLs. Accepts whatever gets pasted — "@juniper",
+  // "juniper", a profile URL, a URL with a query string — and reduces it to
+  // the handle. Returns null if nothing usable is left.
+  function igHandle(c) {
+    let v = (c.instagram || '').trim();
+    if (!v) return null;
+    v = v.replace(/^https?:\/\//i, '')
+         .replace(/^www\./i, '')
+         .replace(/^instagram\.com\//i, '')
+         .replace(/^@+/, '')
+         .split(/[/?#]/)[0]
+         .trim();
+    // Instagram handles are letters, numbers, dots and underscores, max 30.
+    // Anything else is a paste that didn't survive, so show nothing rather
+    // than link somewhere wrong.
+    if (!/^[A-Za-z0-9._]{1,30}$/.test(v)) return null;
+    return v;
+  }
+
+  function igLink(c, extraStyle) {
+    const h = igHandle(c);
+    if (!h) return '';
+    return '<a class="cm-site" href="https://instagram.com/' + esc(h) + '"' +
+           ' target="_blank" rel="noopener noreferrer"' +
+           (extraStyle ? ' style="' + extraStyle + '"' : '') +
+           ' title="instagram.com/' + esc(h) + '" onclick="event.stopPropagation()">@' +
+           esc(h) + '</a>';
+  }
+
   // rel="noopener noreferrer" matters with target="_blank": without noopener
   // the opened page gets a handle on this window and can navigate it.
   function siteLink(c, extraStyle) {
@@ -11344,7 +11374,7 @@ init();
       return '<div class="cm-row' + (S.selected === c.id ? ' sel' : '') + '" data-id="' + c.id + '">' +
                '<span class="cm-dot" style="background:' + colour + '"></span>' +
                '<span class="cm-nm">' + esc(c.name) +
-                 '<div class="cm-sub">' + esc(sub) + siteLink(c) + '</div></span>' +
+                 '<div class="cm-sub">' + esc(sub) + siteLink(c) + igLink(c) + '</div></span>' +
              '</div>';
     };
 
@@ -11402,6 +11432,7 @@ init();
     const list = contactsFor(c.id);
     let h = '<div class="cm-iw"><b>' + esc(c.name) + '</b>';
     h += siteLink(c, 'margin-left:0;color:#1a5fa8');
+    h += igLink(c, 'color:#1a5fa8');
     const a = addrLine(c);
     if (a) h += '<div style="color:#5a6070">' + esc(a) + '</div>';
     if (c.location_note) h += '<div style="color:#9aa0aa;font-size:11.5px">' + esc(c.location_note) + '</div>';
@@ -11512,7 +11543,7 @@ init();
     const panel = $('mapPanel');
     if (!c) { panel.classList.add('off'); return; }
     panel.classList.remove('off');
-    $('mapPanelName').innerHTML = esc(c.name) + siteLink(c);
+    $('mapPanelName').innerHTML = esc(c.name) + siteLink(c) + igLink(c);
 
     const src = c.geocode_source === 'manual'
       ? 'Pin placed by hand — the geocoder will not move it.'
@@ -11530,6 +11561,9 @@ init();
          '</select>';
     h += '<label class="cm-lbl">Website</label>' +
          '<input class="cm-in" id="cmSite" value="' + esc(c.website) + '" placeholder="example.com">';
+    h += '<label class="cm-lbl">Instagram</label>' +
+         '<input class="cm-in" id="cmIg" value="' + (igHandle(c) ? '@' + igHandle(c) : esc(c.instagram)) +
+         '" placeholder="@handle">';
     h += '<label class="cm-lbl">Street</label>' +
          '<input class="cm-in" id="cmA1" value="' + esc(c.address_line1) + '" placeholder="1234 E 6th St">';
     h += '<label class="cm-lbl">Suite / unit</label>' +
@@ -11649,14 +11683,15 @@ init();
       state:         ($('cmState').value || '').trim() || null,
       postal_code:   ($('cmZip').value || '').trim() || null,
       location_note: ($('cmNote').value || '').trim() || null,
-      website:       ($('cmSite').value || '').trim() || null
+      website:       ($('cmSite').value || '').trim() || null,
+      instagram:     igHandle({ instagram: $('cmIg').value }) || null
     };
     msg('Saving…');
     try {
       const { error } = await sb.from('clients').update(patch).eq('id', c.id);
       if (error) throw new Error(error.message);
       Object.assign(c, patch);
-      $('mapPanelName').innerHTML = esc(c.name) + siteLink(c);
+      $('mapPanelName').innerHTML = esc(c.name) + siteLink(c) + igLink(c);
       msg('Saved. Use “Place pin from address” to move the pin.', 'ok');
       renderList();
     } catch (e) { msg('Not saved: ' + (e.message || e), 'err'); }
