@@ -651,7 +651,15 @@
     #page-map .cm-search{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:'Inter',sans-serif;background:#fff;color:var(--text);outline:none}
     #page-map .cm-search:focus{border-color:var(--accent)}
     #page-map .cm-list{flex:1;overflow:auto;padding:.35rem}
-    #page-map .cm-secthead{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:700;margin:.7rem .5rem .3rem}
+    #page-map .cm-secthead{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:700;margin:.7rem .5rem .3rem;display:flex;align-items:center;gap:.3rem;cursor:pointer;user-select:none;border-radius:5px;padding:2px 4px}
+    #page-map .cm-secthead:hover{background:var(--bg3);color:var(--text2)}
+    #page-map .cm-secthead.static,#page-map .cm-secthead.static:hover{cursor:default;background:none;color:var(--text3)}
+    #page-map .cm-chev{display:inline-block;transition:transform .12s ease;font-size:9px;line-height:1}
+    #page-map .cm-chev.shut{transform:rotate(-90deg)}
+    /* Hiding the list gives the map the full width; it is a flex child
+       with flex:1, so it reflows on its own. */
+    #page-map .cm-wrap.nolist .cm-side{display:none}
+    #page-map .cm-sub .cm-site{margin-left:.3rem;font-size:11px}
     #page-map .cm-row{padding:.45rem .55rem;border-radius:7px;cursor:pointer;display:flex;align-items:center;gap:.5rem;font-size:13px;color:var(--text)}
     #page-map .cm-row:hover{background:var(--bg3)}
     #page-map .cm-row.sel{background:var(--navy);color:#fff}
@@ -1195,6 +1203,7 @@
             <div class="page-sub" id="mapSub">Every client with a location, plus who to call.</div>
           </div>
           <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn btn-secondary btn-sm" id="mapListToggle" onclick="window.ClientMap.toggleList()">◀ Hide list</button>
             <button class="btn btn-secondary btn-sm" id="mapPullBtn" onclick="window.ClientMap.pullAll()">⟳ Fill addresses &amp; pins</button>
           </div>
         </div>
@@ -11196,7 +11205,11 @@ init();
     markers: {},         // client_id -> google.maps.Marker
     selected: null,
     filter: '',
-    editingContact: null // contact id, or 'new'
+    editingContact: null, // contact id, or 'new'
+    // Per-session on purpose: collapsing a section is a "right now I want more
+    // map" choice, not a durable preference worth persisting.
+    shut: { placed: false, unplaced: false },
+    listHidden: false
   };
 
   const $ = id => document.getElementById(id);
@@ -11330,19 +11343,40 @@ init();
         : ind + ' · ' + (c.address_line1 ? 'address, no pin' : 'no address');
       return '<div class="cm-row' + (S.selected === c.id ? ' sel' : '') + '" data-id="' + c.id + '">' +
                '<span class="cm-dot" style="background:' + colour + '"></span>' +
-               '<span class="cm-nm">' + esc(c.name) +
-                 '<div class="cm-sub">' + esc(sub) + '</div></span>' +
+               '<span class="cm-nm">' + esc(c.name) + siteLinkTight(c) +
+                 '<div class="cm-sub">' + esc(sub) + siteLink(c) + '</div></span>' +
              '</div>';
     };
 
+    // A collapsed section keeps its header and its count, so you can always
+    // see how many are hidden and click to get them back.
+    const head = (key, label, count) =>
+      '<div class="cm-secthead" data-sect="' + key + '">' +
+        '<span class="cm-chev' + (S.shut[key] ? ' shut' : '') + '">\u25bc</span>' +
+        label + ' (' + count + ')' +
+      '</div>';
+
     let html = '';
-    if (placed.length)  html += '<div class="cm-secthead">On the map (' + placed.length + ')</div>' + placed.map(row).join('');
-    if (missing.length) html += '<div class="cm-secthead">Not placed yet (' + missing.length + ')</div>' + missing.map(row).join('');
-    if (!html) html = '<div class="cm-secthead">No matches</div>';
+    if (placed.length) {
+      html += head('placed', 'On the map', placed.length);
+      if (!S.shut.placed) html += placed.map(row).join('');
+    }
+    if (missing.length) {
+      html += head('unplaced', 'Not placed yet', missing.length);
+      if (!S.shut.unplaced) html += missing.map(row).join('');
+    }
+    if (!html) html = '<div class="cm-secthead static">No matches</div>';
     box.innerHTML = html;
 
     box.querySelectorAll('.cm-row').forEach(el => {
       el.onclick = () => select(el.getAttribute('data-id'), true);
+    });
+    box.querySelectorAll('.cm-secthead[data-sect]').forEach(el => {
+      el.onclick = () => {
+        const k = el.getAttribute('data-sect');
+        S.shut[k] = !S.shut[k];
+        renderList();
+      };
     });
 
     const sub = $('mapSub');
@@ -11457,6 +11491,31 @@ init();
   };
 
   window.ClientMap.filter = function (v) { S.filter = v || ''; renderList(); };
+
+  // The sidebar is 310px wide, so a full hostname beside a long client name
+  // would push the name into an ellipsis. The name line gets the arrow alone
+  // with the URL as its tooltip; the readable hostname sits on the sub-line.
+  function siteLinkTight(c) {
+    const u = siteUrl(c);
+    if (!u) return '';
+    return '<a class="cm-site" href="' + esc(u) + '" target="_blank" rel="noopener noreferrer"' +
+           ' title="' + esc(u) + '" onclick="event.stopPropagation()">\u2197</a>';
+  }
+
+  window.ClientMap.toggleList = function () {
+    S.listHidden = !S.listHidden;
+    const wrap = document.querySelector('#page-map .cm-wrap');
+    const btn = $('mapListToggle');
+    if (wrap) wrap.classList.toggle('nolist', S.listHidden);
+    if (btn) btn.textContent = S.listHidden ? '\u25b6 Show list' : '\u25c0 Hide list';
+    // The container just changed width. Maps JS reflows on its own but anchors
+    // on the top-left rather than holding the view, so the centre is captured
+    // and put back once the layout has settled.
+    if (S.map) {
+      const centre = S.map.getCenter();
+      setTimeout(function () { if (centre) S.map.setCenter(centre); }, 60);
+    }
+  };
 
   function renderPanel() {
     const c = S.clients.find(x => x.id === S.selected);
