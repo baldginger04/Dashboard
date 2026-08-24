@@ -1197,8 +1197,10 @@
           </div>
         </div>
         <div class="cm-legend">
-          <span><span class="cm-dot" style="background:#1B2A4B"></span> Has contacts</span>
-          <span><span class="cm-dot" style="background:#EFA02A"></span> No contact on file</span>
+          <span><span class="cm-dot" style="background:#1B2A4B"></span> Bar</span>
+          <span><span class="cm-dot" style="background:#D85B31"></span> Restaurant</span>
+          <span><span class="cm-dot" style="background:#1e7a45"></span> Grocery</span>
+          <span><span class="cm-dot" style="background:#EFA02A"></span> Other</span>
           <span><span class="cm-dot" style="background:#b93232"></span> Needs an address</span>
           <span style="color:var(--text3)">Hover a pin for contacts · click to edit · drag to reposition</span>
         </div>
@@ -11172,8 +11174,15 @@ init();
   // first-ever open doesn't land in the middle of the Atlantic.
   const HOME = { lat: 30.2672, lng: -97.7431 };
 
-  const PIN_NAVY  = '#1B2A4B';
-  const PIN_AMBER = '#EFA02A';
+  // Pin colour carries INDUSTRY. Whether a client has contacts is still
+  // visible in the sidebar sub-line, so nothing was lost by repurposing this.
+  const INDUSTRY = {
+    bar:        { colour: '#1B2A4B', label: 'Bar' },
+    restaurant: { colour: '#D85B31', label: 'Restaurant' },
+    grocery:    { colour: '#1e7a45', label: 'Grocery' },
+    other:      { colour: '#EFA02A', label: 'Other' }
+  };
+  const PIN_UNPLACED = '#b93232';
 
   const S = {
     booted: false,
@@ -11233,7 +11242,7 @@ init();
   async function loadData() {
     const [cRes, ctRes] = await Promise.all([
       sb.from('clients')
-        .select('id,name,address_line1,address_line2,city,state,postal_code,latitude,longitude,geocode_source,geocoded_at,geocode_error,location_note,show_on_map,archived_at,is_firm,preparer,reviewer')
+        .select('id,name,address_line1,address_line2,city,state,postal_code,latitude,longitude,geocode_source,geocoded_at,geocode_error,location_note,show_on_map,archived_at,is_firm,preparer,reviewer,industry')
         .eq('show_on_map', true).is('archived_at', null).order('name'),
       sb.from('client_contacts')
         .select('*').is('archived_at', null).order('sort_order').order('name')
@@ -11256,7 +11265,10 @@ init();
 
   function hasCoords(c) { return c.latitude != null && c.longitude != null; }
   function contactsFor(id) { return S.contacts[id] || []; }
-  function pinColour(c) { return contactsFor(c.id).length ? PIN_NAVY : PIN_AMBER; }
+  // Anything unrecognised falls back to 'other' rather than rendering
+  // colourless, so a value added in SQL but not here still shows a pin.
+  function industryOf(c) { return INDUSTRY[c.industry] ? c.industry : 'other'; }
+  function pinColour(c) { return INDUSTRY[industryOf(c)].colour; }
 
   function addrLine(c) {
     const a = [c.address_line1, c.address_line2].filter(Boolean).join(', ');
@@ -11271,6 +11283,7 @@ init();
     const f = S.filter.trim().toLowerCase();
     const match = c => !f || (c.name || '').toLowerCase().includes(f) ||
                        (c.city || '').toLowerCase().includes(f) ||
+                       INDUSTRY[industryOf(c)].label.toLowerCase().includes(f) ||
                        contactsFor(c.id).some(x => (x.name || '').toLowerCase().includes(f));
 
     const placed  = S.clients.filter(c => hasCoords(c) && match(c));
@@ -11278,10 +11291,11 @@ init();
 
     const row = c => {
       const n = contactsFor(c.id).length;
-      const colour = hasCoords(c) ? pinColour(c) : '#b93232';
+      const colour = hasCoords(c) ? pinColour(c) : PIN_UNPLACED;
+      const ind = INDUSTRY[industryOf(c)].label;
       const sub = hasCoords(c)
-        ? (n ? n + (n === 1 ? ' contact' : ' contacts') : 'no contact yet')
-        : (c.address_line1 ? 'address, no pin' : 'no address');
+        ? ind + ' · ' + (n ? n + (n === 1 ? ' contact' : ' contacts') : 'no contact yet')
+        : ind + ' · ' + (c.address_line1 ? 'address, no pin' : 'no address');
       return '<div class="cm-row' + (S.selected === c.id ? ' sel' : '') + '" data-id="' + c.id + '">' +
                '<span class="cm-dot" style="background:' + colour + '"></span>' +
                '<span class="cm-nm">' + esc(c.name) +
@@ -11425,6 +11439,13 @@ init();
       : 'No pin yet.';
 
     let h = '';
+    h += '<label class="cm-lbl">Industry</label>' +
+         '<select class="cm-in" id="cmIndustry" onchange="window.ClientMap.saveIndustry(this.value)">' +
+           Object.keys(INDUSTRY).map(function (k) {
+             return '<option value="' + k + '"' + (industryOf(c) === k ? ' selected' : '') +
+                    '>' + INDUSTRY[k].label + '</option>';
+           }).join('') +
+         '</select>';
     h += '<label class="cm-lbl">Street</label>' +
          '<input class="cm-in" id="cmA1" value="' + esc(c.address_line1) + '" placeholder="1234 E 6th St">';
     h += '<label class="cm-lbl">Suite / unit</label>' +
@@ -11512,6 +11533,27 @@ init();
     const el = $('cmAddrMsg');
     if (el) { el.textContent = text; el.className = 'cm-note' + (kind ? ' ' + kind : ''); }
   }
+
+  // Saves immediately on change and recolours the pin in place — no marker
+  // rebuild, so the map doesn't jump back to its fitted bounds mid-edit.
+  window.ClientMap.saveIndustry = async function (value) {
+    const c = S.clients.find(x => x.id === S.selected);
+    if (!c) return;
+    const previous = c.industry;
+    try {
+      const { error } = await sb.from('clients').update({ industry: value }).eq('id', c.id);
+      if (error) throw new Error(error.message);
+      c.industry = value;
+      const m = S.markers[c.id];
+      if (m) m.setIcon(markerIcon(pinColour(c)));
+      renderList();
+    } catch (e) {
+      c.industry = previous;
+      const sel = $('cmIndustry');
+      if (sel) sel.value = industryOf(c);
+      alert('The industry was not saved: ' + (e.message || e));
+    }
+  };
 
   window.ClientMap.saveAddress = async function () {
     const c = S.clients.find(x => x.id === S.selected);
