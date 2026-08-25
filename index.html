@@ -607,6 +607,12 @@
     #page-flbz .flbz-drop{border:2px dashed var(--border2);border-radius:10px;padding:1.6rem 1rem;text-align:center;cursor:pointer;color:var(--text2);font-size:13px;transition:all .15s}
     #page-flbz .flbz-drop:hover,#page-flbz .flbz-drop.over{border-color:var(--accent);color:var(--accent);background:rgba(216,91,49,.05)}
     #page-flbz .flbz-drop b{display:block;font-size:14px;color:var(--text);margin-bottom:.25rem}
+    #page-flbz .flbz-inbox{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;padding:.55rem .7rem;border:1px solid var(--border);border-radius:8px;margin-bottom:.5rem;background:var(--bg)}
+    #page-flbz .flbz-inbox.is-error{border-left:3px solid var(--red)}
+    #page-flbz .flbz-inbox-name{font-size:13px;font-weight:600;color:var(--text);flex:1;min-width:200px}
+    #page-flbz .flbz-inbox-sub{font-size:11px;color:var(--text3);font-weight:400;display:block;margin-top:.1rem}
+    #page-flbz .flbz-inbox-acts{display:flex;gap:.4rem;flex-wrap:wrap}
+    #page-flbz .flbz-inbox-acts .flbz-ghost,#page-flbz .flbz-inbox-acts .flbz-btn{padding:.3rem .7rem;font-size:12px}
     #page-flbz .flbz-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;margin-top:.9rem}
     #page-flbz .flbz-field{display:flex;flex-direction:column;gap:.25rem}
     #page-flbz .flbz-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
@@ -943,7 +949,7 @@
         <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
-        <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes</div>
+        <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('prospects')" id="nav-prospects" style="display:none"><span>🎯</span> Prospects <span class="nav-badge" id="prospectsBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
@@ -1170,6 +1176,15 @@
       <!-- VENDOR CODING AUDIT -->
       <div class="page" id="page-flbz">
         <div class="page-header"><div><div class="page-title">First Light Books — Z-Tapes</div><div class="page-sub">Upload a Booklog Z-Tape, review the entry, post it to QuickBooks</div></div></div>
+
+        <div class="flbz-panel" id="flbzInboxPanel" style="display:none">
+          <div class="flbz-secthead" style="margin:0 0 .6rem">Waiting from Drive</div>
+          <div id="flbzInbox"></div>
+          <div class="flbz-controls" style="margin-top:.7rem">
+            <button class="flbz-btn" id="flbzParseAll">Parse all waiting</button>
+            <button class="flbz-ghost" id="flbzInboxRefresh">Refresh</button>
+          </div>
+        </div>
 
         <div class="flbz-panel">
           <div class="flbz-drop" id="flbzDrop">
@@ -2568,7 +2583,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot();
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -10854,7 +10869,7 @@ init();
   const FN = 'flb-ztape';
   const $ = id => document.getElementById(id);
 
-  const S = { parsed: [], entries: [], busy: false };
+  const S = { parsed: [], entries: [], inbox: [], busy: false };
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -11116,10 +11131,146 @@ init();
     if ($('flbzTo') && !$('flbzTo').value) $('flbzTo').value = iso(to);
   }
 
+  // ---------------------------------------------------------------- drive inbox
+  // Tapes copied into the z-tapes bucket by the DriveWatch Apps Script.
+  // Rows live in drive_watch_items; 'delivered' is the waiting state.
+  // Parsing one here reuses the same path-based parse the drop zone uses.
+
+  const WAITING = ['new', 'delivered', 'error'];
+
+  function fmtWhen(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (isNaN(d)) return '';
+    return d.toLocaleString('en-US', { month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit' });
+  }
+
+  async function loadInbox() {
+    const panel = $('flbzInboxPanel');
+    try {
+      const { data, error } = await sb.from('drive_watch_items')
+        .select('id,file_name,folder_name,drive_url,storage_path,sales_date,status,error_message,detected_at')
+        .in('status', WAITING)
+        .not('storage_path', 'is', null)
+        .order('detected_at', { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      S.inbox = data || [];
+    } catch (_) {
+      S.inbox = [];              // table may not exist yet
+    }
+    renderInbox();
+    refreshInboxBadge();
+    if (panel) panel.style.display = S.inbox.length ? '' : 'none';
+  }
+
+  function renderInbox() {
+    const host = $('flbzInbox');
+    if (!host) return;
+    if (!S.inbox.length) { host.innerHTML = ''; return; }
+
+    host.innerHTML = S.inbox.map(it =>
+      '<div class="flbz-inbox' + (it.status === 'error' ? ' is-error' : '') + '">' +
+        '<div class="flbz-inbox-name">' + esc(it.file_name) +
+          '<span class="flbz-inbox-sub">' +
+            esc(it.folder_name || '') + ' \u00b7 arrived ' + esc(fmtWhen(it.detected_at)) +
+            (it.status === 'error' ? ' \u00b7 ' + esc(it.error_message || 'delivery failed') : '') +
+          '</span>' +
+        '</div>' +
+        '<div class="flbz-inbox-acts">' +
+          (it.status === 'error' ? '' :
+            '<button class="flbz-btn" data-inparse="' + esc(it.id) + '">Parse</button>') +
+          (it.drive_url ? '<a class="flbz-ghost" href="' + esc(it.drive_url) +
+            '" target="_blank" rel="noopener">Drive</a>' : '') +
+          '<button class="flbz-ghost" data-indismiss="' + esc(it.id) + '">Dismiss</button>' +
+        '</div>' +
+      '</div>').join('');
+
+    host.querySelectorAll('[data-inparse]').forEach(b =>
+      b.addEventListener('click', () => parseWaiting(b.getAttribute('data-inparse'), b)));
+    host.querySelectorAll('[data-indismiss]').forEach(b =>
+      b.addEventListener('click', () => markInbox(b.getAttribute('data-indismiss'), 'dismissed')));
+  }
+
+  async function markInbox(id, status) {
+    try {
+      await writeOrThrow(sb.from('drive_watch_items')
+        .update({ status: status, handled_at: new Date().toISOString() })
+        .eq('id', id), 'Update the Drive item');
+    } catch (e) {
+      setStatus((e && e.message) || 'Could not update that item.', true);
+    }
+    loadInbox();
+  }
+
+  async function parseWaiting(id, btn) {
+    const it = S.inbox.find(x => x.id === id);
+    if (!it) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Parsing\u2026'; }
+    setStatus('Parsing ' + it.file_name + '\u2026');
+    try {
+      const data = await invoke({ action: 'parse', path: it.storage_path });
+      S.parsed = S.parsed.filter(p => p.sales_date !== data.sales_date);
+      S.parsed.push(Object.assign({ file: it.file_name }, data));
+      S.parsed.sort((a, b) => String(a.sales_date || '').localeCompare(String(b.sales_date || '')));
+      renderParsed();
+      setStatus(it.file_name + ' parsed. Nothing has been posted yet.');
+      await markInbox(id, 'parsed');
+    } catch (err) {
+      setStatus('Could not parse ' + it.file_name + ': ' + (err.message || err), true);
+      if (btn) { btn.disabled = false; btn.textContent = 'Parse'; }
+    }
+  }
+
+  async function parseAllWaiting() {
+    const queue = S.inbox.filter(x => x.status !== 'error').map(x => x.id);
+    if (!queue.length) { setStatus('Nothing waiting.'); return; }
+    const btn = $('flbzParseAll');
+    if (btn) btn.disabled = true;
+    for (let i = 0; i < queue.length; i++) {
+      setStatus('Parsing ' + (i + 1) + ' of ' + queue.length + '\u2026');
+      await parseWaiting(queue[i], null);
+    }
+    if (btn) btn.disabled = false;
+    setStatus(queue.length + ' tape(s) parsed. Nothing has been posted yet.');
+  }
+
+  // Anything already stored as a posted entry stops waiting on its own,
+  // so a tape handled through the drop zone does not linger in the list.
+  async function reconcileInbox() {
+    if (!S.inbox.length || !S.entries.length) return;
+    const posted = new Set(S.entries.filter(e => e.status === 'posted')
+                                    .map(e => String(e.sales_date)));
+    const stale = S.inbox.filter(it => it.sales_date && posted.has(String(it.sales_date)));
+    if (!stale.length) return;
+    try {
+      await sb.from('drive_watch_items')
+        .update({ status: 'posted', handled_at: new Date().toISOString() })
+        .in('id', stale.map(s => s.id));
+      loadInbox();
+    } catch (_) { /* cosmetic only */ }
+  }
+
+  async function refreshInboxBadge() {
+    const b = $('flbzBadge');
+    if (!b) return;
+    try {
+      const { count } = await sb.from('drive_watch_items')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['new', 'delivered']);
+      if (count) { b.textContent = count; b.style.display = ''; }
+      else { b.style.display = 'none'; }
+    } catch (_) { b.style.display = 'none'; }
+  }
+
+  window.FlbzInboxBadgeBoot = refreshInboxBadge;
+
   window.FlbzOpen = function () {
     defaults();
     renderParsed();
-    loadEntries();
+    loadInbox();
+    loadEntries().then(reconcileInbox);
   };
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -11139,6 +11290,8 @@ init();
     const r = $('flbzRefresh'); if (r) r.addEventListener('click', loadEntries);
     const cs = $('flbzRangeCsv'); if (cs) cs.addEventListener('click', rangeCsv);
     const st = $('flbzSelfTest'); if (st) st.addEventListener('click', selfTest);
+    const ia = $('flbzParseAll'); if (ia) ia.addEventListener('click', parseAllWaiting);
+    const ir = $('flbzInboxRefresh'); if (ir) ir.addEventListener('click', loadInbox);
   });
 })();
 </script>
