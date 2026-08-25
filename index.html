@@ -445,14 +445,20 @@
     .msg-edit-box:focus{border-color:var(--accent)}
     .msg-edit-actions{display:flex;gap:8px;margin-top:6px}
     .msg-clear-btn:hover{border-color:var(--accent);color:var(--accent)}
-    /* Team Chat action buttons (→ Task, 📅 Zoom). Same skin as .msg-clear-btn
-       but WITHOUT margin-left:auto, so they sit inline after the timestamp and
-       let the Clear button keep its right-edge position. */
+    /* Chat action buttons (→ Task, Zoom). Same skin as .msg-clear-btn but
+       WITHOUT margin-left:auto, so they sit inline after the timestamp and let
+       the Clear button keep its right-edge position. */
     .msg-act-btn{background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--text3);cursor:pointer;padding:2px 8px;font-family:'Inter',sans-serif;transition:all .15s}
     .msg-act-btn:hover{border-color:var(--accent);color:var(--accent)}
     .msg-act-btn:disabled{opacity:.5;cursor:default}
     .zm-check{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);padding:9px 0}
     .zm-check input{width:auto}
+    .zm-invites{border:1px solid var(--border);border-radius:6px;padding:8px 10px;max-height:168px;overflow-y:auto}
+    .zm-grp{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin:6px 0 4px}
+    .zm-grp:first-child{margin-top:0}
+    .zm-inv{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text2);padding:3px 0;cursor:pointer}
+    .zm-inv input{width:auto;flex:none}
+    .zm-inv-mail{color:var(--text3);font-size:12px}
     .msg-input-row{display:flex;gap:8px}
     .msg-input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:white;transition:border-color .15s;resize:none}
     .msg-input:focus{border-color:var(--accent)}
@@ -1963,9 +1969,9 @@
   </div>
 </div>
 
-<!-- Schedule a Zoom meeting from a Team Chat note. Times are entered and sent
-     as Central local time with an explicit timezone, so no UTC offset math
-     happens anywhere and DST can't shift a meeting. -->
+<!-- Schedule a Zoom meeting from a chat note. Times are entered and sent as
+     Central wall-clock plus an explicit zone, so no UTC math happens in the
+     browser and a DST boundary can't shift a meeting. -->
 <div class="modal-overlay" id="zoomModal">
   <div class="modal">
     <div class="modal-hdr">
@@ -1974,6 +1980,8 @@
     </div>
     <div class="modal-body">
       <input type="hidden" id="zmRootId" />
+      <input type="hidden" id="zmKind" />
+      <input type="hidden" id="zmClientId" />
       <div class="form-row">
         <label class="form-label">Topic</label>
         <input type="text" class="form-input" id="zmTopic" placeholder="What's the call about?" />
@@ -2004,6 +2012,12 @@
           <label class="form-label">&nbsp;</label>
           <label class="zm-check"><input type="checkbox" id="zmPost" checked /> Post the link in this thread</label>
         </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Invite (sends a calendar invite)</label>
+        <div class="zm-invites" id="zmInviteList"></div>
+        <input type="text" class="form-input" id="zmInviteExtra" style="margin-top:8px"
+               placeholder="Other email addresses, comma separated" />
       </div>
       <div class="form-row">
         <label class="form-label">Agenda (optional)</label>
@@ -5883,7 +5897,7 @@ function renderMsgReply(m) {
   const isResolved = !!m.cleared;
   const btnLabel = isResolved ? 'Unmark' : '✓ Clear';
   return `<div class="msg-reply${m.is_internal ? ' is-internal' : ''}" id="cmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${internalBadge}${msgEditBtn(m, 'messages', 'cmsg_')}<button class="msg-clear-btn" style="margin-left:auto" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button></div>
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${internalBadge}${msgActionBtns(m)}${msgEditBtn(m, 'messages', 'cmsg_')}<button class="msg-clear-btn" style="margin-left:auto" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button></div>
     <div class="msg-body">${highlightMentions(m.body)}${msgImgHtml(m)}</div>
   </div>`;
 }
@@ -5895,7 +5909,7 @@ function renderMsgCard(m, replies) {
   const btnHtml = `<button class="msg-clear-btn" onclick="toggleMsgCleared('${m.id}', ${isResolved})">${btnLabel}</button>`;
   const repliesHtml = (replies && replies.length) ? `<div class="msg-replies">${replies.map(renderMsgReply).join('')}</div>` : '';
   return `<div class="msg-item${isResolved ? ' is-resolved' : ''}${m.is_internal ? ' is-internal' : ''}" id="cmsg_${m.id}">
-    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${internalBadge}${badgeHtml}${msgEditBtn(m, 'messages', 'cmsg_')}${btnHtml}</div>
+    <div class="msg-meta">${avHtml(m.author)}<span class="msg-author" style="margin-left:6px">${m.author}</span><span class="msg-time">${fmtDateTime(m.created_at)}</span>${msgEditedTag(m)}${internalBadge}${badgeHtml}${msgActionBtns(m)}${msgEditBtn(m, 'messages', 'cmsg_')}${btnHtml}</div>
     <div class="msg-body">${highlightMentions(m.body)}${msgImgHtml(m)}</div>
     ${repliesHtml}
     ${replyComposerHtml(m.id, 'msg')}
@@ -6122,53 +6136,80 @@ function teamClearBtn(m) {
   return `<button class="msg-clear-btn" style="margin-left:auto" onclick="clearTeamNote('${m.id}')">✓ Clear</button>`;
 }
 
-// ── TEAM CHAT ACTIONS ────────────────────────────────────────────────────
-// Two buttons on every team note: turn it into a Bald Ginger task, or schedule
-// a Zoom about it. Both are deliberately thin wrappers over machinery that
-// already works rather than new subsystems:
+// ── CHAT ACTIONS: note → task, or note → scheduled Zoom ──────────────────
+// Available on Team Chat (all notes) and on the Clients tab (INTERNAL notes
+// only — renderMsgCard/renderMsgReply serve client-facing threads through the
+// same code path, and those must stay untouched so nothing leaks to a client).
 //
+// Both actions are thin wrappers over machinery that already works:
 //   • → Task  opens the EXISTING Add Task modal (openTaskModal / saveTask are
-//     untouched) with the title, notes and assignee prefilled. Ed edits and
-//     saves as normal, so recurrence, subtasks and the close-category gating
-//     all behave exactly as they do everywhere else.
-//   • 📅 Zoom calls the zoom-create-meeting Edge Function and then posts the
-//     join link back into the thread as an ordinary reply — which means the
-//     existing team_messages webhook fires send-push and notifies the team
-//     with no new notification plumbing at all.
-function teamActionBtns(m) {
-  return `<button class="msg-act-btn" title="Create a Bald Ginger task from this note" onclick="taskFromTeamMsg('${m.id}')">→ Task</button>`
-       + `<button class="msg-act-btn" title="Schedule a Zoom meeting about this note" onclick="openZoomModal('${m.id}')">📅 Zoom</button>`;
+//     byte-identical to before) with title, notes and assignee prefilled.
+//   • Zoom   calls the zoom-create-meeting Edge Function, then posts the join
+//     link back into the thread as an ordinary reply — so the existing
+//     messages / team_messages webhooks fire send-push with no new plumbing.
+//
+// Every Triple user is a team member by construction (the login guard signs out
+// anyone whose profiles.is_team isn't true), so there is no extra gate here.
+function chatActionBtns(id, kind) {
+  return `<button class="msg-act-btn" title="Create a task from this note" onclick="taskFromChatMsg('${id}','${kind}')">→ Task</button>`
+       + `<button class="msg-act-btn" title="Schedule a Zoom meeting about this note" onclick="openZoomModal('${id}','${kind}')">📅 Zoom</button>`;
+}
+function teamActionBtns(m) { return chatActionBtns(m.id, 'team'); }
+function msgActionBtns(m)  { return m.is_internal ? chatActionBtns(m.id, 'client') : ''; }
+
+// One cache per surface, so the two callers don't have to know which array a
+// note came from.
+function chatMsgById(id, kind) {
+  const arr = (kind === 'team' ? currentTeamMessages : currentMessages) || [];
+  return arr.find(x => x.id === id) || null;
 }
 
-// A task title, not a pasted transcript: first non-empty line, capped at 90
-// chars. Mentions are left in place on purpose — the modal opens for editing,
-// so guessing at which @name to strip would only ever remove wanted text.
+// A task title, not a pasted transcript: first non-empty line, capped at 90.
+// Mentions are left in place on purpose — the modal opens for editing, so
+// guessing which @name to strip would only ever remove wanted text.
 function teamMsgTitle(body) {
-  const first = String(body || '').split('\n').map(s => s.trim()).find(Boolean) || 'Follow up on team note';
+  const first = String(body || '').split('\n').map(s => s.trim()).find(Boolean) || 'Follow up on note';
   return first.length > 90 ? first.slice(0, 87).trimEnd() + '…' : first;
 }
 
-// A note may be a reply; meetings and links belong on the thread ROOT, since
-// renderTeamCard only ever renders replies one level deep. A reply hung off a
-// reply would be filed under repliesByRoot[replyId] and never rendered at all.
-function teamRootIdOf(id) {
-  const m = (currentTeamMessages || []).find(x => x.id === id);
+// Meetings and links belong on the thread ROOT: renderTeamCard / renderMsgCard
+// only render replies one level deep, so a reply hung off a reply would be
+// filed under repliesByRoot[replyId] and never appear anywhere.
+function chatRootIdOf(id, kind) {
+  const m = chatMsgById(id, kind);
   return (m && m.parent_message_id) ? m.parent_message_id : id;
 }
 
-function taskFromTeamMsg(id) {
-  const m = (currentTeamMessages || []).find(x => x.id === id);
-  if (!m) { alert("Couldn't find that note — refresh Team Chat and try again."); return; }
-  const firm = (allClients || []).find(c => c.is_firm);
-  if (!firm) { alert("The Bald Ginger firm space isn't set up yet, so there's nowhere to file this task."); return; }
+function chatDeepLink(m, kind) {
+  return kind === 'team'
+    ? 'https://triple.baldginger.com/?go=team&id=' + m.id
+    : 'https://triple.baldginger.com/?go=cmsg&client=' + (m.client_id || currentClientId || '') + '&id=' + m.id;
+}
 
-  openTaskModal(firm.id, 'General');
+function taskFromChatMsg(id, kind) {
+  const m = chatMsgById(id, kind);
+  if (!m) { alert("Couldn't find that note — refresh and try again."); return; }
+
+  // A team note has no client, so it files against the Bald Ginger firm space.
+  // A client note files against THAT client, which is where you'd look for it.
+  let targetId, whereLabel;
+  if (kind === 'team') {
+    const firm = (allClients || []).find(c => c.is_firm);
+    if (!firm) { alert("The Bald Ginger firm space isn't set up yet, so there's nowhere to file this task."); return; }
+    targetId = firm.id; whereLabel = 'Team Chat';
+  } else {
+    targetId = m.client_id || currentClientId;
+    if (!targetId) { alert("Couldn't tell which client this note belongs to."); return; }
+    const c = (allClients || []).find(x => x.id === targetId);
+    whereLabel = (c && c.name ? c.name : 'a client') + ' — internal note';
+  }
+
+  openTaskModal(targetId, 'General');
 
   document.getElementById('tmTitle').value = teamMsgTitle(m.body);
   document.getElementById('tmNotes').value =
-    'From Team Chat — ' + (m.author || 'someone') + ', ' + fmtDateTime(m.created_at) + '\n\n'
-    + String(m.body || '') + '\n\n'
-    + 'https://triple.baldginger.com/?go=team&id=' + m.id;
+    'From ' + whereLabel + ' — ' + (m.author || 'someone') + ', ' + fmtDateTime(m.created_at) + '\n\n'
+    + String(m.body || '') + '\n\n' + chatDeepLink(m, kind);
 
   // Assign to whoever is looking, when that name is one of the modal's options.
   // The options carry no value attribute, so option.value is the display text.
@@ -6192,18 +6233,90 @@ function zmNextSlotCentral() {
   return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
 }
 
-function openZoomModal(id) {
-  const m = (currentTeamMessages || []).find(x => x.id === id);
-  document.getElementById('zmRootId').value = teamRootIdOf(id);
-  document.getElementById('zmTopic').value = m ? teamMsgTitle(m.body) : 'Bald Ginger team call';
-  document.getElementById('zmDate').value = tzToday();
-  document.getElementById('zmTime').value = zmNextSlotCentral();
+async function openZoomModal(id, kind) {
+  const m = chatMsgById(id, kind);
+  document.getElementById('zmRootId').value   = chatRootIdOf(id, kind);
+  document.getElementById('zmKind').value     = kind;
+  document.getElementById('zmClientId').value = (kind === 'client' && m) ? (m.client_id || currentClientId || '') : '';
+  document.getElementById('zmTopic').value    = m ? teamMsgTitle(m.body) : 'Bald Ginger call';
+  document.getElementById('zmDate').value     = tzToday();
+  document.getElementById('zmTime').value     = zmNextSlotCentral();
   document.getElementById('zmDuration').value = '30';
-  document.getElementById('zmAgenda').value = m ? String(m.body || '').slice(0, 1500) : '';
-  document.getElementById('zmPost').checked = true;
+  document.getElementById('zmAgenda').value   = m ? String(m.body || '').slice(0, 1500) : '';
+  document.getElementById('zmPost').checked   = true;
+  document.getElementById('zmInviteExtra').value = '';
   document.getElementById('zmStatus').textContent = '';
   document.getElementById('zmCreateBtn').disabled = false;
+  document.getElementById('zmInviteList').innerHTML =
+    '<div style="color:var(--text3);font-size:12px">Loading people…</div>';
   document.getElementById('zoomModal').classList.add('open');
+  await zmLoadInvitees(kind);
+}
+
+// Team names come from profiles via taggable_users(); TEAM_EMAILS backfills
+// anyone whose profile row has no email. Client contacts are pulled live for
+// the client this note sits on. Nobody is pre-checked — an invite that goes
+// out because a box was already ticked is worse than one nobody sent.
+async function zmLoadInvitees(kind) {
+  const rows = [];
+  const seen = new Set();
+  const add = (name, email, group) => {
+    const key = String(email || '').trim().toLowerCase();
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    rows.push({ name: name || email, email: String(email).trim(), group });
+  };
+
+  (taggableUsers || []).forEach(u => add(u.name, u.email, 'Team'));
+  Object.keys(TEAM_EMAILS).forEach(n => add(n, TEAM_EMAILS[n], 'Team'));
+
+  const clientId = document.getElementById('zmClientId').value;
+  if (kind === 'client' && clientId) {
+    try {
+      const { data, error } = await sb.from('client_contacts')
+        .select('name, email, role').eq('client_id', clientId).is('archived_at', null);
+      if (error) throw error;
+      (data || []).forEach(c => add(c.name + (c.role ? ' · ' + c.role : ''), c.email, 'Client contacts'));
+    } catch (e) {
+      console.error('zmLoadInvitees: client_contacts', e);
+    }
+  }
+
+  const groups = {};
+  rows.forEach(r => { (groups[r.group] = groups[r.group] || []).push(r); });
+  let html = '';
+  ['Team', 'Client contacts'].forEach(g => {
+    if (!groups[g]) return;
+    html += `<div class="zm-grp">${g}</div>`;
+    html += groups[g].map(r =>
+      `<label class="zm-inv"><input type="checkbox" data-email="${escHtml(r.email)}" data-name="${escHtml(r.name)}" />`
+      + `<span>${escHtml(r.name)}</span><span class="zm-inv-mail">${escHtml(r.email)}</span></label>`
+    ).join('');
+  });
+  document.getElementById('zmInviteList').innerHTML =
+    html || '<div style="color:var(--text3);font-size:12px">No addresses on file. Use the box below.</div>';
+}
+
+const ZM_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+// Returns { invitees, invalid }. Bad addresses are REPORTED, never silently
+// dropped — a typo'd invite that vanishes is worse than one that complains.
+function zmGatherInvitees() {
+  const invitees = [], invalid = [], seen = new Set();
+  const push = (name, email) => {
+    const e = String(email || '').trim();
+    if (!e) return;
+    if (!ZM_EMAIL_RE.test(e)) { invalid.push(e); return; }
+    const k = e.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    invitees.push({ name: name || null, email: e });
+  };
+  document.querySelectorAll('#zmInviteList input[type=checkbox]:checked')
+    .forEach(cb => push(cb.dataset.name, cb.dataset.email));
+  String(document.getElementById('zmInviteExtra').value || '')
+    .split(/[,;\s]+/).forEach(e => push(null, e));
+  return { invitees, invalid };
 }
 
 async function createZoomMeeting() {
@@ -6215,77 +6328,102 @@ async function createZoomMeeting() {
   const dur    = parseInt(document.getElementById('zmDuration').value, 10) || 30;
   const agenda = document.getElementById('zmAgenda').value.trim();
   const rootId = document.getElementById('zmRootId').value;
+  const kind   = document.getElementById('zmKind').value;
   const post   = document.getElementById('zmPost').checked;
 
-  if (!topic)        { status.textContent = 'Give the meeting a topic.'; return; }
-  if (!date || !time){ status.textContent = 'Pick a date and a start time.'; return; }
+  if (!topic)         { status.textContent = 'Give the meeting a topic.'; return; }
+  if (!date || !time) { status.textContent = 'Pick a date and a start time.'; return; }
+
+  const { invitees, invalid } = zmGatherInvitees();
+  if (invalid.length) {
+    status.textContent = "That doesn't look like an email address: " + invalid.join(', ');
+    return;
+  }
 
   btn.disabled = true;
   status.textContent = 'Creating the meeting in Zoom…';
 
-  let meeting;
+  let data;
   try {
-    const { data, error } = await sb.functions.invoke('zoom-create-meeting', {
+    const res = await sb.functions.invoke('zoom-create-meeting', {
       body: {
         topic,
-        // Local wall-clock time plus an explicit zone. Zoom resolves the offset
-        // itself, so a DST boundary can't move the meeting an hour.
+        // Wall-clock local time plus an explicit zone. Zoom resolves the offset
+        // itself, so a DST boundary can't move the meeting by an hour.
         start_local: date + 'T' + time + ':00',
         timezone: 'America/Chicago',
         duration: dur,
-        agenda: agenda || null
+        agenda: agenda || null,
+        invitees
       }
     });
-    if (error) throw error;
+    if (res.error) throw res.error;
+    data = res.data;
     if (!data || !data.ok) throw new Error((data && data.error) || 'Zoom did not return a meeting.');
-    meeting = data.meeting || {};
-    if (!meeting.join_url) throw new Error('Zoom returned a meeting with no join link.');
+    if (!data.meeting || !data.meeting.join_url) throw new Error('Zoom returned a meeting with no join link.');
   } catch (err) {
     status.textContent = "Couldn't create the meeting — " + (err.message || 'please try again.');
     btn.disabled = false;
     return;
   }
 
-  // From here the meeting EXISTS in Zoom. Every failure below has to surface the
-  // join link rather than swallow it, or Ed is left with an orphaned meeting he
-  // has no way to reach from here.
+  const meeting = data.meeting;
+  const table = kind === 'team' ? 'team_messages' : 'messages';
+
+  // The invite email is best-effort and reported separately: the MEETING is the
+  // thing that had to succeed, and it did. A failed send must never look like a
+  // failed meeting, and must never swallow the join link.
+  let inviteNote = '';
+  if (invitees.length) {
+    inviteNote = data.invite_error
+      ? '\n⚠️ Calendar invites did not send (' + data.invite_error + ') — forward this link instead.'
+      : '\nInvited: ' + invitees.map(i => i.name || i.email).join(', ');
+  }
+
   if (post && rootId) {
     const author = document.getElementById('sidebarName').textContent;
     const body = '📅 Zoom scheduled — ' + topic + '\n'
       + zmWhenLabel(date, time) + ' Central · ' + dur + ' min\n'
-      + meeting.join_url;
-    const { error } = await sb.from('team_messages').insert({
-      author, author_id: (currentUser && currentUser.id) || null,
-      body, parent_message_id: rootId
-    });
+      + meeting.join_url + inviteNote;
+    const row = { author, author_id: (currentUser && currentUser.id) || null, body, parent_message_id: rootId };
+    // A client-side note MUST carry the same is_internal + client_id as the
+    // thread it joins, or a meeting about internal work becomes visible in the
+    // client portal. This is the one line where a mistake would leak.
+    if (table === 'messages') {
+      row.client_id = document.getElementById('zmClientId').value || currentClientId;
+      row.is_team = true;
+      row.is_internal = true;
+    }
+    const { error } = await sb.from(table).insert(row);
     if (error) {
       status.innerHTML = 'Meeting created, but the note failed to post ('
-        + String(error.message || 'unknown error') + '). Copy the link:<br><a href="'
-        + meeting.join_url + '" target="_blank" rel="noopener">' + meeting.join_url + '</a>';
+        + escHtml(error.message || 'unknown error') + '). Copy the link:<br><a href="'
+        + escHtml(meeting.join_url) + '" target="_blank" rel="noopener">' + escHtml(meeting.join_url) + '</a>';
       btn.disabled = false;
       return;
     }
     // A cleared thread hides its replies, which would swallow the meeting note.
-    // Reopening matches what clearTeamNote/reopenTeamNote already do as a pair.
-    const root = (currentTeamMessages || []).find(x => x.id === rootId);
+    const root = chatMsgById(rootId, kind);
     if (root && root.cleared) {
-      await sb.from('team_messages').update({ cleared: false })
+      await sb.from(table).update({ cleared: false })
         .or('id.eq.' + rootId + ',parent_message_id.eq.' + rootId);
     }
     closeModal('zoomModal');
-    await loadTeamMessages();
+    if (kind === 'team') await loadTeamMessages();
+    else await loadMessages(row.client_id);
     return;
   }
 
-  // Not posting to the thread: the modal stays open holding the only copy.
-  status.innerHTML = 'Meeting created for ' + zmWhenLabel(date, time)
-    + ' Central.<br><a href="' + meeting.join_url + '" target="_blank" rel="noopener">'
-    + meeting.join_url + '</a>';
+  // Not posting to the thread: this modal holds the only copy of the link.
+  status.innerHTML = 'Meeting created for ' + escHtml(zmWhenLabel(date, time)) + ' Central.'
+    + (inviteNote ? '<br>' + escHtml(inviteNote.trim()) : '')
+    + '<br><a href="' + escHtml(meeting.join_url) + '" target="_blank" rel="noopener">'
+    + escHtml(meeting.join_url) + '</a>';
   btn.disabled = false;
 }
 
-// "Tue Aug 26, 2:00 PM" from the raw date + time inputs. Built by hand from the
-// field values rather than via Date parsing, so no timezone conversion happens.
+// "Wed, Aug 26, 2:00 PM" built from the raw field values rather than via Date
+// parsing of a full timestamp, so no timezone conversion can shift it.
 function zmWhenLabel(date, time) {
   const d = new Date(date + 'T12:00:00');   // midday keeps the date stable everywhere
   const day = isNaN(d) ? date : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
