@@ -739,18 +739,18 @@
     #page-vendoraudit .va-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
     #page-vendoraudit .va-chip[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
     #page-vendoraudit .va-views{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
-    #page-vendoraudit .va-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
-    #page-vendoraudit .va-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
-    #page-vendoraudit .va-field{display:flex;flex-direction:column;gap:.25rem}
-    #page-vendoraudit .va-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
-    #page-vendoraudit select,#page-vendoraudit input[type=text],#page-vendoraudit input[type=number]{font:inherit;font-size:13px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:7px;background:var(--bg)}
-    #page-vendoraudit .va-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1.05rem;cursor:pointer}
-    #page-vendoraudit .va-btn:hover{filter:brightness(.93)}
-    #page-vendoraudit .va-ghost{font:inherit;font-weight:500;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.45rem .85rem;cursor:pointer}
-    #page-vendoraudit .va-ghost:hover{border-color:var(--accent);color:var(--accent)}
-    #page-vendoraudit button:disabled{opacity:.45;cursor:default}
-    #page-vendoraudit .va-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
-    #page-vendoraudit .va-status.err{color:var(--red)}
+    #page-vendoraudit .va-panel,#page-mv .va-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+    #page-vendoraudit .va-controls,#page-mv .va-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
+    #page-vendoraudit .va-field,#page-mv .va-field{display:flex;flex-direction:column;gap:.25rem}
+    #page-vendoraudit .va-field label,#page-mv .va-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-vendoraudit select,#page-vendoraudit input[type=text],#page-vendoraudit input[type=number],#page-mv select,#page-mv input[type=text],#page-mv input[type=number]{font:inherit;font-size:13px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:7px;background:var(--bg)}
+    #page-vendoraudit .va-btn,#page-mv .va-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1.05rem;cursor:pointer}
+    #page-vendoraudit .va-btn:hover,#page-mv .va-btn:hover{filter:brightness(.93)}
+    #page-vendoraudit .va-ghost,#page-mv .va-ghost{font:inherit;font-weight:500;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.45rem .85rem;cursor:pointer}
+    #page-vendoraudit .va-ghost:hover,#page-mv .va-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    #page-vendoraudit button:disabled,#page-mv button:disabled{opacity:.45;cursor:default}
+    #page-vendoraudit .va-status,#page-mv .va-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-vendoraudit .va-status.err,#page-mv .va-status.err{color:var(--red)}
     #page-vendoraudit .va-runmeta{font-size:11.5px;color:var(--text3);margin-top:.35rem}
     #page-vendoraudit .va-filters{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.9rem}
     #page-vendoraudit .va-find{background:var(--bg2);border:1px solid var(--border);border-left-width:3px;border-radius:9px;padding:.75rem .9rem;margin-bottom:.55rem}
@@ -768,25 +768,19 @@
     #page-vendoraudit .t-item_map{background:var(--green-bg);color:var(--green)}
     #page-vendoraudit .t-balance_sheet{background:var(--bg3);color:var(--text2)}
     #page-vendoraudit .va-meta{font-size:11.5px;color:var(--text3);margin-top:.3rem}
-    #page-mv .mv-panel{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:.75rem .85rem;margin-bottom:.85rem}
-    #page-mv .mv-controls{display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap}
-    #page-mv .mv-field label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:700;margin-bottom:.2rem}
-    #page-mv .mv-btn{font:inherit;font-size:12.5px;font-weight:700;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.42rem .9rem;cursor:pointer}
-    #page-mv .mv-btn:disabled{opacity:.5;cursor:default}
-    #page-mv .mv-ghost{font:inherit;font-size:12.5px;font-weight:600;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:.4rem .8rem;cursor:pointer;color:var(--text2)}
-    #page-mv .mv-ghost:disabled{opacity:.5;cursor:default}
-    #page-mv .mv-status{font-size:12px;color:var(--text3);margin-top:.45rem}
-    #page-mv .mv-status.err{color:var(--red)}
-    #page-mv .mv-bulk{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.5rem 0 .75rem;padding:.55rem .65rem;background:var(--bg3);border-radius:7px}
-    #page-mv table{width:100%;border-collapse:collapse;font-size:12.5px}
-    #page-mv th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:700;padding:.35rem .5rem;border-bottom:1px solid var(--border2)}
-    #page-mv td{padding:.35rem .5rem;border-bottom:1px solid var(--border);vertical-align:top}
+    /* Missing Vendors reuses the Vendor Audit control classes above, so the
+       two pages cannot drift apart. Only the worklist table is MV-specific. */
+    #page-mv .mv-bulk{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:0 0 .9rem;padding:.6rem .75rem;background:var(--bg3);border-radius:9px}
+    #page-mv table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+    #page-mv th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;padding:.5rem .6rem;border-bottom:1px solid var(--border2)}
+    #page-mv td{padding:.45rem .6rem;border-bottom:1px solid var(--border);vertical-align:top}
+    #page-mv tr:last-child td{border-bottom:none}
     #page-mv td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
     #page-mv tr.is-ignored{opacity:.5}
     #page-mv tr.is-staged{background:var(--green-bg)}
-    #page-mv input[type=text]{font:inherit;font-size:12.5px;width:100%;min-width:150px;padding:.25rem .4rem;border:1px solid var(--border2);border-radius:5px;background:var(--bg)}
-    #page-mv .mv-row-note{font-size:11px;color:var(--text3)}
-    #page-mv .mv-res{font-size:12px;padding:.5rem .6rem;border-radius:7px;margin-bottom:.6rem}
+    #page-mv td input[type=text]{width:100%;min-width:150px}
+    #page-mv .mv-row-note{font-size:11.5px;color:var(--text3);margin-top:.15rem}
+    #page-mv .mv-res{font-size:12.5px;padding:.6rem .75rem;border-radius:9px;margin-bottom:.75rem}
     #page-mv .mv-res.good{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
     #page-mv .mv-res.warn{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border)}
     #page-vendoraudit .va-detail{margin-top:.55rem;padding:.6rem;background:var(--bg3);border-radius:7px;font-size:12px}
@@ -987,18 +981,25 @@
         <div class="nav-item" onclick="showPage('search')" id="nav-search"><span>🔍</span> Search Tasks</div>
         <div class="nav-section">Team</div>
         <div class="nav-item" onclick="showPage('team')" id="nav-team"><span>💬</span> Team Chat <span class="nav-badge" id="teamChatBadge" style="display:none">0</span></div>
-        <div class="nav-section">Tools</div>
+        <div class="nav-section">Bookkeeping Tools</div>
         <a class="nav-item" id="nav-portal" href="https://client.baldginger.com/" target="_blank" rel="noopener">
           <span>🌐</span> Client Portal <span class="nav-badge" id="portalBadge" style="display:none">0</span>
         </a>
-        <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
+        <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
+        <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="showPage('mv')" id="nav-mv"><span>🏷️</span> Missing Vendors</div>
+        <div class="nav-section">Monthly Tools</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
-        <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
-        <div class="nav-item" onclick="showPage('mv')" id="nav-mv"><span>🏷️</span> Missing Vendors</div>
+        <!-- Marketing holds only Prospects today, which is permission-gated, so
+             the SECTION HEADER is hidden with it. Otherwise anyone without
+             prospect access sees a heading with nothing under it. Revealed on
+             the same line in showApp that reveals nav-prospects. -->
+        <div class="nav-section" id="nav-section-marketing" style="display:none">Marketing</div>
         <div class="nav-item" onclick="showPage('prospects')" id="nav-prospects" style="display:none"><span>🎯</span> Prospects <span class="nav-badge" id="prospectsBadge" style="display:none">0</span></div>
-        <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
+        <div class="nav-section">Maintenance</div>
+        <div class="nav-item" onclick="showPage('automation')" id="nav-automation"><span>⟳</span> Automation Monitor</div>
         <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
         <div class="nav-item" onclick="showPage('admin')" id="nav-admin" style="display:none"><span>⚙️</span> Admin</div>
       </nav>
@@ -1300,22 +1301,22 @@
       <div class="page" id="page-mv">
         <div class="page-header"><div><div class="page-title">Missing Vendors</div><div class="page-sub">Expenses posted without a payee — assign one and write it back to QuickBooks</div></div></div>
 
-        <div class="mv-panel">
-          <div class="mv-controls">
-            <div class="mv-field"><label for="mvClient">Client</label>
+        <div class="va-panel">
+          <div class="va-controls">
+            <div class="va-field"><label for="mvClient">Client</label>
               <select id="mvClient" style="min-width:230px"></select></div>
-            <div class="mv-field"><label for="mvMonths">Look-back</label>
+            <div class="va-field"><label for="mvMonths">Look-back</label>
               <select id="mvMonths">
                 <option value="3">3 months</option>
                 <option value="6">6 months</option>
                 <option value="12" selected>12 months</option>
                 <option value="24">24 months</option>
               </select></div>
-            <button class="mv-btn" id="mvScanBtn">Scan</button>
+            <button class="va-btn" id="mvScanBtn">Scan</button>
             <label style="font-size:12px;color:var(--text2);display:flex;gap:.35rem;align-items:center;cursor:pointer">
               <input type="checkbox" id="mvShowIgnored"> Show set aside</label>
           </div>
-          <div class="mv-status" id="mvStatus"></div>
+          <div class="va-status" id="mvStatus"></div>
         </div>
 
         <div id="mvResult"></div>
@@ -2718,7 +2719,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; const _nsm = document.getElementById('nav-section-marketing'); if (_nsm) _nsm.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -12610,7 +12611,7 @@ init();
     const el = $('mvStatus');
     if (!el) return;
     el.textContent = msg || '';
-    el.className = 'mv-status' + (isErr ? ' err' : '');
+    el.className = 'va-status' + (isErr ? ' err' : '');
   }
 
   function fillClients() {
@@ -12638,11 +12639,11 @@ init();
         '<input type="text" id="mvBulkMatch" placeholder="text in memo, account or amount" style="max-width:230px">' +
         '<span style="font-size:12px;color:var(--text2)">&rarr;</span>' +
         '<input type="text" id="mvBulkVendor" list="mvVendorList" placeholder="vendor" style="max-width:200px">' +
-        '<button class="mv-ghost" onclick="MV.bulkApply()">Stage matches</button>' +
+        '<button class="va-ghost" onclick="MV.bulkApply()">Stage matches</button>' +
         '<div style="flex:1"></div>' +
         '<span style="font-size:12px;color:var(--text2)">' + n + ' staged</span>' +
-        '<button class="mv-ghost" onclick="MV.clearStaged()"' + (n ? '' : ' disabled') + '>Clear</button>' +
-        '<button class="mv-btn" onclick="MV.commit()"' + (n && !S.busy ? '' : ' disabled') + '>' +
+        '<button class="va-ghost" onclick="MV.clearStaged()"' + (n ? '' : ' disabled') + '>Clear</button>' +
+        '<button class="va-btn" onclick="MV.commit()"' + (n && !S.busy ? '' : ' disabled') + '>' +
           (S.busy ? 'Writing\u2026' : 'Commit ' + n + ' to QuickBooks') + '</button>' +
       '</div>';
   }
@@ -12686,8 +12687,8 @@ init();
         'placeholder="vendor" onchange="MV.stage(\'' + t.id + '\', this.value)"></td>' +
       '<td style="white-space:nowrap">' +
         (t.ignored
-          ? '<button class="mv-ghost" onclick="MV.unignore(\'' + t.id + '\')">Restore</button>'
-          : '<button class="mv-ghost" onclick="MV.ignore(\'' + t.id + '\')">Set aside</button>') +
+          ? '<button class="va-ghost" onclick="MV.unignore(\'' + t.id + '\')">Restore</button>'
+          : '<button class="va-ghost" onclick="MV.ignore(\'' + t.id + '\')">Set aside</button>') +
       '</td>' +
     '</tr>';
   }
