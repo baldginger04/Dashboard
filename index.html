@@ -766,6 +766,7 @@
     #page-vendoraudit .t-dominance{background:var(--yellow-bg);color:var(--yellow)}
     #page-vendoraudit .t-cross_client{background:var(--purple-bg);color:var(--purple)}
     #page-vendoraudit .t-item_map{background:var(--green-bg);color:var(--green)}
+    #page-vendoraudit .t-balance_sheet{background:var(--bg3);color:var(--text2)}
     #page-vendoraudit .va-meta{font-size:11.5px;color:var(--text3);margin-top:.3rem}
     #page-vendoraudit .va-acts{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.55rem}
     #page-vendoraudit .va-act{font:inherit;font-size:11.5px;font-weight:600;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:.28rem .6rem;cursor:pointer;color:var(--text2)}
@@ -10330,6 +10331,7 @@ init();
     ['dominance',    'Dominance'],
     ['cross_client', 'Cross-client'],
     ['item_map',     'Item library'],
+    ['balance_sheet', 'Balance sheet'],
   ];
   const CFG_FIELDS = [
     ['min_vendor_amount',         'Min vendor $ in period',   '1'],
@@ -10339,19 +10341,28 @@ init();
     ['new_account_min_amount',    'New-account min $',        '1'],
     ['new_account_baseline_days', 'Baseline required (days)', '1'],
     ['cross_client_min_agree',    'Cross-client min agree',   '1'],
+    ['bs_min_amount',             'Balance-sheet min $',      '1'],
+    ['bs_min_txns',               'Balance-sheet min txns',   '1'],
   ];
+  // Fallback only -- vendor_audit_config always wins (see effectiveCfg).
+  // Floors are 0 per the 2026-08-07 call: this is a bookkeeping completeness
+  // check, not an audit sample. dominance_share_floor is NOT a materiality
+  // threshold -- it defines "minority share" and the test skips accounts at or
+  // above it, so 0 would disable the strategy entirely.
   const DEFAULTS = {
     strategy_boundary: true, strategy_new_account: true, strategy_dominance: true,
-    strategy_cross_client: true, strategy_item_map: true,
-    min_vendor_amount: 500, dominance_share_floor: 0.20, dominance_min_amount: 250,
-    dominance_min_txns: 2, new_account_min_amount: 100,
+    strategy_cross_client: true, strategy_item_map: true, strategy_balance_sheet: true,
+    min_vendor_amount: 0, dominance_share_floor: 0.20, dominance_min_amount: 0,
+    dominance_min_txns: 1, new_account_min_amount: 0,
     new_account_baseline_days: 180, cross_client_min_agree: 2,
+    bs_min_amount: 0, bs_min_txns: 1,
   };
 
   const S = {
     view: 'findings',
     clientId: '',
     connected: new Set(),
+    connectedError: null,
     findings: [],
     exceptions: [],
     lastRun: null,
@@ -10393,11 +10404,26 @@ init();
   }
 
   // ── loading ──────────────────────────────────────────────
+  // On 2026-08-27 this read returned zero rows because qbo_connections had RLS
+  // enabled with no policy -- PostgREST answers that with an empty array and a
+  // null error, so every client silently rendered "(not connected)" and the
+  // only way to find out why was the browser console. Both failure modes are
+  // now surfaced: a real error, and the suspicious empty-result case.
   async function loadConnected() {
+    S.connectedError = null;
     try {
-      const { data } = await sb.from('qbo_connections').select('client_id');
+      const { data, error } = await sb.from('qbo_connections').select('client_id');
+      if (error) {
+        S.connected = new Set();
+        S.connectedError = error.message || String(error);
+        return;
+      }
       S.connected = new Set((data || []).map(r => r.client_id));
-    } catch (_) { S.connected = new Set(); }
+      if (!S.connected.size) S.connectedError = 'empty';
+    } catch (e) {
+      S.connected = new Set();
+      S.connectedError = (e && e.message) || String(e);
+    }
   }
 
   function fillClientSelect() {
@@ -10826,6 +10852,13 @@ init();
     await loadConnected();
     fillClientSelect();
     await loadAll();
+    if (S.connectedError === 'empty') {
+      setStatus('No QuickBooks connections were readable, so every client is '
+        + 'labelled "not connected". If clients really are connected, the '
+        + 'qbo_connections read policy is missing.', true);
+    } else if (S.connectedError) {
+      setStatus('Couldn\u2019t read QuickBooks connections: ' + S.connectedError, true);
+    }
   };
 
   // Keep the nav badge honest even when the tab has never been opened.
