@@ -768,6 +768,27 @@
     #page-vendoraudit .t-item_map{background:var(--green-bg);color:var(--green)}
     #page-vendoraudit .t-balance_sheet{background:var(--bg3);color:var(--text2)}
     #page-vendoraudit .va-meta{font-size:11.5px;color:var(--text3);margin-top:.3rem}
+    #page-mv .mv-panel{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:.75rem .85rem;margin-bottom:.85rem}
+    #page-mv .mv-controls{display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap}
+    #page-mv .mv-field label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:700;margin-bottom:.2rem}
+    #page-mv .mv-btn{font:inherit;font-size:12.5px;font-weight:700;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.42rem .9rem;cursor:pointer}
+    #page-mv .mv-btn:disabled{opacity:.5;cursor:default}
+    #page-mv .mv-ghost{font:inherit;font-size:12.5px;font-weight:600;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:.4rem .8rem;cursor:pointer;color:var(--text2)}
+    #page-mv .mv-ghost:disabled{opacity:.5;cursor:default}
+    #page-mv .mv-status{font-size:12px;color:var(--text3);margin-top:.45rem}
+    #page-mv .mv-status.err{color:var(--red)}
+    #page-mv .mv-bulk{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.5rem 0 .75rem;padding:.55rem .65rem;background:var(--bg3);border-radius:7px}
+    #page-mv table{width:100%;border-collapse:collapse;font-size:12.5px}
+    #page-mv th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:700;padding:.35rem .5rem;border-bottom:1px solid var(--border2)}
+    #page-mv td{padding:.35rem .5rem;border-bottom:1px solid var(--border);vertical-align:top}
+    #page-mv td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #page-mv tr.is-ignored{opacity:.5}
+    #page-mv tr.is-staged{background:var(--green-bg)}
+    #page-mv input[type=text]{font:inherit;font-size:12.5px;width:100%;min-width:150px;padding:.25rem .4rem;border:1px solid var(--border2);border-radius:5px;background:var(--bg)}
+    #page-mv .mv-row-note{font-size:11px;color:var(--text3)}
+    #page-mv .mv-res{font-size:12px;padding:.5rem .6rem;border-radius:7px;margin-bottom:.6rem}
+    #page-mv .mv-res.good{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+    #page-mv .mv-res.warn{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border)}
     #page-vendoraudit .va-detail{margin-top:.55rem;padding:.6rem;background:var(--bg3);border-radius:7px;font-size:12px}
     #page-vendoraudit .va-detail table{width:100%;border-collapse:collapse}
     #page-vendoraudit .va-detail th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:700;padding:.2rem .45rem;border-bottom:1px solid var(--border2)}
@@ -975,6 +996,7 @@
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="showPage('mv')" id="nav-mv"><span>🏷️</span> Missing Vendors</div>
         <div class="nav-item" onclick="showPage('prospects')" id="nav-prospects" style="display:none"><span>🎯</span> Prospects <span class="nav-badge" id="prospectsBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
         <div class="nav-item" onclick="showPage('links')" id="nav-links"><span>🔗</span> Quick Links</div>
@@ -1273,6 +1295,32 @@
             <div class="cm-panel-body" id="mapPanelBody"></div>
           </div>
         </div>
+      </div>
+
+      <div class="page" id="page-mv">
+        <div class="page-header"><div><div class="page-title">Missing Vendors</div><div class="page-sub">Expenses posted without a payee — assign one and write it back to QuickBooks</div></div></div>
+
+        <div class="mv-panel">
+          <div class="mv-controls">
+            <div class="mv-field"><label for="mvClient">Client</label>
+              <select id="mvClient" style="min-width:230px"></select></div>
+            <div class="mv-field"><label for="mvMonths">Look-back</label>
+              <select id="mvMonths">
+                <option value="3">3 months</option>
+                <option value="6">6 months</option>
+                <option value="12" selected>12 months</option>
+                <option value="24">24 months</option>
+              </select></div>
+            <button class="mv-btn" id="mvScanBtn">Scan</button>
+            <label style="font-size:12px;color:var(--text2);display:flex;gap:.35rem;align-items:center;cursor:pointer">
+              <input type="checkbox" id="mvShowIgnored"> Show set aside</label>
+          </div>
+          <div class="mv-status" id="mvStatus"></div>
+        </div>
+
+        <div id="mvResult"></div>
+        <div id="mvBulk"></div>
+        <div id="mvList"><div class="empty">Pick a client and scan.</div></div>
       </div>
 
       <div class="page" id="page-vendoraudit">
@@ -6770,6 +6818,7 @@ function showPage(name) {
   if (name === 'analyses') loadAnalyses();
   if (name === 'salestax') loadTaxPage();
   if (name === 'flbz' && window.FlbzOpen) window.FlbzOpen();
+  if (name === 'mv' && window.MvOpen) window.MvOpen();
   if (name === 'vendoraudit' && window.VendorAuditOpen) window.VendorAuditOpen();
   if (name === 'map' && window.ClientMap) window.ClientMap.open();
   if (name === 'prospects' && window.TxProspectsOpen) window.TxProspectsOpen();
@@ -12515,6 +12564,313 @@ init();
     } finally {
       S.loading = false;
     }
+  };
+})();
+</script>
+<script>
+/* ============================================================
+   MISSING VENDORS — added 2026-08-27
+
+   Expenses posted without a payee, assignable in bulk and written
+   back to QuickBooks.
+
+   This is the first surface in Triple that CHANGES a client's books.
+   Two consequences shape the whole module:
+
+     - Nothing is written until Commit. Typing a vendor stages it;
+       the staged set is visible and countable before anything leaves
+       the browser.
+     - The server re-fetches every transaction and refuses stale ones,
+       so a row someone else edited since the scan is reported back as
+       'stale' rather than silently overwritten. The results panel
+       shows those explicitly instead of folding them into a count.
+
+   Scope is Purchase only (Expense / Check / Credit Card). A Bill cannot
+   exist without a vendor in QBO, and Deposits and Journal Entries carry
+   the payee per LINE, which is a different problem.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => (n < 0 ? '-$' : '$') + Math.abs(Number(n) || 0)
+    .toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const S = {
+    booted: false,
+    clientId: '',
+    txns: [],
+    vendors: [],
+    staged: {},        // transaction id -> { vendor_id, vendor_name } | { new_vendor_name }
+    scan: null,
+    result: null,
+    busy: false,
+  };
+
+  function setStatus(msg, isErr) {
+    const el = $('mvStatus');
+    if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'mv-status' + (isErr ? ' err' : '');
+  }
+
+  function fillClients() {
+    const sel = $('mvClient');
+    if (!sel) return;
+    const list = (typeof allClients !== 'undefined' ? allClients : [])
+      .filter(c => c && !c.is_firm)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const prev = S.clientId;
+    sel.innerHTML = '<option value="">Select client&#8230;</option>' +
+      list.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+    if (prev && list.some(c => c.id === prev)) sel.value = prev;
+  }
+
+  const stagedCount = () => Object.keys(S.staged).length;
+
+  function renderBulk() {
+    const el = $('mvBulk');
+    if (!el) return;
+    if (!S.txns.length) { el.innerHTML = ''; return; }
+    const n = stagedCount();
+    el.innerHTML =
+      '<div class="mv-bulk">' +
+        '<span style="font-size:12px;color:var(--text2);font-weight:600">Apply to every row matching</span>' +
+        '<input type="text" id="mvBulkMatch" placeholder="text in memo, account or amount" style="max-width:230px">' +
+        '<span style="font-size:12px;color:var(--text2)">&rarr;</span>' +
+        '<input type="text" id="mvBulkVendor" list="mvVendorList" placeholder="vendor" style="max-width:200px">' +
+        '<button class="mv-ghost" onclick="MV.bulkApply()">Stage matches</button>' +
+        '<div style="flex:1"></div>' +
+        '<span style="font-size:12px;color:var(--text2)">' + n + ' staged</span>' +
+        '<button class="mv-ghost" onclick="MV.clearStaged()"' + (n ? '' : ' disabled') + '>Clear</button>' +
+        '<button class="mv-btn" onclick="MV.commit()"' + (n && !S.busy ? '' : ' disabled') + '>' +
+          (S.busy ? 'Writing\u2026' : 'Commit ' + n + ' to QuickBooks') + '</button>' +
+      '</div>';
+  }
+
+  function renderResult() {
+    const el = $('mvResult');
+    if (!el) return;
+    const r = S.result;
+    if (!r) { el.innerHTML = ''; return; }
+    const t = r.tally || {};
+    const bad = (t.stale || 0) + (t.error || 0) + (t.skipped || 0);
+    let html = '<div class="mv-res ' + (bad ? 'warn' : 'good') + '">' +
+      (t.ok || 0) + ' written to QuickBooks';
+    if (bad) {
+      const parts = [];
+      if (t.stale)   parts.push(t.stale + ' changed since the scan');
+      if (t.skipped) parts.push(t.skipped + ' skipped');
+      if (t.error)   parts.push(t.error + ' failed');
+      html += ' \u00b7 ' + parts.join(', ');
+      const detail = (r.results || []).filter(x => x.status !== 'ok');
+      html += '<div style="margin-top:.35rem;font-size:11.5px">' +
+        detail.map(x => esc(x.id + ': ' + (x.message || x.status))).join('<br>') + '</div>';
+      html += '<div style="margin-top:.35rem;font-size:11.5px">Re-scan to pick these up again.</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }
+
+  function rowHtml(t) {
+    const st = S.staged[t.id];
+    const val = st ? (st.vendor_name || st.new_vendor_name || '') : '';
+    return '<tr class="' + (t.ignored ? 'is-ignored' : (st ? 'is-staged' : '')) + '">' +
+      '<td style="white-space:nowrap">' + esc(t.txn_date || '') + '</td>' +
+      '<td>' + esc(t.payment_type || '') + (t.payment_account ? '<div class="mv-row-note">' + esc(t.payment_account) + '</div>' : '') + '</td>' +
+      '<td>' + esc(t.doc_num || '') + '</td>' +
+      '<td>' + esc((t.accounts || []).join(', ')) +
+        (t.memo ? '<div class="mv-row-note">' + esc(t.memo) + '</div>' : '') +
+        (t.ignored ? '<div class="mv-row-note">Set aside: ' + esc(t.ignore_reason || '') + '</div>' : '') + '</td>' +
+      '<td class="num">' + esc(money(t.amount)) + '</td>' +
+      '<td><input type="text" list="mvVendorList" value="' + esc(val) + '" ' +
+        'placeholder="vendor" onchange="MV.stage(\'' + t.id + '\', this.value)"></td>' +
+      '<td style="white-space:nowrap">' +
+        (t.ignored
+          ? '<button class="mv-ghost" onclick="MV.unignore(\'' + t.id + '\')">Restore</button>'
+          : '<button class="mv-ghost" onclick="MV.ignore(\'' + t.id + '\')">Set aside</button>') +
+      '</td>' +
+    '</tr>';
+  }
+
+  function renderList() {
+    const el = $('mvList');
+    if (!el) return;
+    if (!S.clientId) { el.innerHTML = '<div class="empty">Pick a client and scan.</div>'; return; }
+    if (!S.scan)     { el.innerHTML = '<div class="empty">No scan has been run for this client yet.</div>'; return; }
+    if (!S.txns.length) {
+      el.innerHTML = '<div class="empty">Every expense in this window has a payee.</div>';
+      return;
+    }
+    el.innerHTML =
+      '<datalist id="mvVendorList">' +
+        S.vendors.map(v => '<option value="' + esc(v.name) + '"></option>').join('') +
+      '</datalist>' +
+      '<div style="font-size:12px;color:var(--text3);margin-bottom:.4rem">' +
+        S.txns.length + ' transaction' + (S.txns.length === 1 ? '' : 's') +
+        ' \u00b7 ' + money(S.scan.total_amount) +
+        ' \u00b7 ' + esc(S.scan.range_start + ' to ' + S.scan.range_end) +
+        ' \u00b7 ' + S.scan.scanned + ' scanned' +
+      '</div>' +
+      '<table><thead><tr>' +
+        '<th>Date</th><th>Type</th><th>No.</th><th>Coded to</th>' +
+        '<th style="text-align:right">Amount</th><th>Vendor</th><th></th>' +
+      '</tr></thead><tbody>' +
+      S.txns.map(rowHtml).join('') +
+      '</tbody></table>';
+  }
+
+  function renderAll() { renderResult(); renderBulk(); renderList(); }
+
+  // ── staging ──────────────────────────────────────────────
+  // A typed name that exactly matches an existing vendor is staged as that
+  // vendor; anything else is staged as a NEW vendor, which the server creates
+  // only after checking for an existing match of its own.
+  function stage(id, raw) {
+    const name = String(raw || '').trim();
+    if (!name) { delete S.staged[id]; renderAll(); return; }
+    const hit = S.vendors.find(v => v.name.toLowerCase() === name.toLowerCase());
+    S.staged[id] = hit ? { vendor_id: hit.id, vendor_name: hit.name } : { new_vendor_name: name };
+    renderAll();
+  }
+
+  function clearStaged() { S.staged = {}; renderAll(); }
+
+  function bulkApply() {
+    const match  = String(($('mvBulkMatch') || {}).value || '').trim().toLowerCase();
+    const vendor = String(($('mvBulkVendor') || {}).value || '').trim();
+    if (!vendor) { setStatus('Type the vendor to apply.', true); return; }
+    if (!match)  { setStatus('Type some text to match on \u2014 blank would stage every row.', true); return; }
+    let n = 0;
+    for (const t of S.txns) {
+      if (t.ignored) continue;
+      const hay = [t.memo, (t.accounts || []).join(' '), t.doc_num, String(t.amount), t.payment_account]
+        .join(' ').toLowerCase();
+      if (!hay.includes(match)) continue;
+      stage(t.id, vendor);
+      n++;
+    }
+    setStatus(n ? ('Staged ' + n + ' row' + (n === 1 ? '' : 's') + '.') : 'Nothing matched that text.', !n);
+    renderAll();
+  }
+
+  // ── set aside ────────────────────────────────────────────
+  async function ignore(id) {
+    const reason = prompt('Why does this transaction have no payee? (required)');
+    if (reason == null) return;
+    if (!reason.trim()) { setStatus('A reason is required.', true); return; }
+    try {
+      await writeOrThrow(sb.from('txn_review_ignores').upsert({
+        client_id: S.clientId, entity_type: 'Purchase', entity_id: id,
+        reason: reason.trim(),
+        created_by: (currentUser && currentUser.id) || null,
+        created_by_name: (typeof getViewingUserName === 'function' ? getViewingUserName() : null),
+      }, { onConflict: 'client_id,entity_type,entity_id' }), 'Set aside');
+      delete S.staged[id];
+      const t = S.txns.find(x => x.id === id);
+      if (t) { t.ignored = true; t.ignore_reason = reason.trim(); }
+      if (!$('mvShowIgnored').checked) S.txns = S.txns.filter(x => x.id !== id);
+      renderAll();
+    } catch (e) { setStatus((e && e.message) || 'Couldn\u2019t set that aside.', true); }
+  }
+
+  async function unignore(id) {
+    try {
+      await writeOrThrow(sb.from('txn_review_ignores').delete()
+        .eq('client_id', S.clientId).eq('entity_type', 'Purchase').eq('entity_id', id), 'Restore');
+      const t = S.txns.find(x => x.id === id);
+      if (t) { t.ignored = false; t.ignore_reason = null; }
+      renderAll();
+    } catch (e) { setStatus((e && e.message) || 'Couldn\u2019t restore that.', true); }
+  }
+
+  // ── scan / commit ────────────────────────────────────────
+  async function scan() {
+    if (!S.clientId) { setStatus('Pick a client first.', true); return; }
+    S.busy = true; S.result = null; S.staged = {};
+    $('mvScanBtn').disabled = true;
+    setStatus('Reading expenses from QuickBooks\u2026');
+    try {
+      const { data, error } = await sb.functions.invoke('qbo-txn-scan', {
+        body: {
+          client_id: S.clientId,
+          months: Number($('mvMonths').value || 12),
+          include_ignored: !!$('mvShowIgnored').checked,
+        },
+      });
+      if (error) throw new Error(error.message || 'the scan failed');
+      if (data && data.ok === false) throw new Error(friendly(data.error));
+      S.scan = data;
+      S.txns = data.transactions || [];
+      S.vendors = data.vendors || [];
+      setStatus(S.txns.length
+        ? (S.txns.length + ' expense' + (S.txns.length === 1 ? '' : 's') + ' with no payee.')
+        : 'Every expense in this window has a payee.');
+    } catch (e) {
+      S.scan = null; S.txns = []; S.vendors = [];
+      setStatus((e && e.message) || String(e), true);
+    }
+    S.busy = false;
+    $('mvScanBtn').disabled = false;
+    renderAll();
+  }
+
+  function friendly(code) {
+    if (code === 'not_connected') return 'QuickBooks isn\u2019t connected for this client.';
+    if (code === 'reauth_needed') return 'The QuickBooks connection needs reconnecting.';
+    return code;
+  }
+
+  async function commit() {
+    const ids = Object.keys(S.staged);
+    if (!ids.length) return;
+    if (!confirm('Write ' + ids.length + ' vendor' + (ids.length === 1 ? '' : 's') +
+                 ' to QuickBooks? This changes the client\u2019s books.')) return;
+
+    S.busy = true; renderBulk();
+    setStatus('Writing to QuickBooks\u2026');
+    try {
+      const changes = ids.map(id => {
+        const t = S.txns.find(x => x.id === id) || {};
+        return Object.assign({
+          entity_type: 'Purchase', id,
+          sync_token: t.sync_token, txn_date: t.txn_date,
+          amount: t.amount, doc_num: t.doc_num,
+        }, S.staged[id]);
+      });
+      const { data, error } = await sb.functions.invoke('qbo-txn-write', {
+        body: { client_id: S.clientId, changes },
+      });
+      if (error) throw new Error(error.message || 'the write failed');
+      if (data && data.ok === false) throw new Error(friendly(data.error));
+
+      S.result = data;
+      const okIds = (data.results || []).filter(r => r.status === 'ok').map(r => r.id);
+      S.txns = S.txns.filter(t => !okIds.includes(t.id));
+      for (const id of okIds) delete S.staged[id];
+      setStatus('');
+    } catch (e) {
+      setStatus((e && e.message) || String(e), true);
+    }
+    S.busy = false;
+    renderAll();
+  }
+
+  window.MV = { stage, clearStaged, bulkApply, ignore, unignore, commit };
+
+  window.MvOpen = async function () {
+    if (!S.booted) {
+      S.booted = true;
+      $('mvScanBtn').addEventListener('click', scan);
+      $('mvClient').addEventListener('change', e => {
+        S.clientId = e.target.value;
+        S.txns = []; S.vendors = []; S.staged = {}; S.scan = null; S.result = null;
+        setStatus('');
+        renderAll();
+      });
+      $('mvShowIgnored').addEventListener('change', () => { if (S.scan) scan(); });
+    }
+    fillClients();
+    renderAll();
   };
 })();
 </script>
