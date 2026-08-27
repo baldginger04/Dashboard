@@ -768,6 +768,15 @@
     #page-vendoraudit .t-item_map{background:var(--green-bg);color:var(--green)}
     #page-vendoraudit .t-balance_sheet{background:var(--bg3);color:var(--text2)}
     #page-vendoraudit .va-meta{font-size:11.5px;color:var(--text3);margin-top:.3rem}
+    #page-vendoraudit .va-detail{margin-top:.55rem;padding:.6rem;background:var(--bg3);border-radius:7px;font-size:12px}
+    #page-vendoraudit .va-detail table{width:100%;border-collapse:collapse}
+    #page-vendoraudit .va-detail th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:700;padding:.2rem .45rem;border-bottom:1px solid var(--border2)}
+    #page-vendoraudit .va-detail td{padding:.25rem .45rem;border-bottom:1px solid var(--border);vertical-align:top}
+    #page-vendoraudit .va-detail tr:last-child td{border-bottom:none}
+    #page-vendoraudit .va-detail td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #page-vendoraudit .va-detail .va-dnote{font-size:11.5px;color:var(--text3);margin-bottom:.4rem}
+    #page-vendoraudit .va-detail .va-dwarn{font-size:11.5px;color:var(--yellow);background:var(--yellow-bg);border:1px solid var(--yellow-border);border-radius:5px;padding:.35rem .5rem;margin-bottom:.45rem}
+    #page-vendoraudit .va-detail .va-derr{font-size:11.5px;color:var(--red)}
     #page-vendoraudit .va-acts{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.55rem}
     #page-vendoraudit .va-act{font:inherit;font-size:11.5px;font-weight:600;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:.28rem .6rem;cursor:pointer;color:var(--text2)}
     #page-vendoraudit .va-act:hover{border-color:var(--accent);color:var(--accent)}
@@ -10363,6 +10372,8 @@ init();
     clientId: '',
     connected: new Set(),
     connectedError: null,
+    detail: {},        // finding id -> { loading } | { error } | payload
+    detailOpen: null,  // only one drill is expanded at a time
     findings: [],
     exceptions: [],
     lastRun: null,
@@ -10584,6 +10595,85 @@ init();
     el.innerHTML = html;
   }
 
+  // ── transaction drill-down ───────────────────────────────
+  // Detail is pulled live from QuickBooks at click time rather than stored
+  // during the audit, so it can never disagree with the books. The cost is a
+  // round trip per finding; results are cached for the session.
+  function detailPanel(f) {
+    const d = S.detail[f.id];
+    if (!d) return '';
+    if (d.loading) return '<div class="va-detail"><div class="va-dnote">Pulling transactions from QuickBooks\u2026</div></div>';
+    if (d.error) {
+      const msg = d.error === 'not_connected'      ? 'QuickBooks isn\u2019t connected for this client.'
+                : d.error === 'reauth_needed'      ? 'The QuickBooks connection needs reconnecting.'
+                : d.error === 'run_range_unavailable' ? 'The audit run behind this finding is gone, so there\u2019s no date range to search. Re-run the audit.'
+                : d.error;
+      return '<div class="va-detail"><div class="va-derr">' + esc(msg) + '</div></div>';
+    }
+
+    const lines = d.lines || [];
+    let html = '<div class="va-detail">';
+
+    if (d.drifted) {
+      html += '<div class="va-dwarn">QuickBooks now shows ' + lines.length + ' transaction' +
+        (lines.length === 1 ? '' : 's') + ' totalling ' + money(d.total) +
+        ', but this finding was recorded as ' + d.stored_count + ' totalling ' + money(d.stored_amount) +
+        '. The books have changed since the audit ran \u2014 re-run it to refresh.</div>';
+    }
+    if (d.truncated) {
+      html += '<div class="va-dwarn">Showing the first ' + d.limit + ' transactions only.</div>';
+    }
+
+    html += '<div class="va-dnote">' + esc(d.range_start + ' to ' + d.range_end) +
+            '  \u00b7  ' + esc(d.report) +
+            (d.txn_type ? '  \u00b7  ' + esc(d.txn_type) + ' only' : '') + '</div>';
+
+    if (!lines.length) {
+      html += '<div class="va-dnote">No matching transactions came back. If the finding is recent this is worth a look \u2014 the columns QuickBooks returned were: ' +
+              esc((d.columns_seen || []).join(', ') || 'none') + '</div></div>';
+      return html;
+    }
+
+    html += '<table><thead><tr>' +
+      '<th>Date</th><th>Type</th><th>No.</th><th>Name</th><th>Memo</th><th style="text-align:right">Amount</th>' +
+      '</tr></thead><tbody>';
+    for (const l of lines) {
+      html += '<tr>' +
+        '<td>' + esc(l.date) + '</td>' +
+        '<td>' + esc(l.txn_type) + '</td>' +
+        '<td>' + esc(l.doc_num) + '</td>' +
+        '<td>' + esc(l.name) + '</td>' +
+        '<td>' + esc(l.memo) + '</td>' +
+        '<td class="num">' + esc(money(l.amount)) + '</td>' +
+      '</tr>';
+    }
+    html += '</tbody></table>';
+    html += '<div class="va-dnote" style="margin-top:.4rem;margin-bottom:0">' +
+            lines.length + ' transaction' + (lines.length === 1 ? '' : 's') +
+            '  \u00b7  ' + esc(money(d.total)) + '</div>';
+    html += '</div>';
+    return html;
+  }
+
+  async function toggleDetail(id) {
+    // Collapse if it is already the open one.
+    if (S.detailOpen === id) { S.detailOpen = null; renderFindings(); return; }
+    S.detailOpen = id;
+    if (S.detail[id] && !S.detail[id].error) { renderFindings(); return; }
+
+    S.detail[id] = { loading: true };
+    renderFindings();
+    try {
+      const { data, error } = await sb.functions.invoke('qbo-vendor-detail', { body: { finding_id: id } });
+      if (error) throw new Error(error.message || 'the lookup failed');
+      if (data && data.ok === false) { S.detail[id] = { error: data.error || 'the lookup failed' }; }
+      else { S.detail[id] = data; }
+    } catch (e) {
+      S.detail[id] = { error: (e && e.message) || String(e) };
+    }
+    renderFindings();
+  }
+
   function findingCard(f) {
     const stratLabel = (STRATEGIES.find(s => s[0] === f.strategy) || [null, f.strategy])[1];
     const meta = [];
@@ -10616,11 +10706,14 @@ init();
         '</div>';
     }
 
-    const acts = f.status === 'fixed'
+    const drillLabel = S.detailOpen === f.id ? 'Hide transactions' : 'View transactions';
+    const drill = '<button class="va-act" onclick="VA.toggleDetail(\'' + f.id + '\')">' + drillLabel + '</button>';
+
+    const acts = drill + (f.status === 'fixed'
       ? '<button class="va-act" onclick="VA.setStatus(\'' + f.id + '\',\'open\')">Reopen</button>'
       : '<button class="va-act" onclick="VA.openForm(\'' + f.id + '\',\'correct\')">Correct as coded</button>' +
         '<button class="va-act" onclick="VA.openForm(\'' + f.id + '\',\'wont_fix\')">Won\u2019t fix</button>' +
-        '<button class="va-act" onclick="VA.setStatus(\'' + f.id + '\',\'fixed\')">Mark fixed</button>';
+        '<button class="va-act" onclick="VA.setStatus(\'' + f.id + '\',\'fixed\')">Mark fixed</button>');
 
     return '<div class="va-find sev-' + esc(f.severity) + (f.status === 'fixed' ? ' is-fixed' : '') + '">' +
       '<div class="va-head">' +
@@ -10630,6 +10723,7 @@ init();
       '</div>' +
       '<div class="va-meta">' + esc(meta.join('  \u00b7  ')) + '</div>' +
       '<div class="va-acts">' + acts + '</div>' +
+      (S.detailOpen === f.id ? detailPanel(f) : '') +
       form +
     '</div>';
   }
@@ -10829,6 +10923,7 @@ init();
     openForm(id, disposition) { S.openForm = { id, disposition }; renderFindings(); setTimeout(() => { const el = $('vaReason_' + id); if (el) el.focus(); }, 30); },
     closeForm()       { S.openForm = null; renderFindings(); },
     saveDisposition, removeException,
+    toggleDetail,
     setStatus: setFindingStatus,
   };
 
