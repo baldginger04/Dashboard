@@ -6475,7 +6475,25 @@ async function createZoomMeeting() {
         invitees
       }
     });
-    if (res.error) throw res.error;
+    if (res.error) {
+      // supabase-js collapses every non-2xx into "Edge Function returned a
+      // non-2xx status code" and hides the body. The function always sends a
+      // JSON body with the real reason, so read it back out before giving up.
+      let detail = res.error.message || 'request failed';
+      const ctx = res.error.context;
+      if (ctx && typeof ctx.text === 'function') {
+        try {
+          const raw = await ctx.text();
+          let parsed = null;
+          try { parsed = JSON.parse(raw); } catch (_) {}
+          const msg = parsed && (parsed.error || parsed.message || parsed.msg);
+          detail = 'HTTP ' + ctx.status + ': ' + (msg || raw.slice(0, 300) || detail);
+        } catch (_) {
+          if (ctx.status) detail = 'HTTP ' + ctx.status + ': ' + detail;
+        }
+      }
+      throw new Error(detail);
+    }
     data = res.data;
     if (!data || !data.ok) throw new Error((data && data.error) || 'Zoom did not return a meeting.');
     if (!data.meeting || !data.meeting.join_url) throw new Error('Zoom returned a meeting with no join link.');
