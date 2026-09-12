@@ -1721,9 +1721,34 @@
           #page-reconciler .rc-drop{display:block;border:2px dashed var(--border2);border-radius:12px;padding:1.6rem;text-align:center;cursor:pointer}
           #page-reconciler .rc-drop:hover{border-color:var(--coral)}
           #page-reconciler .rc-sec-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);font-weight:700;margin:0 0 .6rem}
+          #page-reconciler .rc-views{display:flex;gap:8px;margin:0 0 1rem}
+          #page-reconciler .rc-vbtn{border:1px solid var(--border2);background:#fff;color:var(--navy);border-radius:8px;padding:8px 16px;font-family:'Hanken Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer}
+          #page-reconciler .rc-vbtn:hover{border-color:var(--coral)}
+          #page-reconciler .rc-vbtn-on{background:var(--navy);color:#fff;border-color:var(--navy)}
+          #page-reconciler .rc-filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:1rem}
+          #page-reconciler .rc-filters .form-select,#page-reconciler .rc-filters .form-input{min-width:150px}
+          #page-reconciler .rc-logrow{cursor:pointer}
+          #page-reconciler .rc-logrow:hover td{background:var(--warm)}
+          #page-reconciler .rc-logrow.is-open td{background:var(--warm)}
+          #page-reconciler .rc-num{text-align:right;font-variant-numeric:tabular-nums}
+          #page-reconciler .rc-zero{color:var(--text3)}
+          #page-reconciler .rc-detcell{background:var(--warm);padding:0 !important}
+          #page-reconciler .rc-dwrap{padding:12px 14px 16px}
+          #page-reconciler .rc-dgrp{font-size:11px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin:12px 0 5px}
+          #page-reconciler .rc-dtbl{width:100%;border-collapse:collapse;font-size:12px;background:#fff;border:1px solid var(--border)}
+          #page-reconciler .rc-dtbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);font-weight:600;padding:5px 8px;border-bottom:1px solid var(--border)}
+          #page-reconciler .rc-dtbl td{padding:5px 8px;border-bottom:1px solid var(--border)}
+          #page-reconciler .rc-dnone{font-size:12px;color:var(--text3);padding:4px 0}
         </style>
 
         <div class="page-header"><div><div class="page-title">Statement Reconciler</div><div class="page-sub">Match vendor statements against the books in QuickBooks</div></div></div>
+
+        <div class="rc-views">
+          <button class="rc-vbtn rc-vbtn-on" id="rcTabWork" onclick="RcLogView('work')">Reconcile</button>
+          <button class="rc-vbtn" id="rcTabLog" onclick="RcLogView('log')">Log</button>
+        </div>
+
+        <div id="rcViewWork">
 
         <div class="card" style="padding:1.4rem;margin-bottom:1rem">
           <div class="rc-sec-title">Connected companies</div>
@@ -1746,6 +1771,22 @@
         <div class="card" style="padding:1.4rem">
           <div class="rc-sec-title">Recent reconciliations</div>
           <div id="rcHistory"><span class="rc-muted">Pick a company to see its history.</span></div>
+        </div>
+        </div>
+
+        <div id="rcViewLog" style="display:none">
+          <div class="rc-cards" id="rcLogStats"></div>
+          <div class="card" style="padding:1.4rem">
+            <div class="rc-sec-title">Reconciliation log</div>
+            <div class="rc-filters">
+              <div><div class="rc-lbl">Client</div><select id="rcLogClient" class="form-select" onchange="RcLogRender()"><option value="">All clients</option></select></div>
+              <div><div class="rc-lbl">Outcome</div><select id="rcLogOutcome" class="form-select" onchange="RcLogRender()"><option value="">All outcomes</option><option value="missing">Missing documents</option><option value="mismatch">Amount / date mismatch</option><option value="stray">Open bills not on statement</option><option value="clean">Clean</option></select></div>
+              <div><div class="rc-lbl">Period</div><select id="rcLogDays" class="form-select" onchange="RcLogReload()"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option><option value="0">Everything</option></select></div>
+              <div><div class="rc-lbl">Vendor</div><input id="rcLogVendor" class="form-input" type="text" placeholder="Search vendor" oninput="RcLogRender()" /></div>
+              <button class="btn btn-secondary" onclick="RcLogReload()">Refresh</button>
+            </div>
+            <div id="rcLogBody"><div class="rc-muted">Loading&hellip;</div></div>
+          </div>
         </div>
       </div>
 
@@ -11783,6 +11824,7 @@ init();
       const { data, error } = await sb.from('drive_watch_items')
         .select('id,file_name,folder_name,drive_url,storage_path,sales_date,status,error_message,detected_at')
         .in('status', WAITING)
+        .eq('storage_bucket', BUCKET)
         .not('storage_path', 'is', null)
         .order('detected_at', { ascending: true })
         .limit(200);
@@ -11889,6 +11931,7 @@ init();
     try {
       const { count } = await sb.from('drive_watch_items')
         .select('id', { count: 'exact', head: true })
+        .eq('storage_bucket', BUCKET)
         .in('status', ['new', 'delivered']);
       if (count) { b.textContent = count; b.style.display = ''; }
       else { b.style.display = 'none'; }
@@ -13139,6 +13182,344 @@ init();
     }
     fillClients();
     render();
+  };
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   STATEMENT RECONCILER — LOG
+
+   A firm-wide track record of every reconciliation ever run, across all
+   clients, with the per-line detail behind each one.
+
+   No migration was needed for this. qbo-reconcile has been writing the full
+   line-by-line result into `reconciliations.rows` all along, next to
+   `summary` — the original page simply never read it back. This reads it.
+
+   Two-step on purpose: the LIST query leaves `rows` out, because a jsonb
+   blob per statement line across every client and vendor is a large download
+   for a table that only needs the counts. `rows` is fetched for a single run
+   at the moment it is expanded, and cached for the session.
+
+   Paging goes through the global fetchAllRows so this can never be silently
+   truncated by PostgREST's max-rows cap as the table grows — the same class
+   of bug that broke My Week on 8/17.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function(){
+  const esc = s => String(s==null?'':s).replace(/[&<>"']/g, ch =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  const money = n => (n==null || n==='' || isNaN(n)) ? '—'
+    : (Number(n)<0 ? '-$' : '$') +
+      Math.abs(Number(n)).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const $ = id => document.getElementById(id);
+
+  let runs = [], people = {}, loaded = false, openId = null, current = 'work';
+  const detail = {};          // reconciliation id -> rows array, or {__error}
+
+  const sum       = r => (r && r.summary) || {};
+  const missingOf = r => Number(sum(r).missing_in_qbo || 0);
+  const mismatchOf= r => Number(sum(r).amount_mismatch || 0) + Number(sum(r).date_mismatch || 0);
+  const strayOf   = r => Number(sum(r).not_in_statement || 0);
+
+  function when(ts){
+    if(!ts) return '—';
+    const d = new Date(ts);
+    if(isNaN(d)) return '—';
+    return d.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',
+                                    hour:'numeric',minute:'2-digit'});
+  }
+
+  // ── view switch ────────────────────────────────────────────────────────
+  function view(which){
+    const work = $('rcViewWork'), log = $('rcViewLog');
+    if(!work || !log) return;
+    current = (which === 'log') ? 'log' : 'work';
+    const isLog = current === 'log';
+    work.style.display = isLog ? 'none' : '';
+    log.style.display  = isLog ? '' : 'none';
+    const tw = $('rcTabWork'), tl = $('rcTabLog');
+    if(tw) tw.className = 'rc-vbtn' + (isLog ? '' : ' rc-vbtn-on');
+    if(tl) tl.className = 'rc-vbtn' + (isLog ? ' rc-vbtn-on' : '');
+    if(isLog && !loaded) load();
+  }
+
+  // ── load ───────────────────────────────────────────────────────────────
+  async function load(){
+    const host = $('rcLogBody');
+    if(host) host.innerHTML = '<div class="rc-muted">Loading the log…</div>';
+    try {
+      const days = Number((($('rcLogDays')||{}).value) || 90);
+      const since = days > 0 ? new Date(Date.now() - days*86400000).toISOString() : null;
+      const build = () => {
+        let q = sb.from('reconciliations')
+          .select('id,realm_id,company_name,vendor_name,statement_date,summary,run_by,created_at');
+        if(since) q = q.gte('created_at', since);
+        return q;
+      };
+      runs = await fetchAllRows(build, 1000);
+      runs.sort((a,b) => String(b.created_at||'').localeCompare(String(a.created_at||'')));
+      await loadPeople();
+      loaded = true;
+      fillClients();
+      render();
+    } catch(e){
+      loaded = false;
+      if(host) host.innerHTML =
+        '<div class="rc-err">Could not load the log: ' + esc((e && e.message) || e) + '</div>' +
+        '<div class="rc-muted" style="margin-top:.45rem">If that mentions permissions, or the log ' +
+        'stays empty while the Reconcile tab shows history, the <code>reconciliations</code> table ' +
+        'is missing a team select policy.</div>';
+    }
+  }
+
+  // Who ran it. Cosmetic only — profiles.full_name is not depended on, so a
+  // missing column leaves the column blank instead of breaking the page.
+  async function loadPeople(){
+    const ids = [...new Set(runs.map(r => r.run_by).filter(Boolean))];
+    const need = ids.filter(id => !(id in people));
+    if(!need.length) return;
+    try {
+      const { data, error } = await sb.from('profiles').select('id,full_name').in('id', need);
+      if(error) throw error;
+      (data||[]).forEach(p => { people[p.id] = p.full_name || ''; });
+      need.forEach(id => { if(!(id in people)) people[id] = ''; });
+    } catch(_){
+      need.forEach(id => { people[id] = ''; });
+    }
+  }
+
+  function fillClients(){
+    const sel = $('rcLogClient');
+    if(!sel) return;
+    const keep = sel.value;
+    const list = [...new Set(runs.map(r => String(r.company_name||'').trim()).filter(Boolean))]
+      .sort((a,b) => a.localeCompare(b));
+    sel.innerHTML = '<option value="">All clients</option>' +
+      list.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+    if(keep && list.indexOf(keep) >= 0) sel.value = keep;
+  }
+
+  // ── filter ─────────────────────────────────────────────────────────────
+  function filtered(){
+    const c = (($('rcLogClient')||{}).value) || '';
+    const o = (($('rcLogOutcome')||{}).value) || '';
+    const v = ((($('rcLogVendor')||{}).value) || '').trim().toLowerCase();
+    return runs.filter(r => {
+      if(c && String(r.company_name||'') !== c) return false;
+      if(v && String(r.vendor_name||'').toLowerCase().indexOf(v) === -1) return false;
+      if(o === 'missing'  && missingOf(r) === 0) return false;
+      if(o === 'mismatch' && mismatchOf(r) === 0) return false;
+      if(o === 'stray'    && strayOf(r) === 0) return false;
+      // "Clean" means nothing at all was flagged, open bills included.
+      if(o === 'clean'    && (missingOf(r) > 0 || mismatchOf(r) > 0 || strayOf(r) > 0)) return false;
+      return true;
+    });
+  }
+
+  // ── render ─────────────────────────────────────────────────────────────
+  function render(){
+    const host = $('rcLogBody');
+    if(!host) return;
+    const list = filtered();
+    renderStats(list);
+
+    if(!runs.length){
+      host.innerHTML = '<div class="rc-muted">No reconciliations recorded in this period. ' +
+        'Widen the period, or run one from the Reconcile tab.</div>';
+      return;
+    }
+    if(!list.length){
+      host.innerHTML = '<div class="rc-muted">No runs match these filters.</div>';
+      return;
+    }
+
+    const head = '<thead><tr>' +
+      '<th>When</th><th>Client</th><th>Vendor</th><th>Statement</th>' +
+      '<th class="rc-num">Lines</th><th class="rc-num">Matched</th>' +
+      '<th class="rc-num">Missing</th><th class="rc-num">Mismatch</th>' +
+      '<th class="rc-num">Not on stmt</th><th>Outcome</th><th>Run by</th>' +
+      '</tr></thead>';
+
+    const body = list.map(r => {
+      const s = sum(r), miss = missingOf(r), mis = mismatchOf(r);
+      // A statement with an open QBO bill the vendor never listed is NOT clean
+      // — it just isn't a document to chase, so it gets its own wording.
+      const chip = miss > 0
+        ? '<span class="rc-pill" style="background:var(--red)">Needs documents</span>'
+        : (mis > 0
+            ? '<span class="rc-pill" style="background:var(--yellow)">Needs review</span>'
+            : (strayOf(r) > 0
+                ? '<span class="rc-pill" style="background:var(--blue)">Check open bills</span>'
+                : '<span class="rc-pill" style="background:var(--green)">Clean</span>'));
+      const n = (v, warn) => '<td class="rc-num' + (Number(v||0) ? '' : ' rc-zero') + '"' +
+        (warn && Number(v||0) ? ' style="font-weight:700;color:' + warn + '"' : '') +
+        '>' + Number(v||0) + '</td>';
+      const isOpen = String(openId) === String(r.id);
+      const main = '<tr class="rc-logrow' + (isOpen ? ' is-open' : '') +
+        '" data-rcopen="' + esc(r.id) + '">' +
+        '<td>' + esc(when(r.created_at)) + '</td>' +
+        '<td>' + esc(r.company_name || '—') + '</td>' +
+        '<td>' + esc(r.vendor_name || '—') + '</td>' +
+        '<td>' + esc(r.statement_date || '—') + '</td>' +
+        n(s.total) + n(s.matched) + n(miss, 'var(--red)') + n(mis, 'var(--yellow)') + n(strayOf(r)) +
+        '<td>' + chip + '</td>' +
+        '<td>' + esc(people[r.run_by] || '') + '</td>' +
+        '</tr>';
+      return main + (isOpen ? detailRow(r) : '');
+    }).join('');
+
+    host.innerHTML = '<table class="rc-tbl">' + head + '<tbody>' + body + '</tbody></table>' +
+      '<div class="rc-muted" style="margin-top:.7rem">' + list.length +
+      ' run' + (list.length === 1 ? '' : 's') + ' shown. Click any row for the line detail.</div>';
+
+    host.querySelectorAll('[data-rcopen]').forEach(tr =>
+      tr.addEventListener('click', () => toggle(tr.getAttribute('data-rcopen'))));
+    host.querySelectorAll('[data-rccopy]').forEach(b =>
+      b.addEventListener('click', ev => {
+        ev.stopPropagation();
+        copyMissing(b.getAttribute('data-rccopy'), b);
+      }));
+  }
+
+  function renderStats(list){
+    const host = $('rcLogStats');
+    if(!host) return;
+    const needDocs = list.filter(r => missingOf(r) > 0).length;
+    const needRev  = list.filter(r => missingOf(r) === 0 &&
+                                      (mismatchOf(r) > 0 || strayOf(r) > 0)).length;
+    const lines    = list.reduce((a,r) => a + missingOf(r), 0);
+    const clients  = new Set(list.map(r => String(r.company_name||'').trim()).filter(Boolean)).size;
+    const last     = list.length ? when(list[0].created_at) : '—';
+    const card = (n, l, c) => '<div class="rc-card"><div class="rc-card-n"' +
+      (c ? ' style="color:' + c + '"' : '') + '>' + n + '</div>' +
+      '<div class="rc-card-l">' + l + '</div></div>';
+    host.innerHTML =
+      card(list.length, 'Statements reconciled') +
+      card(needDocs, 'Need documents', needDocs ? 'var(--red)' : '') +
+      card(needRev, 'Need review', needRev ? 'var(--yellow)' : '') +
+      card(lines, 'Missing line items', lines ? 'var(--red)' : '') +
+      card(clients, 'Clients covered') +
+      '<div class="rc-card"><div class="rc-card-n" style="font-size:13px;font-weight:700;padding:6px 0">' +
+        esc(last) + '</div><div class="rc-card-l">Most recent run</div></div>';
+  }
+
+  // ── detail ─────────────────────────────────────────────────────────────
+  const GROUPS = [
+    ['MISSING_IN_QBO',   'Missing in QuickBooks — ask the vendor for a copy', 'var(--red)'],
+    ['AMOUNT_MISMATCH',  'Amount mismatch',                                       'var(--yellow)'],
+    ['DATE_MISMATCH',    'Date mismatch',                                         'var(--yellow)'],
+    ['NOT_IN_STATEMENT', 'In QuickBooks, not on the statement',                   'var(--blue)']
+  ];
+
+  function detailRow(r){
+    const d = detail[r.id];
+    let inner;
+    if(d === undefined){
+      inner = '<div class="rc-muted">Loading the lines…</div>';
+    } else if(d && d.__error){
+      inner = '<div class="rc-err">Could not load the lines: ' + esc(d.__error) + '</div>';
+    } else if(!Array.isArray(d) || !d.length){
+      inner = '<div class="rc-muted">This run saved no line detail. Runs from before the log ' +
+              'existed still have their counts above.</div>';
+    } else {
+      const matched = d.filter(x => x.match === 'MATCHED').length;
+      let out = '';
+      GROUPS.forEach(g => {
+        const rows = d.filter(x => x.match === g[0]);
+        if(!rows.length) return;
+        out += '<div class="rc-dgrp" style="color:' + g[2] + '">' + g[1] +
+               ' · ' + rows.length + '</div>' + lineTable(rows, g[0]);
+      });
+      if(!out) out = '<div class="rc-dnone">Everything on this statement matched the books.</div>';
+      const miss = d.filter(x => x.match === 'MISSING_IN_QBO').length;
+      const copy = miss
+        ? '<button class="btn btn-secondary btn-sm" data-rccopy="' + esc(r.id) + '" ' +
+          'style="margin-top:12px">Copy the ' + miss + ' missing item' + (miss===1?'':'s') +
+          ' for an email</button>'
+        : '';
+      out += '<div class="rc-dnone" style="margin-top:10px">' + matched +
+             ' line' + (matched===1?'':'s') + ' matched cleanly and are not listed.</div>' + copy;
+      inner = out;
+    }
+    return '<tr><td class="rc-detcell" colspan="11"><div class="rc-dwrap">' + inner + '</div></td></tr>';
+  }
+
+  function lineTable(rows, kind){
+    const showQbo = (kind === 'AMOUNT_MISMATCH' || kind === 'DATE_MISMATCH' || kind === 'NOT_IN_STATEMENT');
+    const head = '<tr><th>Invoice #</th><th>Statement date</th><th class="rc-num">Statement amount</th>' +
+      (showQbo ? '<th>QBO date</th><th class="rc-num">QBO amount</th>' : '') +
+      '<th>Description</th><th>Status</th></tr>';
+    const body = rows.map(x =>
+      '<tr><td>' + esc(x.invoice_number || '—') + '</td>' +
+      '<td>' + esc(x.date || '—') + '</td>' +
+      '<td class="rc-num">' + money(x.amount) + '</td>' +
+      (showQbo ? '<td>' + esc(x.qbo_date || '—') + '</td>' +
+                 '<td class="rc-num">' + money(x.qbo_amount) + '</td>' : '') +
+      '<td>' + esc(x.description || '') + '</td>' +
+      '<td>' + esc(x.status || '') + '</td></tr>').join('');
+    return '<table class="rc-dtbl"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
+  }
+
+  async function toggle(id){
+    openId = (String(openId) === String(id)) ? null : id;
+    render();
+    if(openId === null) return;
+    if(detail[openId] !== undefined) return;
+    const want = openId;
+    try {
+      const { data, error } = await sb.from('reconciliations')
+        .select('rows').eq('id', want).maybeSingle();
+      if(error) throw error;
+      detail[want] = (data && Array.isArray(data.rows)) ? data.rows : [];
+    } catch(e){
+      detail[want] = { __error: (e && e.message) || 'request failed' };
+    }
+    if(String(openId) === String(want)) render();
+  }
+
+  // Clipboard text for the vendor request. Phase 1 gives the copy; the drafted
+  // email comes later and will read exactly these same rows.
+  function copyMissing(id, btn){
+    const r = runs.find(x => String(x.id) === String(id));
+    const d = detail[id];
+    if(!r || !Array.isArray(d)) return;
+    const miss = d.filter(x => x.match === 'MISSING_IN_QBO');
+    if(!miss.length) return;
+    const pad = (s, w) => { s = String(s); return s + ' '.repeat(Math.max(1, w - s.length)); };
+    const lines = miss.map(x =>
+      '  ' + pad(x.invoice_number || '(no number)', 18) +
+      pad(x.date || '(no date)', 13) +
+      pad(money(x.amount), 14) +
+      (x.description || ''));
+    const text =
+      r.vendor_name + '  —  ' + (r.company_name || '') + '\n' +
+      'Statement dated ' + (r.statement_date || '(no date shown)') + '\n\n' +
+      'The following ' + miss.length + ' item' + (miss.length===1?'':'s') +
+      ' appear on the statement but are not in our records. ' +
+      'Could you send copies?\n\n' +
+      '  ' + pad('Invoice #', 18) + pad('Date', 13) + pad('Amount', 14) + 'Description\n' +
+      lines.join('\n') + '\n';
+    const done = ok => {
+      if(!btn) return;
+      const was = btn.textContent;
+      btn.textContent = ok ? 'Copied ✓' : 'Could not copy — select it by hand';
+      setTimeout(() => { btn.textContent = was; }, 2600);
+    };
+    try {
+      const p = navigator.clipboard && navigator.clipboard.writeText(text);
+      if(p && p.then) p.then(() => done(true), () => done(false)); else done(!!p);
+    } catch(_){ done(false); }
+  }
+
+  // ── exports + page hook ────────────────────────────────────────────────
+  window.RcLogView   = view;
+  window.RcLogRender = function(){ openId = null; render(); };
+  window.RcLogReload = function(){ loaded = false; openId = null; load(); };
+
+  const _spLog = window.showPage;
+  window.showPage = function(n){
+    _spLog(n);
+    if(n === 'reconciler') view(current);
   };
 })();
 </script>
