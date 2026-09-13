@@ -8719,11 +8719,81 @@ function renderDetailMeta(c) {
     if (typeof renderClientsTable === 'function') renderClientsTable(); // keep All Clients in sync
   };
 
+  // --- Preparer and reviewer, click-to-edit like the two above ---
+  //
+  // These were previously set only at client creation and read-only after, so
+  // fixing one meant running SQL by hand. That is why they drift, and a role
+  // that drifts now has a consequence beyond display: the statement chase
+  // email resolves its recipient from clients.preparer, so a stale name means
+  // the email falls back to the owner instead of reaching whoever owns the work.
+  //
+  // The picker offers only people who have a known email address, so a role
+  // set here is routable BY CONSTRUCTION. An existing value that is not in
+  // that list is kept as an option rather than silently dropped — seeing the
+  // wrong name is how you notice it needs correcting.
+  const roleSpan = (label, field) => {
+    const span = document.createElement('span');
+    const val = c[field] || '';
+    span.textContent = label + ' ' + (val || '—');
+    span.title = 'Click to change the ' + label.toLowerCase();
+    span.style.cssText = linkStyle;
+
+    span.onclick = () => {
+      const sel = document.createElement('select');
+      sel.style.cssText = 'font-size:13px;padding:2px 6px;border:1px solid var(--border2);border-radius:6px;';
+      const add = (text, value, selected) => {
+        const o = document.createElement('option');
+        o.textContent = text; o.value = value; if (selected) o.selected = true;
+        sel.appendChild(o);
+      };
+      add('— none —', '', !val);
+      const names = Object.keys(TEAM_EMAILS);
+      if (val && names.indexOf(val) === -1) add(val + '  (no email on file)', val, true);
+      names.forEach(n => add(n, n, n === val));
+
+      span.replaceWith(sel);
+      sel.focus();
+
+      let done = false;
+      const finish = async (save) => {
+        if (done) return;                 // change then blur must not save twice
+        done = true;
+        const next = sel.value || null;
+        if (save && next !== (val || null)) {
+          const patch = {}; patch[field] = next;
+          const { error } = await sb.from('clients').update(patch).eq('id', c.id);
+          if (error) {
+            alert("Couldn't save the " + label.toLowerCase() + ': ' + error.message);
+          } else {
+            c[field] = next;
+            // Keep the in-memory list in step: myClientIdSet() and the client
+            // bubbles read preparer/reviewer straight off allClients, so a
+            // stale copy there would change what the page shows you.
+            const row = (typeof allClients !== 'undefined' && allClients || [])
+              .find(x => x && x.id === c.id);
+            if (row) row[field] = next;
+          }
+        }
+        renderDetailMeta(c);
+        if (typeof renderClientsTable === 'function') renderClientsTable();
+      };
+
+      sel.onchange  = () => finish(true);
+      sel.onblur    = () => finish(true);
+      sel.onkeydown = ev => { if (ev.key === 'Escape') { ev.preventDefault(); finish(false); } };
+    };
+    return span;
+  };
+
   el.appendChild(periodSpan);
   el.appendChild(monthInput);
   el.appendChild(document.createTextNode(' · '));
   el.appendChild(dueSpan);
   el.appendChild(dateInput);
+  el.appendChild(document.createTextNode(' · '));
+  el.appendChild(roleSpan('Prep', 'preparer'));
+  el.appendChild(document.createTextNode(' · '));
+  el.appendChild(roleSpan('Review', 'reviewer'));
 }
 // "Now" but as an ISO string suitable for updated_at fields. Same as `new Date().toISOString()`
 // — we don't need timezone for stored timestamps (those are absolute moments in time),
