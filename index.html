@@ -1816,7 +1816,7 @@
             <div class="rc-sec-title">Reconciliation log</div>
             <div class="rc-filters">
               <div><div class="rc-lbl">Client</div><select id="rcLogClient" class="form-select" onchange="RcLogRender()"><option value="">All clients</option></select></div>
-              <div><div class="rc-lbl">Outcome</div><select id="rcLogOutcome" class="form-select" onchange="RcLogRender()"><option value="">All outcomes</option><option value="missing">Missing documents</option><option value="mismatch">Amount / date mismatch</option><option value="stray">Open bills not on statement</option><option value="clean">Clean</option></select></div>
+              <div><div class="rc-lbl">Outcome</div><select id="rcLogOutcome" class="form-select" onchange="RcLogRender()"><option value="">All outcomes</option><option value="missing">Missing documents</option><option value="held">Held — not sent</option><option value="mismatch">Amount / date mismatch</option><option value="stray">Open bills not on statement</option><option value="clean">Clean</option></select></div>
               <div><div class="rc-lbl">Period</div><select id="rcLogDays" class="form-select" onchange="RcLogReload()"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="365">Last 12 months</option><option value="0">Everything</option></select></div>
               <div><div class="rc-lbl">Vendor</div><input id="rcLogVendor" class="form-input" type="text" placeholder="Search vendor" oninput="RcLogRender()" /></div>
               <button class="btn btn-secondary" onclick="RcLogReload()">Refresh</button>
@@ -13415,7 +13415,8 @@ init();
       const since = days > 0 ? new Date(Date.now() - days*86400000).toISOString() : null;
       const build = () => {
         let q = sb.from('reconciliations')
-          .select('id,realm_id,company_name,vendor_name,statement_date,summary,run_by,created_at');
+          .select('id,realm_id,company_name,vendor_name,statement_date,summary,run_by,created_at,' +
+                  'release_requested_at,release_requested_by,released_at');
         if(since) q = q.gte('created_at', since);
         return q;
       };
@@ -13438,7 +13439,10 @@ init();
   // Who ran it. Cosmetic only — profiles.full_name is not depended on, so a
   // missing column leaves the column blank instead of breaking the page.
   async function loadPeople(){
-    const ids = [...new Set(runs.map(r => r.run_by).filter(Boolean))];
+    // release_requested_by as well as run_by: the held panel names whoever
+    // pressed Send anyway, and an unresolved id would read as "someone".
+    const ids = [...new Set(runs.flatMap(r => [r.run_by, r.release_requested_by])
+                                .filter(Boolean))];
     const need = ids.filter(id => !(id in people));
     if(!need.length) return;
     try {
@@ -13471,6 +13475,7 @@ init();
       if(c && String(r.company_name||'') !== c) return false;
       if(v && String(r.vendor_name||'').toLowerCase().indexOf(v) === -1) return false;
       if(o === 'missing'  && missingOf(r) === 0) return false;
+      if(o === 'held'     && !isHeld(r)) return false;
       if(o === 'mismatch' && mismatchOf(r) === 0) return false;
       if(o === 'stray'    && strayOf(r) === 0) return false;
       // "Clean" means nothing at all was flagged, open bills included.
@@ -13507,7 +13512,13 @@ init();
       const s = sum(r), miss = missingOf(r), mis = mismatchOf(r);
       // A statement with an open QBO bill the vendor never listed is NOT clean
       // — it just isn't a document to chase, so it gets its own wording.
-      const chip = miss > 0
+      const chip = isHeld(r)
+        ? (r.released_at
+            ? '<span class="rc-pill" style="background:var(--green)">Released</span>'
+            : (r.release_requested_at
+                ? '<span class="rc-pill" style="background:var(--blue)">Release queued</span>'
+                : '<span class="rc-pill" style="background:var(--red)">HELD \u2014 not sent</span>'))
+        : miss > 0
         ? '<span class="rc-pill" style="background:var(--red)">Needs documents</span>'
         : (mis > 0
             ? '<span class="rc-pill" style="background:var(--yellow)">Needs review</span>'
@@ -13541,6 +13552,12 @@ init();
       b.addEventListener('click', ev => {
         ev.stopPropagation();
         copyMissing(b.getAttribute('data-rccopy'), b);
+      }));
+    host.querySelectorAll('[data-rcrelease]').forEach(b =>
+      b.addEventListener('click', ev => {
+        // The row itself toggles open/closed on click, so this must not bubble.
+        ev.stopPropagation();
+        releaseRun(b.getAttribute('data-rcrelease'), b);
       }));
   }
 
@@ -13601,10 +13618,80 @@ init();
           ' for an email</button>'
         : '';
       out += '<div class="rc-dnone" style="margin-top:10px">' + matched +
-             ' line' + (matched===1?'':'s') + ' matched cleanly and are not listed.</div>' + copy;
+             ' line' + (matched===1?'':'s') + ' matched cleanly and are not listed.</div>' +
+             copy + heldPanel(r);
       inner = out;
     }
     return '<tr><td class="rc-detcell" colspan="11"><div class="rc-dwrap">' + inner + '</div></td></tr>';
+  }
+
+  // ── held statements, and releasing one ─────────────────────────────────
+  // A run where NOT ONE line matched a bill is held back by the drain: no
+  // chase email goes out, because that pattern usually means the statement was
+  // reconciled against the wrong vendor. It is also exactly what a genuine
+  // FIRST statement from a new supplier looks like, so a person has to be able
+  // to say "the vendor is right, send it".
+  //
+  // Computed here rather than stored — it is the same test the drain applies
+  // (nothing matched, something missing), and both read the same summary.
+  function isHeld(r){
+    const s = sum(r);
+    return Number(s.matched || 0) === 0 && missingOf(r) > 0;
+  }
+
+  function heldPanel(r){
+    if(!isHeld(r)) return '';
+    const miss = missingOf(r);
+    const total = ((r.summary && r.summary.total) || 0);
+
+    if(r.released_at){
+      return '<div class="rc-dnone" style="margin-top:12px;color:var(--green)">' +
+        'Released — the chase email was sent ' + esc(when(r.released_at)) + '.</div>';
+    }
+    if(r.release_requested_at){
+      const who = people[r.release_requested_by] || 'someone';
+      return '<div class="rc-dnone" style="margin-top:12px;color:var(--blue)">' +
+        'Queued by ' + esc(who) + ' — the chase email goes out on the next run ' +
+        '(within 15 minutes).</div>';
+    }
+    return '<div style="margin-top:14px;padding:11px 13px;border-radius:9px;' +
+      'background:rgba(185,50,50,.08);border:1px solid rgba(185,50,50,.35)">' +
+      '<div style="font-weight:700;color:var(--red);margin-bottom:4px">' +
+        'HELD — no chase email was sent</div>' +
+      '<div class="rc-muted" style="margin-bottom:9px">Not one of the ' + total +
+        ' lines on this statement matched a bill, which usually means it was ' +
+        'reconciled against the wrong vendor. Check the statement against ' +
+        '<strong>' + esc(r.vendor_name || 'the vendor') + '</strong> before sending. ' +
+        'If the vendor is wrong, reconcile it by hand in the Reconcile tab instead — ' +
+        'your choice is remembered.</div>' +
+      '<button class="btn btn-secondary btn-sm" data-rcrelease="' + esc(r.id) + '">' +
+        'Send the ' + miss + ' missing item' + (miss===1?'':'s') + ' anyway</button>' +
+      '</div>';
+  }
+
+  async function releaseRun(id, btn){
+    const r = runs.find(x => String(x.id) === String(id));
+    if(!r) return;
+    const miss = missingOf(r);
+    if(!confirm('Send a chase email for ' + miss + ' item' + (miss===1?'':'s') +
+                ' to whoever prepares ' + (r.company_name || 'this client') + '?\n\n' +
+                'Vendor: ' + (r.vendor_name || 'not named') + '\n\n' +
+                'Nothing on this statement matched a bill, so send only if you have ' +
+                'checked the vendor is right.')) return;
+    if(btn){ btn.disabled = true; btn.textContent = 'Queueing…'; }
+    try {
+      await writeOrThrow(sb.from('reconciliations').update({
+        release_requested_at: new Date().toISOString(),
+        release_requested_by: (currentUser && currentUser.id) || null
+      }).eq('id', id), 'Release held statement');
+      r.release_requested_at = new Date().toISOString();
+      r.release_requested_by = (currentUser && currentUser.id) || null;
+      render();
+    } catch(e){
+      if(btn){ btn.disabled = false; btn.textContent = 'Send the ' + miss + ' missing item' +
+                                                      (miss===1?'':'s') + ' anyway'; }
+      alert('Could not queue that release: ' + ((e && e.message) || e));
+    }
   }
 
   function lineTable(rows, kind){
