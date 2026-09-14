@@ -14243,9 +14243,29 @@ init();
         body: { client_id: S.clientId, all: true },
       });
       const all = data?.accounts ?? data ?? [];
+      // je_gl_map stores whatever form resolves in QBO, and toast-sync's resolver
+      // accepts several: the bare name, the fully qualified path, and either with
+      // the account number prefixed. The picker has to recognise all of them or a
+      // perfectly good mapping shows up as "not in chart" — and picking from the
+      // list would then rewrite a working value for no reason.
       S.accounts = all
-        .map(a => ({ name: a.name ?? a.Name, label: a.label ?? a.name ?? a.Name, type: a.type ?? a.Type }))
-        .filter(a => a.name)
+        .map(a => {
+          const name = a.name ?? a.Name;
+          const fq = a.fully_qualified_name ?? a.FullyQualifiedName ?? null;
+          const num = a.acct_num ?? a.AcctNum ?? null;
+          if (!name) return null;
+          const canonical = num ? `${num} ${name}` : (fq || name);
+          const alts = [name, fq, canonical, a.label,
+                        num ? `${num} ${fq || name}` : null]
+            .filter(Boolean).map(x => String(x).toLowerCase());
+          return {
+            value: canonical,
+            label: a.label ?? canonical,
+            type: a.type ?? a.Type,
+            alts: [...new Set(alts)],
+          };
+        })
+        .filter(Boolean)
         .sort((a, b) => String(a.label).localeCompare(String(b.label)));
     } catch (e) {
       console.warn('[salesmap] chart of accounts unavailable', e);
@@ -14265,13 +14285,21 @@ init();
   }
 
   function accountOptions(selected) {
-    // the stored name may not be in the chart (renamed, or another client's
-    // convention) — keep it as an option rather than silently switching it
-    const known = S.accounts.some(a => a.name === selected);
+    const sel = String(selected || '').toLowerCase();
+    const match = sel ? S.accounts.find(a => a.alts.includes(sel)) : null;
+
     let html = '<option value="">— not mapped —</option>';
-    if (selected && !known) html += `<option value="${esc(selected)}" selected>${esc(selected)} (not in chart)</option>`;
+    // Genuinely absent from the chart — renamed, deactivated, or wrong. Keep it
+    // visible rather than silently switching it to something else.
+    if (selected && !match) {
+      html += `<option value="${esc(selected)}" selected>${esc(selected)} (not in chart)</option>`;
+    }
     for (const a of S.accounts) {
-      html += `<option value="${esc(a.name)}"${a.name === selected ? ' selected' : ''}>${esc(a.label)}</option>`;
+      const isSel = match && a.value === match.value;
+      // Re-selecting the row it already has must not rewrite the stored string,
+      // so the matched option carries the stored value, not the canonical one.
+      const val = isSel ? selected : a.value;
+      html += `<option value="${esc(val)}"${isSel ? ' selected' : ''}>${esc(a.label)}</option>`;
     }
     return html;
   }
