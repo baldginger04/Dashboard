@@ -498,6 +498,33 @@
     .sm-raw{margin-top:14px;font-size:12px}
     .sm-raw summary{cursor:pointer;color:var(--text2);font-weight:600}
     .sm-raw pre{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:auto;max-height:260px;font-size:11px;margin-top:8px}
+    /* SALES MAPPING EDITOR */
+    .mp-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:1rem}
+    .mp-wrap{display:grid;grid-template-columns:200px 1fr;gap:18px;align-items:start}
+    .mp-side{position:sticky;top:12px;display:flex;flex-direction:column;gap:1px;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--border)}
+    .mp-sec{background:#fff;border:none;border-left:3px solid transparent;text-align:left;padding:9px 12px;font-size:13px;font-family:inherit;cursor:pointer;color:var(--text2);display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .mp-sec:hover{background:var(--bg3)}
+    .mp-sec.on{border-left-color:var(--accent);color:var(--text);font-weight:600;background:var(--bg3)}
+    .mp-sec .mp-n{font-size:10px;color:var(--text3);font-variant-numeric:tabular-nums}
+    .mp-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+    .mp-card h3{margin:0 0 2px;font-size:15px}
+    .mp-card .mp-hint{font-size:12px;color:var(--text3);margin-bottom:12px}
+    .mp-row{display:grid;grid-template-columns:1fr 1.4fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--bg3)}
+    .mp-row:last-child{border-bottom:none}
+    .mp-name{font-size:13px;font-weight:600}
+    .mp-bucket{font-size:10px;color:var(--text3);display:block;margin-top:1px}
+    .mp-acct{width:100%;padding:6px 8px;border:1px solid var(--border2);border-radius:7px;background:#fff;font-size:12px;font-family:inherit}
+    .mp-acct.dirty{border-color:var(--accent);background:#FFFBEB}
+    .mp-acct.missing{border-color:#DC2626;background:#FEF2F2}
+    .mp-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px 6px;border-radius:6px}
+    .mp-del:hover{background:#FEE2E2;color:#DC2626}
+    .mp-unmapped{background:#FEF3C7;border:1px solid #FCD34D;border-radius:10px;padding:12px 14px;margin-bottom:14px}
+    .mp-unmapped h3{margin:0 0 2px;font-size:14px;color:#78350F}
+    .mp-unmapped .mp-hint{color:#92400E;font-size:12px;margin-bottom:10px}
+    .mp-foot{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--border);padding:11px 0;display:flex;align-items:center;gap:10px;margin-top:6px}
+    .mp-foot .mp-status{font-size:12px;color:var(--text3);margin-right:auto}
+    #mpReapply .modal{max-width:520px}
+    .mp-warn{background:#FEF3C7;border:1px solid #FCD34D;color:#78350F;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;margin-top:10px}
     /* MODAL */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center}
     .modal-overlay.open{display:flex}
@@ -1042,6 +1069,7 @@
         </a>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
         <div class="nav-item" onclick="showPage('syncmon')" id="nav-syncmon"><span>📆</span> Daily Sales Sync Monitor</div>
+        <div class="nav-item" onclick="showPage('salesmap')" id="nav-salesmap"><span>🔗</span> Sales Mapping</div>
         <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('mv')" id="nav-mv"><span>🏷️</span> Missing Vendors</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
@@ -1928,6 +1956,32 @@
         <div id="smNote" style="font-size:12px;color:var(--text3);margin-top:10px"></div>
       </div>
 
+      <!-- SALES MAPPING EDITOR -->
+      <div class="page" id="page-salesmap">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Sales Mapping</div>
+            <div class="page-sub">Where each POS item posts in QuickBooks</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-ghost" onclick="SalesMap.reload()">Refresh</button>
+          </div>
+        </div>
+        <div class="mp-bar">
+          <label style="font-size:12px;color:var(--text3)">Client:</label>
+          <select class="sm-sel" id="mpClient" onchange="SalesMap.setClient(this.value)"></select>
+        </div>
+        <div class="mp-wrap">
+          <div class="mp-side" id="mpSide"></div>
+          <div id="mpBody"></div>
+        </div>
+        <div class="mp-foot" id="mpFoot" style="display:none">
+          <span class="mp-status" id="mpStatus"></span>
+          <button class="btn btn-ghost" onclick="SalesMap.discard()">Discard</button>
+          <button class="btn" id="mpSaveBtn" onclick="SalesMap.save()">Save changes</button>
+        </div>
+      </div>
+
       <div class="page" id="page-links">
         <div class="page-header"><div><div class="page-title">Quick Links</div><div class="page-sub">Jump straight to the apps we use every day</div></div></div>
         <div class="card" style="padding:1.5rem">
@@ -2002,6 +2056,31 @@
     </div>
     <div class="modal-body" id="smModalBody"></div>
     <div class="modal-footer" id="smModalFoot"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mpReapply">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div class="modal-title">Re-apply mappings</div>
+      <button class="modal-close" onclick="closeModal('mpReapply')">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;line-height:1.55;color:var(--text2)">
+        Re-runs every business date from the date below through yesterday using the
+        mappings as they stand now. Each day's journal entry is rewritten in place
+        in QuickBooks &mdash; same entry, same number, corrected accounts.
+      </div>
+      <div style="margin-top:14px">
+        <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">Re-apply from</label>
+        <input type="date" id="mpReapplyFrom" class="mp-acct" style="max-width:220px">
+      </div>
+      <div class="mp-warn" id="mpReapplyWarn"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('mpReapply')">Cancel</button>
+      <button class="btn" id="mpReapplyBtn" onclick="SalesMap.runReapply()">Re-apply</button>
+    </div>
   </div>
 </div>
 
@@ -14043,6 +14122,321 @@ init();
   window.showPage = function (n) {
     _spSync(n);
     if (n === 'syncmon') window.SyncMon.open_page();
+  };
+})();
+
+// ══════════════════════════════════════════════════════════
+// SALES MAPPING EDITOR
+// ══════════════════════════════════════════════════════════
+// Edits je_gl_map for one client, laid out in the same sections xtraCHEF uses.
+// Bucket keys are "<section>:<POS item name>", so the sections are derived from
+// the data rather than hardcoded — a new section type appears on its own.
+//
+// Two things this does that a plain table would not:
+//   * surfaces buckets that have APPEARED in je_sync_log but have no mapping,
+//     so a gap shows up as soon as the item is first rung rather than when a
+//     day fails
+//   * re-applies a changed mapping backwards, rewriting each day's entry in
+//     place in QBO (toast-sync already updates by SyncToken and dedupes, so
+//     re-running a date is idempotent)
+(function () {
+  const SECTIONS = [
+    ['sales_category', 'Sales categories'],
+    ['service_charge', 'Service charges'],
+    ['tip', 'Tips'],
+    ['discount', 'Discounts'],
+    ['tax', 'Taxes'],
+    ['payment', 'Payments'],
+    ['payment_fee', 'Payment fees'],
+    ['deferral', 'Deferrals'],
+    ['refund', 'Refunds'],
+    ['adjustment', 'Adjustments'],
+  ];
+
+  const S = {
+    clients: [], clientId: null, source: null,
+    rows: [],            // {bucket, qbo_account_name, __new?}
+    seen: [],            // buckets present in je_sync_log
+    accounts: [],
+    dirty: new Map(),    // bucket -> account name
+    removed: new Set(),
+    section: 'sales_category',
+    loading: false,
+  };
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+  const sectionOf = b => String(b || '').split(':')[0];
+  const itemOf = b => String(b || '').split(':').slice(1).join(':');
+  const labelOf = key => (SECTIONS.find(s => s[0] === key) || [key, key])[1];
+
+  async function loadClients() {
+    const { data, error } = await sb
+      .from('sync_sources')
+      .select('client_id, source, enabled, clients(name)')
+      .order('source');
+    if (error) { console.error('[salesmap] clients', error); return; }
+    S.clients = (data || []).map(r => ({
+      key: r.client_id + '|' + r.source,
+      client_id: r.client_id,
+      source: r.source,
+      name: (r.clients && r.clients.name) || 'Unknown client',
+    })).sort((a, b) => a.name.localeCompare(b.name));
+
+    const sel = document.getElementById('mpClient');
+    if (!sel) return;
+    sel.innerHTML = S.clients.map(c =>
+      `<option value="${esc(c.key)}">${esc(c.name)} — ${esc(typeof sourceLabel === 'function' ? sourceLabel(c.source) : c.source)}</option>`
+    ).join('');
+    if (!S.clientId && S.clients.length) {
+      S.clientId = S.clients[0].client_id;
+      S.source = S.clients[0].source;
+    }
+    const cur = S.clients.find(c => c.client_id === S.clientId && c.source === S.source);
+    if (cur) sel.value = cur.key;
+  }
+
+  async function loadMap() {
+    if (!S.clientId) return;
+    S.loading = true;
+    document.getElementById('mpBody').innerHTML = '<div class="empty" style="padding:2rem"><span class="spinner"></span></div>';
+
+    const [mapRes, logRes] = await Promise.all([
+      sb.from('je_gl_map')
+        .select('bucket, qbo_account_name')
+        .eq('client_id', S.clientId).eq('source', S.source)
+        .order('bucket'),
+      sb.from('je_sync_log')
+        .select('lines')
+        .eq('client_id', S.clientId).eq('source', S.source)
+        .order('sales_date', { ascending: false })
+        .limit(60),
+    ]);
+
+    S.rows = mapRes.data || [];
+
+    // every bucket this client has actually produced, from recent logged days
+    const seen = new Set();
+    for (const r of logRes.data || []) {
+      for (const l of (Array.isArray(r.lines) ? r.lines : [])) {
+        if (l && l.bucket) seen.add(l.bucket);
+      }
+    }
+    S.seen = [...seen];
+
+    // full chart of accounts for the picker
+    try {
+      const { data } = await sb.functions.invoke('qbo-accounts', {
+        body: { client_id: S.clientId, all: true },
+      });
+      const all = data?.accounts ?? data ?? [];
+      S.accounts = all
+        .map(a => ({ name: a.name ?? a.Name, label: a.label ?? a.name ?? a.Name, type: a.type ?? a.Type }))
+        .filter(a => a.name)
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+    } catch (e) {
+      console.warn('[salesmap] chart of accounts unavailable', e);
+      S.accounts = [];
+    }
+
+    S.dirty.clear();
+    S.removed.clear();
+    S.loading = false;
+    render();
+  }
+
+  function currentAccount(bucket) {
+    if (S.dirty.has(bucket)) return S.dirty.get(bucket);
+    const r = S.rows.find(x => x.bucket === bucket);
+    return r ? r.qbo_account_name : '';
+  }
+
+  function accountOptions(selected) {
+    // the stored name may not be in the chart (renamed, or another client's
+    // convention) — keep it as an option rather than silently switching it
+    const known = S.accounts.some(a => a.name === selected);
+    let html = '<option value="">— not mapped —</option>';
+    if (selected && !known) html += `<option value="${esc(selected)}" selected>${esc(selected)} (not in chart)</option>`;
+    for (const a of S.accounts) {
+      html += `<option value="${esc(a.name)}"${a.name === selected ? ' selected' : ''}>${esc(a.label)}</option>`;
+    }
+    return html;
+  }
+
+  function render() {
+    const counts = {};
+    for (const r of S.rows) {
+      if (S.removed.has(r.bucket)) continue;
+      const k = sectionOf(r.bucket);
+      counts[k] = (counts[k] || 0) + 1;
+    }
+
+    document.getElementById('mpSide').innerHTML = SECTIONS.map(([key, label]) =>
+      `<button class="mp-sec${S.section === key ? ' on' : ''}" onclick="SalesMap.setSection('${key}')">` +
+      `<span>${esc(label)}</span><span class="mp-n">${counts[key] || 0}</span></button>`
+    ).join('');
+
+    const unmapped = S.seen.filter(b =>
+      !S.rows.some(r => r.bucket === b && !S.removed.has(r.bucket)) && !S.dirty.has(b));
+
+    let html = '';
+
+    if (unmapped.length) {
+      html += '<div class="mp-unmapped"><h3>Seen in sales but not mapped</h3>' +
+        '<div class="mp-hint">These came through the POS in the last 60 logged days with nowhere to post. ' +
+        'A day containing one of these stops rather than posting.</div>';
+      for (const b of unmapped.sort()) {
+        html += `<div class="mp-row">
+          <div><span class="mp-name">${esc(itemOf(b) || b)}</span><span class="mp-bucket">${esc(b)}</span></div>
+          <select class="mp-acct missing" onchange="SalesMap.setAccount('${esc(b)}', this.value)">${accountOptions('')}</select>
+          <span></span>
+        </div>`;
+      }
+      html += '</div>';
+    }
+
+    const rows = S.rows
+      .filter(r => sectionOf(r.bucket) === S.section && !S.removed.has(r.bucket))
+      .sort((a, b) => a.bucket.localeCompare(b.bucket));
+
+    html += `<div class="mp-card"><h3>${esc(labelOf(S.section))}</h3>` +
+      `<div class="mp-hint">The name on the left is what the POS calls it. It must match exactly, so it is not editable here — change it in the POS and the new name shows up as unmapped.</div>`;
+
+    if (!rows.length) {
+      html += '<div class="empty" style="padding:1.2rem">Nothing mapped in this section.</div>';
+    } else {
+      for (const r of rows) {
+        const val = currentAccount(r.bucket);
+        const isDirty = S.dirty.has(r.bucket);
+        html += `<div class="mp-row">
+          <div><span class="mp-name">${esc(itemOf(r.bucket) || r.bucket)}</span><span class="mp-bucket">${esc(r.bucket)}</span></div>
+          <select class="mp-acct${isDirty ? ' dirty' : ''}${val ? '' : ' missing'}" onchange="SalesMap.setAccount('${esc(r.bucket)}', this.value)">${accountOptions(val)}</select>
+          <button class="mp-del" title="Remove this mapping" onclick="SalesMap.remove('${esc(r.bucket)}')">&times;</button>
+        </div>`;
+      }
+    }
+    html += '</div>';
+
+    document.getElementById('mpBody').innerHTML = html;
+
+    const n = S.dirty.size + S.removed.size;
+    const foot = document.getElementById('mpFoot');
+    foot.style.display = n ? 'flex' : 'none';
+    document.getElementById('mpStatus').textContent =
+      n ? `${n} unsaved change${n === 1 ? '' : 's'}` : '';
+  }
+
+  async function save() {
+    const btn = document.getElementById('mpSaveBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const ups = [];
+      for (const [bucket, name] of S.dirty.entries()) {
+        if (!name) continue;
+        ups.push({ client_id: S.clientId, source: S.source, bucket, qbo_account_name: name, qbo_account_id: null });
+      }
+      if (ups.length) {
+        const { error } = await sb.from('je_gl_map')
+          .upsert(ups, { onConflict: 'client_id,source,bucket' });
+        if (error) throw error;
+      }
+      for (const bucket of S.removed) {
+        const { error } = await sb.from('je_gl_map').delete()
+          .eq('client_id', S.clientId).eq('source', S.source).eq('bucket', bucket);
+        if (error) throw error;
+      }
+      const changed = [...S.dirty.keys()];
+      await loadMap();
+      if (changed.length && S.source === 'toast') offerReapply(changed);
+    } catch (e) {
+      alert('Save failed: ' + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save changes';
+    }
+  }
+
+  function offerReapply(changed) {
+    const d = new Date(); d.setDate(1);
+    document.getElementById('mpReapplyFrom').value =
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    document.getElementById('mpReapplyWarn').innerHTML =
+      `Saved. ${changed.length} mapping${changed.length === 1 ? '' : 's'} changed. ` +
+      `Entries already posted still use the old accounts until you re-apply.`;
+    openModal('mpReapply');
+  }
+
+  async function runReapply() {
+    const from = document.getElementById('mpReapplyFrom').value;
+    if (!from) { alert('Pick a date first.'); return; }
+
+    const start = (() => { const [y, m, d] = from.split('-').map(Number); return new Date(y, m - 1, d); })();
+    const end = new Date(); end.setDate(end.getDate() - 1);
+    if (start > end) { alert('That date is in the future.'); return; }
+
+    const dates = [];
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dates.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`);
+    }
+    if (dates.length > 62) { alert(`That is ${dates.length} days. Pick a later start date — 60 days is the practical limit in one run.`); return; }
+
+    const btn = document.getElementById('mpReapplyBtn');
+    btn.disabled = true; btn.textContent = `Re-applying ${dates.length} days…`;
+    try {
+      const { data, error } = await sb.functions.invoke('toast-sync', {
+        body: { client_id: S.clientId, business_dates: dates, dry_run: false },
+      });
+      if (error) throw error;
+      const res = data?.results || [];
+      const posted = res.filter(r => r.status === 'posted').length;
+      const errs = res.filter(r => r.status === 'error');
+      closeModal('mpReapply');
+      alert(`Re-applied ${dates.length} days: ${posted} posted, ${errs.length} with errors.` +
+        (errs.length ? `\n\nFirst error — ${errs[0].business_date}: ${errs[0].error}` : ''));
+    } catch (e) {
+      alert('Re-apply failed: ' + (e.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = 'Re-apply';
+    }
+  }
+
+  window.SalesMap = {
+    async open_page() {
+      if (!S.clients.length) await loadClients();
+      await loadMap();
+    },
+    setClient(key) {
+      const c = S.clients.find(x => x.key === key);
+      if (!c) return;
+      if (S.dirty.size || S.removed.size) {
+        if (!confirm('You have unsaved changes. Switch client and lose them?')) {
+          const cur = S.clients.find(x => x.client_id === S.clientId && x.source === S.source);
+          if (cur) document.getElementById('mpClient').value = cur.key;
+          return;
+        }
+      }
+      S.clientId = c.client_id; S.source = c.source;
+      loadMap();
+    },
+    setSection(k) { S.section = k; render(); },
+    setAccount(bucket, name) {
+      const orig = (S.rows.find(r => r.bucket === bucket) || {}).qbo_account_name || '';
+      if (name === orig) S.dirty.delete(bucket); else S.dirty.set(bucket, name);
+      render();
+    },
+    remove(bucket) {
+      if (!confirm(`Remove the mapping for ${bucket}?\n\nDays containing it will stop instead of posting.`)) return;
+      S.removed.add(bucket); S.dirty.delete(bucket); render();
+    },
+    discard() { S.dirty.clear(); S.removed.clear(); render(); },
+    save, runReapply,
+    reload() { loadClients().then(loadMap); },
+  };
+
+  const _spMap = window.showPage;
+  window.showPage = function (n) {
+    _spMap(n);
+    if (n === 'salesmap') window.SalesMap.open_page();
   };
 })();
 
