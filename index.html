@@ -1916,7 +1916,7 @@
           <div style="display:flex;gap:10px;align-items:center">
             <div class="inv-switch" id="invSwitch"></div>
             <button class="btn btn-primary" id="invUploadBtn" onclick="InvStartUpload()">&#8593; Upload</button>
-            <input type="file" id="invUploadFile" accept="application/pdf,image/*" style="display:none" onchange="InvHandleUpload(this)">
+            <input type="file" id="invUploadFile" accept="application/pdf,image/*" multiple style="display:none" onchange="InvHandleUpload(this)">
           </div>
         </div>
         <div id="invTabs" class="inv-tabs"></div>
@@ -8420,6 +8420,7 @@ function resubmitAnalysis(id) {
 // ══════════════════════════════════════════════════════════
 const Inv = { tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null };
 const INV_TABS = [
+  { key:'processing',   label:'Processing',   where:['processing'] },
   { key:'needs_review', label:'Needs Review', where:['needs_review'] },
   { key:'pending',      label:'Ready',        where:['pending'] },
   { key:'approved',     label:'Approved',     where:['approved'] },
@@ -8427,7 +8428,7 @@ const INV_TABS = [
   { key:'pushed',       label:'Pushed',       where:['pushed'] },
   { key:'all',          label:'All',          where:null },
 ];
-const INV_BADGE = { needs_review:['inv-b-review','Needs review'], pending:['inv-b-ready','Ready'], approved:['inv-b-approved','Approved'], duplicate:['inv-b-dup','Duplicate'], pushed:['inv-b-pushed','Pushed'], error:['inv-b-dup','Error'] };
+const INV_BADGE = { processing:['inv-b-ready','Processing'], needs_review:['inv-b-review','Needs review'], pending:['inv-b-ready','Ready'], approved:['inv-b-approved','Approved'], duplicate:['inv-b-dup','Duplicate'], pushed:['inv-b-pushed','Pushed'], error:['inv-b-dup','Error'] };
 const invMoney = n => (n==null?'—':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
 const invEsc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -8442,7 +8443,7 @@ async function InvLoad(){
   InvRenderSwitcher();
   await InvRefresh();
 }
-async function InvRefresh(){ await InvLoadCounts(); await InvRenderList(); }
+async function InvRefresh(){ await InvLoadCounts(); await InvRenderList(); if((Inv.counts||{}).processing) InvStartPolling(); }
 
 function InvRenderSwitcher(){
   const el=document.getElementById('invSwitch'); if(!el) return;
@@ -8495,7 +8496,7 @@ function InvRowHtml(r){
     +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span>'+(r.status==='duplicate'&&r.qbo_bill_id?' <span class="inv-dim" style="font-size:11px">in QBO #'+invEsc(r.qbo_bill_id)+'</span>':'')+'</td></tr>';
 }
 function InvEmptyFor(tab){
-  const m={needs_review:'Nothing waiting on you.',pending:'Nothing ready to approve.',approved:'Nothing approved and waiting.',duplicate:'No duplicates flagged.',pushed:'Nothing posted to QBO yet.',all:'No invoices yet.'}[tab]||'Nothing here.';
+  const m={processing:'Nothing processing right now.',needs_review:'Nothing waiting on you.',pending:'Nothing ready to approve.',approved:'Nothing approved and waiting.',duplicate:'No duplicates flagged.',pushed:'Nothing posted to QBO yet.',all:'No invoices yet.'}[tab]||'Nothing here.';
   return '<div class="empty">'+m+'</div>';
 }
 async function InvFillCoded(ids){
@@ -8601,20 +8602,82 @@ function InvStartUpload(){
   if(!Inv.client){ toast('Pick a client first — use the switcher, top right.'); Inv.swOpen=true; InvRenderSwitcher(); return; }
   document.getElementById('invUploadFile').click();
 }
+// Batch upload. Each file goes to the `invoices` bucket first, gets a queue row
+// marked 'processing' so it is visible and durable immediately, and only then is
+// extraction fired. Nothing blocks on the model, so the list fills in as each one
+// finishes -- which is what you want when dropping twenty invoices at once.
+const INV_UPLOAD_CONCURRENCY = 4;
+
+function invSlug(s){ return String(s||'client').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)||'client'; }
+
 async function InvHandleUpload(input){
-  const file=input.files[0]; input.value=''; if(!file) return;
+  const files=Array.from(input.files||[]); input.value=''; if(!files.length) return;
   const name=Inv.clients[Inv.client]||'client';
-  document.getElementById('invBody').innerHTML='<div class="empty"><span class="spinner"></span> Reading “'+invEsc(file.name)+'” and coding it for '+invEsc(name)+'…<br><span class="inv-note">Multi-page invoices take a few seconds.</span></div>';
-  try{
-    const dataUrl=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
-    const r=await sb.functions.invoke('invoice-extract',{ body:{ file:dataUrl, mime:file.type||'application/pdf', client_id:Inv.client, source:'manual' } });
-    if(r.error){ toast('Upload failed: '+r.error.message,'warn'); await InvRenderList(); return; }
-    const d=r.data;
-    if(d&&d.mode==='duplicate'){ toast('Already in the queue — skipped as a duplicate.'); Inv.tab='all'; await InvRefresh(); return; }
-    if(d&&d.mode==='rejected'){ toast('Couldn’t read it clearly'+(d.quality_issues&&d.quality_issues.length?': '+d.quality_issues[0]:'.'),'warn'); await InvRenderList(); return; }
-    if(d&&d.mode==='written'&&d.invoice_id){ toast('Coded — '+(d.auto_coded||0)+' auto, '+(d.needs_review||0)+' to review.','ok'); await InvLoadCounts(); await InvOpenInvoice(d.invoice_id); return; }
-    toast('Unexpected response.'); await InvRenderList();
-  }catch(err){ toast('Upload error: '+String(err&&err.message||err),'warn'); await InvRenderList(); }
+  const prefix=invSlug(name);
+
+  toast(files.length===1?('Uploading "'+files[0].name+'"...'):('Uploading '+files.length+' invoices for '+name+'...'));
+  Inv.tab='processing';
+
+  let queued=0;
+  const jobs=files.slice();
+
+  async function worker(){
+    while(jobs.length){
+      const file=jobs.shift();
+      try{
+        const stamp=Date.now()+'_'+Math.random().toString(36).slice(2,8);
+        const safe=String(file.name||'invoice.pdf').replace(/[^A-Za-z0-9._-]+/g,'_');
+        const path=prefix+'/'+stamp+'_'+safe;
+
+        const up=await sb.storage.from('invoices').upload(path,file,{ contentType:file.type||'application/pdf', upsert:false });
+        if(up.error) throw up.error;
+
+        const ins=await sb.from('invoice_queue').insert({
+          client_id:Inv.client, source:'manual', status:'processing',
+          file_path:'invoices/'+path,
+        }).select('id').single();
+        if(ins.error) throw ins.error;
+
+        queued++;
+        await InvRefresh();
+
+        // Fire extraction and move on. Any failure is written onto the row, so a
+        // bad file never disappears silently -- it shows up as Error in the list.
+        sb.functions.invoke('invoice-extract',{ body:{
+          queue_id:ins.data.id, storage_bucket:'invoices', storage_path:path,
+          mime:file.type||'application/pdf', client_id:Inv.client, source:'manual',
+        }}).then(async(r)=>{
+          if(r.error){
+            await sb.from('invoice_queue').update({ status:'error', error_detail:String(r.error.message||r.error).slice(0,500) }).eq('id',ins.data.id);
+          }
+          await InvRefresh();
+        }).catch(async(e)=>{
+          await sb.from('invoice_queue').update({ status:'error', error_detail:String(e&&e.message||e).slice(0,500) }).eq('id',ins.data.id);
+          await InvRefresh();
+        });
+      }catch(err){
+        toast('Could not upload "'+(file&&file.name||'file')+'": '+String(err&&err.message||err),'warn');
+      }
+    }
+  }
+
+  await Promise.all(Array.from({length:Math.min(INV_UPLOAD_CONCURRENCY,files.length)},worker));
+  if(queued) toast(queued+' invoice'+(queued===1?'':'s')+' uploaded - coding now.','ok');
+  InvStartPolling();
+}
+
+// Poll while anything is still processing, then stop. One head-count query per
+// tick and it cancels itself, so leaving the page open costs nothing.
+let invPollTimer=null;
+function InvStartPolling(){
+  if(invPollTimer) return;
+  invPollTimer=setInterval(async()=>{
+    let q=sb.from('invoice_queue').select('id',{count:'exact',head:true}).eq('status','processing');
+    if(Inv.client) q=q.eq('client_id',Inv.client);
+    const { count }=await q;
+    await InvRefresh();
+    if(!count){ clearInterval(invPollTimer); invPollTimer=null; }
+  },4000);
 }
 
 // ── GLOBAL TASK SEARCH (across all clients) ──────────────
