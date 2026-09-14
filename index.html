@@ -8632,9 +8632,12 @@ async function InvHandleUpload(input){
         const up=await sb.storage.from('invoices').upload(path,file,{ contentType:file.type||'application/pdf', upsert:false });
         if(up.error) throw up.error;
 
+        // vendor is NOT NULL, and the file name is the most useful thing to show
+        // while a row is still processing. Extraction overwrites it.
         const ins=await sb.from('invoice_queue').insert({
           client_id:Inv.client, source:'manual', status:'processing',
           file_path:'invoices/'+path,
+          vendor:String(file.name||'Uploading...').slice(0,120),
         }).select('id').single();
         if(ins.error) throw ins.error;
 
