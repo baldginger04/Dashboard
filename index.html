@@ -14167,6 +14167,18 @@ init();
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+  // The sync monitor has its own copy inside its IIFE and is not reachable from
+  // here, so this module carries its own. Same slugs, same display names.
+  const SRC_LABELS = {
+    square: 'Square',
+    shopware: 'Shopware',
+    zenoti: 'Zenoti',
+    ecrs: 'ECRS',
+    toast: 'Toast',
+    booklog: 'Booklog'
+  };
+  const srcLabel = s => SRC_LABELS[String(s || '').toLowerCase()] || s || '';
+
   const sectionOf = b => String(b || '').split(':')[0];
   const itemOf = b => String(b || '').split(':').slice(1).join(':');
   const labelOf = key => (SECTIONS.find(s => s[0] === key) || [key, key])[1];
@@ -14187,7 +14199,7 @@ init();
     const sel = document.getElementById('mpClient');
     if (!sel) return;
     sel.innerHTML = S.clients.map(c =>
-      `<option value="${esc(c.key)}">${esc(c.name)} — ${esc(typeof sourceLabel === 'function' ? sourceLabel(c.source) : c.source)}</option>`
+      `<option value="${esc(c.key)}">${esc(c.name)} — ${esc(srcLabel(c.source))}</option>`
     ).join('');
     if (!S.clientId && S.clients.length) {
       S.clientId = S.clients[0].client_id;
