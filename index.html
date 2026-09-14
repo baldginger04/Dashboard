@@ -463,6 +463,41 @@
     .msg-input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:white;transition:border-color .15s;resize:none}
     .msg-input:focus{border-color:var(--accent)}
 
+    /* DAILY SALES SYNC MONITOR */
+    .sm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:1rem}
+    .sm-sel{padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;min-width:220px}
+    .sm-nav{display:flex;align-items:center;gap:6px;margin-left:auto}
+    .sm-nav #smLabel{font-size:13px;font-weight:600;min-width:130px;text-align:center}
+    .sm-legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:11px;color:var(--text2);margin-bottom:10px}
+    .sm-leg{display:inline-flex;align-items:center;gap:5px}
+    .sm-sw{width:10px;height:10px;border-radius:3px;display:inline-block;flex-shrink:0}
+    .sm-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+    .sm-dow{background:var(--bg3);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);font-weight:600;text-align:center;padding:6px 0}
+    .sm-cell{background:#fff;min-height:92px;padding:5px 6px;display:flex;flex-direction:column;gap:3px}
+    .sm-cell.is-other{background:#faf9f6}
+    .sm-daynum{font-size:11px;color:var(--text3);font-weight:600;line-height:18px}
+    .sm-cell.is-today .sm-daynum{color:#fff;background:var(--accent);width:18px;height:18px;border-radius:50%;text-align:center}
+    .sm-chip{display:block;width:100%;text-align:left;font-size:11px;border:none;border-left:3px solid transparent;border-radius:4px;padding:3px 6px;cursor:pointer;font-family:inherit;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:filter .12s}
+    .sm-chip:hover{filter:brightness(.94)}
+    .sm-chip small{display:block;font-weight:500;font-size:9px;letter-spacing:.04em;text-transform:uppercase;opacity:.85}
+    .sm-c-posted{background:#DCFCE7;border-left-color:#16A34A;color:#14532D}
+    .sm-c-error{background:#FEE2E2;border-left-color:#DC2626;color:#7F1D1D}
+    .sm-c-dry{background:#FEF3C7;border-left-color:#D97706;color:#78350F}
+    .sm-c-skip{background:#F1F0EC;border-left-color:#9CA3AF;color:#6B7280}
+    .sm-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1rem}
+    #smModal .modal{max-width:760px}
+    .sm-err{background:#FEE2E2;border:1px solid #FCA5A5;color:#7F1D1D;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5}
+    .sm-err b{display:block;margin-bottom:3px}
+    .sm-tbl{width:100%;border-collapse:collapse;font-size:12px}
+    .sm-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);border-bottom:1px solid var(--border);padding:6px 8px}
+    .sm-tbl td{padding:6px 8px;border-bottom:1px solid var(--bg3);vertical-align:top}
+    .sm-tbl td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+    .sm-tbl tfoot td{font-weight:700;border-top:2px solid var(--border);border-bottom:none}
+    .sm-acct{font-weight:600}
+    .sm-bucket{color:var(--text3);font-size:10px;display:block;margin-top:1px}
+    .sm-raw{margin-top:14px;font-size:12px}
+    .sm-raw summary{cursor:pointer;color:var(--text2);font-weight:600}
+    .sm-raw pre{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:auto;max-height:260px;font-size:11px;margin-top:8px}
     /* MODAL */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center}
     .modal-overlay.open{display:flex}
@@ -1006,6 +1041,7 @@
           <span>🌐</span> Client Portal <span class="nav-badge" id="portalBadge" style="display:none">0</span>
         </a>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Invoices</div>
+        <div class="nav-item" onclick="showPage('syncmon')" id="nav-syncmon"><span>📆</span> Daily Sales Sync Monitor</div>
         <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('mv')" id="nav-mv"><span>🏷️</span> Missing Vendors</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
@@ -1860,6 +1896,38 @@
       </div>
 
       <!-- QUICK LINKS -->
+      <!-- DAILY SALES SYNC MONITOR -->
+      <div class="page" id="page-syncmon">
+        <div class="page-header">
+          <div>
+            <div class="page-title">Daily Sales Sync Monitor</div>
+            <div class="page-sub">One journal entry per day, per client — green posted, red needs attention</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <button class="btn btn-ghost" onclick="SyncMon.reload()">Refresh</button>
+          </div>
+        </div>
+        <div class="sm-bar">
+          <label style="font-size:12px;color:var(--text3)">Client:</label>
+          <select class="sm-sel" id="smClient" onchange="SyncMon.setClient(this.value)"></select>
+          <div class="sm-nav">
+            <button class="btn btn-ghost btn-sm" onclick="SyncMon.shift(-1)">&lsaquo;</button>
+            <span id="smLabel"></span>
+            <button class="btn btn-ghost btn-sm" onclick="SyncMon.shift(1)">&rsaquo;</button>
+            <button class="btn btn-ghost btn-sm" onclick="SyncMon.today()">Today</button>
+          </div>
+        </div>
+        <div class="sm-sum" id="smSummary"></div>
+        <div class="sm-legend">
+          <span class="sm-leg"><span class="sm-sw" style="background:#16A34A"></span>Posted to QBO</span>
+          <span class="sm-leg"><span class="sm-sw" style="background:#DC2626"></span>Not posted — needs attention</span>
+          <span class="sm-leg"><span class="sm-sw" style="background:#D97706"></span>Dry run — computed, not posted</span>
+          <span class="sm-leg"><span class="sm-sw" style="background:#9CA3AF"></span>No activity</span>
+        </div>
+        <div class="sm-grid" id="smGrid"></div>
+        <div id="smNote" style="font-size:12px;color:var(--text3);margin-top:10px"></div>
+      </div>
+
       <div class="page" id="page-links">
         <div class="page-header"><div><div class="page-title">Quick Links</div><div class="page-sub">Jump straight to the apps we use every day</div></div></div>
         <div class="card" style="padding:1.5rem">
@@ -1923,6 +1991,20 @@
 </div>
 
 <!-- TASK MODAL -->
+<div class="modal-overlay" id="smModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title" id="smModalTitle">Daily sales</div>
+        <div class="page-sub" id="smModalSub" style="margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('smModal')">&times;</button>
+    </div>
+    <div class="modal-body" id="smModalBody"></div>
+    <div class="modal-footer" id="smModalFoot"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="taskModal">
   <div class="modal">
     <div class="modal-hdr">
@@ -13603,6 +13685,265 @@ init();
     if(n === 'reconciler') view(current);
   };
 })();
+// ══════════════════════════════════════════════════════════
+// DAILY SALES SYNC MONITOR
+// ══════════════════════════════════════════════════════════
+// Per-client month calendar over je_sync_log. One chip per day:
+//   green  = posted to QBO
+//   red    = computed but NOT posted (mapping gap, out of balance, API error)
+//   amber  = dry run — the entry was computed and logged, nothing sent
+//   grey   = no activity that day (closed)
+// Clicking a day shows the full entry, the reason it failed if it did, and a
+// retry. Source-agnostic by design: Briscuits (square) and VanHorn's (toast)
+// render on the same grid, and Lacquer/Radius join for free when they land.
+(function () {
+  const S = { clients: [], clientId: null, month: null, rows: [], loading: false, byDate: {} };
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const ymd = s => s.replace(/-/g, '');
+
+  // A date-only string must not go through new Date() — that parses as UTC and
+  // shifts the day backwards for anyone west of Greenwich.
+  function localDate(s) {
+    const [y, m, d] = String(s).split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+
+  function monthStart(d) { const x = new Date(d.getFullYear(), d.getMonth(), 1); return x; }
+
+  async function loadClients() {
+    const { data, error } = await sb
+      .from('sync_sources')
+      .select('client_id, source, enabled, clients(name)')
+      .order('source');
+    if (error) { console.error('[syncmon] clients', error); return; }
+    // One entry per client+source. A client on two POS systems gets two rows,
+    // which is correct — they are two different syncs.
+    S.clients = (data || []).map(r => ({
+      key: r.client_id + '|' + r.source,
+      client_id: r.client_id,
+      source: r.source,
+      enabled: r.enabled,
+      name: (r.clients && r.clients.name) || 'Unknown client'
+    })).sort((a, b) => a.name.localeCompare(b.name));
+
+    const sel = document.getElementById('smClient');
+    if (!sel) return;
+    sel.innerHTML = S.clients.map(c =>
+      `<option value="${esc(c.key)}">${esc(c.name)} — ${esc(c.source)}${c.enabled ? '' : ' (not live)'}</option>`
+    ).join('');
+    if (!S.clientId && S.clients.length) S.clientId = S.clients[0].key;
+    if (S.clientId) sel.value = S.clientId;
+  }
+
+  function current() { return S.clients.find(c => c.key === S.clientId) || null; }
+
+  async function loadMonth() {
+    const c = current();
+    const grid = document.getElementById('smGrid');
+    if (!c) { if (grid) grid.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:2rem">No clients are set up for daily sales sync yet.</div>'; return; }
+
+    S.loading = true;
+    if (grid) grid.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:2rem"><span class="spinner"></span></div>';
+
+    const from = monthStart(S.month);
+    const to = new Date(S.month.getFullYear(), S.month.getMonth() + 1, 0);
+
+    const { data, error } = await sb
+      .from('je_sync_log')
+      .select('id, sales_date, status, qbo_je_id, error_message, totals, lines, raw, updated_at')
+      .eq('client_id', c.client_id)
+      .eq('source', c.source)
+      .gte('sales_date', iso(from))
+      .lte('sales_date', iso(to))
+      .order('sales_date');
+
+    S.loading = false;
+    if (error) {
+      console.error('[syncmon] month', error);
+      if (grid) grid.innerHTML = `<div class="empty" style="grid-column:1/-1;padding:2rem">Could not load: ${esc(error.message)}</div>`;
+      return;
+    }
+    S.rows = data || [];
+    S.byDate = {};
+    S.rows.forEach(r => { S.byDate[r.sales_date] = r; });
+    render();
+  }
+
+  function chipClass(status) {
+    if (status === 'posted') return 'sm-c-posted';
+    if (status === 'error') return 'sm-c-error';
+    if (status === 'dry_run') return 'sm-c-dry';
+    return 'sm-c-skip';
+  }
+  function chipLabel(status) {
+    if (status === 'posted') return 'Posted';
+    if (status === 'error') return 'Not posted';
+    if (status === 'dry_run') return 'Dry run';
+    if (status === 'skipped') return 'No activity';
+    return status || '';
+  }
+
+  function render() {
+    const c = current();
+    document.getElementById('smLabel').textContent =
+      S.month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+    const counts = { posted: 0, error: 0, dry_run: 0, other: 0 };
+    let total = 0;
+    S.rows.forEach(r => {
+      if (counts[r.status] === undefined) counts.other++; else counts[r.status]++;
+      if (r.status === 'posted') total += Number(r.totals && r.totals.debits) || 0;
+    });
+    document.getElementById('smSummary').innerHTML =
+      `<div class="metric-card"><div class="metric-label">Posted</div><div class="metric-value mv-green">${counts.posted}</div></div>` +
+      `<div class="metric-card"><div class="metric-label">Needs attention</div><div class="metric-value mv-red">${counts.error}</div></div>` +
+      `<div class="metric-card"><div class="metric-label">Dry run</div><div class="metric-value mv-orange">${counts.dry_run}</div></div>` +
+      `<div class="metric-card"><div class="metric-label">Posted this month</div><div class="metric-value">${money(total)}</div></div>`;
+
+    const first = monthStart(S.month);
+    const startDow = first.getDay();
+    const daysIn = new Date(S.month.getFullYear(), S.month.getMonth() + 1, 0).getDate();
+    const todayIso = iso(new Date());
+
+    const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    let html = DOW.map(d => `<div class="sm-dow">${d}</div>`).join('');
+
+    for (let i = 0; i < startDow; i++) html += '<div class="sm-cell is-other"></div>';
+
+    for (let day = 1; day <= daysIn; day++) {
+      const d = new Date(S.month.getFullYear(), S.month.getMonth(), day);
+      const key = iso(d);
+      const row = S.byDate[key];
+      const isToday = key === todayIso ? ' is-today' : '';
+      let chip = '';
+      if (row) {
+        const amt = Number(row.totals && row.totals.debits) || 0;
+        const label = chipLabel(row.status);
+        const main = row.status === 'skipped' ? '—' : money(amt);
+        chip = `<button class="sm-chip ${chipClass(row.status)}" onclick="SyncMon.open('${key}')" title="${esc(row.error_message || label)}">${main}<small>${esc(label)}</small></button>`;
+      }
+      html += `<div class="sm-cell${isToday}"><div class="sm-daynum">${day}</div>${chip}</div>`;
+    }
+
+    const tail = (7 - ((startDow + daysIn) % 7)) % 7;
+    for (let i = 0; i < tail; i++) html += '<div class="sm-cell is-other"></div>';
+
+    document.getElementById('smGrid').innerHTML = html;
+
+    const note = document.getElementById('smNote');
+    if (c && !c.enabled) {
+      note.innerHTML = `<strong>${esc(c.name)} — ${esc(c.source)}</strong> is not live yet: <code>sync_sources.enabled</code> is false, so runs compute and log but never post.`;
+    } else {
+      note.textContent = 'Days with no chip were never run. Blank days inside a month that is otherwise green usually mean the cron did not fire.';
+    }
+  }
+
+  function open(dateKey) {
+    const row = S.byDate[dateKey];
+    const c = current();
+    if (!row || !c) return;
+
+    document.getElementById('smModalTitle').textContent =
+      localDate(dateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    document.getElementById('smModalSub').textContent =
+      `${c.name} · ${c.source} · ${chipLabel(row.status)}${row.qbo_je_id ? ' · QBO JE ' + row.qbo_je_id : ''}`;
+
+    let body = '';
+
+    if (row.error_message) {
+      body += `<div class="sm-err"><b>Not posted</b>${esc(row.error_message)}</div>`;
+    }
+
+    const lines = Array.isArray(row.lines) ? row.lines : [];
+    if (lines.length) {
+      const dr = lines.filter(l => l.posting === 'Debit').reduce((s, l) => s + (Number(l.amount) || 0), 0);
+      const cr = lines.filter(l => l.posting === 'Credit').reduce((s, l) => s + (Number(l.amount) || 0), 0);
+      body += '<table class="sm-tbl"><thead><tr><th>Account</th><th>Description</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>';
+      lines.forEach(l => {
+        const amt = Number(l.amount) || 0;
+        // account is written into the log from toast-sync onward; older rows
+        // only have the bucket, so fall back to showing that alone.
+        const acct = l.account ? `<span class="sm-acct">${esc(l.account)}</span><span class="sm-bucket">${esc(l.bucket)}</span>`
+                               : `<span class="sm-acct">${esc(l.bucket)}</span>`;
+        body += `<tr><td>${acct}</td><td>${esc(l.description || '')}</td>` +
+          `<td class="num">${l.posting === 'Debit' ? money(amt) : ''}</td>` +
+          `<td class="num">${l.posting === 'Credit' ? money(amt) : ''}</td></tr>`;
+      });
+      body += `</tbody><tfoot><tr><td colspan="2">Total</td><td class="num">${money(dr)}</td><td class="num">${money(cr)}</td></tr></tfoot></table>`;
+      if (Math.abs(dr - cr) >= 0.005) {
+        body += `<div class="sm-err" style="margin-top:12px"><b>Out of balance</b>Debits exceed credits by ${money(dr - cr)}.</div>`;
+      }
+    } else if (row.status === 'skipped') {
+      body += '<div class="empty" style="padding:1.5rem">No sales activity on this date.</div>';
+    } else {
+      body += '<div class="empty" style="padding:1.5rem">No lines were computed for this date.</div>';
+    }
+
+    if (row.raw) {
+      body += `<details class="sm-raw"><summary>Figures pulled from the POS</summary><pre>${esc(JSON.stringify(row.raw, null, 2))}</pre></details>`;
+    }
+
+    document.getElementById('smModalBody').innerHTML = body;
+
+    // Retry only where we have a function that takes a single date. square-sync
+    // is invoked with an empty body by its cron and has no per-date entry point,
+    // so offering a button there would be a lie.
+    const canRetry = c.source === 'toast';
+    document.getElementById('smModalFoot').innerHTML = canRetry
+      ? `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>` +
+        `<button class="btn" id="smRetryBtn" onclick="SyncMon.retry('${dateKey}')">Retry this day</button>`
+      : `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>`;
+
+    openModal('smModal');
+  }
+
+  async function retry(dateKey) {
+    const c = current();
+    if (!c) return;
+    const btn = document.getElementById('smRetryBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+    try {
+      const { data, error } = await sb.functions.invoke('toast-sync', {
+        body: { client_id: c.client_id, business_date: ymd(dateKey), dry_run: false }
+      });
+      if (error) throw error;
+      const res = (data && data.results && data.results[0]) || {};
+      await loadMonth();
+      closeModal('smModal');
+      const ok = res.status === 'posted';
+      if (window.toast) window.toast(ok ? `Posted ${dateKey}` : `${dateKey}: ${res.status}${res.error ? ' — ' + res.error : ''}`);
+      else alert(ok ? `Posted ${dateKey}` : `${dateKey}: ${res.status}\n${res.error || ''}`);
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Retry this day'; }
+      alert('Retry failed: ' + (e.message || e));
+    }
+  }
+
+  window.SyncMon = {
+    async open_page() {
+      if (!S.month) S.month = monthStart(new Date());
+      if (!S.clients.length) await loadClients();
+      await loadMonth();
+    },
+    setClient(key) { S.clientId = key; loadMonth(); },
+    shift(n) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + n, 1); loadMonth(); },
+    today() { S.month = monthStart(new Date()); loadMonth(); },
+    reload() { loadClients().then(loadMonth); },
+    open,
+    retry
+  };
+
+  const _spSync = window.showPage;
+  window.showPage = function (n) {
+    _spSync(n);
+    if (n === 'syncmon') window.SyncMon.open_page();
+  };
+})();
+
 </script>
 </body>
 </html>
