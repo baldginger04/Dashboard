@@ -9179,12 +9179,23 @@ init();
     const res = document.getElementById('rcResults');
     res.innerHTML = '<div class="rc-muted">Reconciling\u2026</div>';
     try {
+      // statement_vendor is what the PDF calls this supplier; vendor_name is
+      // the QuickBooks vendor just picked from the dropdown. Sending both is
+      // what lets the pairing be learned — "FreshPoint San Antonio" on the
+      // statement, "Sysco" in the books. Without it a match made here teaches
+      // nothing and the same statement has to be matched again next week.
+      const svendor = (extracted && extracted.vendor_name) || '';
       const d = await invoke('qbo-reconcile', {
         realm_id: cur.realm_id, vendor_id: vid, invoices: extracted.invoices||[],
-        company_name: cur.company_name, vendor_name: vname, statement_date: extracted.statement_date
+        company_name: cur.company_name, vendor_name: vname, statement_date: extracted.statement_date,
+        statement_vendor: svendor
       });
       renderResults(d); loadHistory();
       if(d.saved===false) toast('Result shown, but history save failed','warn');
+      // Say so out loud, so it is obvious this only has to be done once.
+      if(svendor && norm(svendor) !== norm(vname)){
+        toast('Learned: statements from "'+svendor+'" will now match '+vname+' automatically','ok');
+      }
     } catch(e){
       res.innerHTML = e.code==='reconnect_needed'
         ? '<div class="rc-err">Connection expired. <button class="btn btn-secondary" onclick="ReconConnect()">Reconnect</button></div>'
