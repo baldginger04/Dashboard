@@ -8572,13 +8572,13 @@ async function InvSaveCoding(){
   for(const s of sels){ const code=s.value; if(!code) continue; const qid=acct.byId&&acct.byId[code]?acct.byId[code].id:null;
     lineUpdates.push({id:s.dataset.line,final_account:code,qbo_account_id:qid});
     if(s.dataset.mk) mapRows.push({client_id:inv.client_id,vendor:inv.vendor,match_key:s.dataset.mk,gl_account:code,qbo_account_id:qid,updated_at:new Date().toISOString()}); }
-  if(!lineUpdates.length){ toast('Pick an account first.'); return; }
+  if(!lineUpdates.length){ invToast('Pick an account first.'); return; }
   for(const u of lineUpdates) await sb.from('invoice_lines').update({final_account:u.final_account,qbo_account_id:u.qbo_account_id,needs_review:false}).eq('id',u.id);
   if(mapRows.length) await sb.from('item_map').upsert(mapRows,{onConflict:'client_id,vendor,match_key'});
   const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
   const status=(rem&&rem.length)?'needs_review':'pending';
   await sb.from('invoice_queue').update({status}).eq('id',inv.id);
-  toast(mapRows.length?('Saved — '+mapRows.length+' item'+(mapRows.length>1?'s':'')+' learned.'):'Saved.', 'ok');
+  invToast(mapRows.length?('Saved — '+mapRows.length+' item'+(mapRows.length>1?'s':'')+' learned.'):'Saved.', 'ok');
   await InvLoadCounts();
   await InvOpenInvoice(inv.id);
 }
@@ -8586,7 +8586,7 @@ async function InvApprove(){
   const { inv, lines, acct }=Inv.current;
   if(acct.connected){ for(const l of lines){ if(!l.qbo_account_id && l.final_account && acct.byId&&acct.byId[l.final_account]) await sb.from('invoice_lines').update({qbo_account_id:acct.byId[l.final_account].id}).eq('id',l.id); } }
   await sb.from('invoice_queue').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',inv.id);
-  toast('Approved — queued for the QBO push.', 'ok');
+  invToast('Approved — queued for the QBO push.', 'ok');
   Inv.tab='approved'; await InvRefresh();
 }
 async function InvDelete(){
@@ -8595,11 +8595,11 @@ async function InvDelete(){
   const msg = inv.status==='pushed' ? head+'\n\n⚠ This one was already PUSHED to QuickBooks. Deleting here clears the queue only — the QBO bill must be handled in QuickBooks.' : head+'\n\nRemoves it from the queue. Nothing has been posted to QuickBooks.';
   if(!confirm(msg)) return;
   await sb.from('invoice_queue').delete().eq('id',inv.id);
-  toast('Removed from the queue.', 'ok'); await InvRefresh();
+  invToast('Removed from the queue.', 'ok'); await InvRefresh();
 }
 
 function InvStartUpload(){
-  if(!Inv.client){ toast('Pick a client first — use the switcher, top right.'); Inv.swOpen=true; InvRenderSwitcher(); return; }
+  if(!Inv.client){ invToast('Pick a client first — use the switcher, top right.'); Inv.swOpen=true; InvRenderSwitcher(); return; }
   document.getElementById('invUploadFile').click();
 }
 // Batch upload. Each file goes to the `invoices` bucket first, gets a queue row
@@ -8608,6 +8608,23 @@ function InvStartUpload(){
 // finishes -- which is what you want when dropping twenty invoices at once.
 const INV_UPLOAD_CONCURRENCY = 4;
 
+// The app's `toast` lives inside the Statement Reconciler IIFE and is not
+// reachable from here, so MasJefe gets its own. Self-contained on purpose:
+// a missing notifier must never be what stops an upload.
+function invToast(msg, kind){
+  try{
+    let t=document.getElementById('invToast');
+    if(!t){
+      t=document.createElement('div'); t.id='invToast';
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%;transition:opacity .25s';
+      document.body.appendChild(t);
+    }
+    t.style.background = kind==='warn' ? '#b93232' : (kind==='ok' ? '#1e7a45' : '#1B2A4B');
+    t.textContent=String(msg); t.style.opacity='1';
+    clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.opacity='0'; }, 4200);
+  }catch(_){ console.log('[masjefe]', msg); }
+}
+
 function invSlug(s){ return String(s||'client').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)||'client'; }
 
 async function InvHandleUpload(input){
@@ -8615,7 +8632,7 @@ async function InvHandleUpload(input){
   const name=Inv.clients[Inv.client]||'client';
   const prefix=invSlug(name);
 
-  toast(files.length===1?('Uploading "'+files[0].name+'"...'):('Uploading '+files.length+' invoices for '+name+'...'));
+  invToast(files.length===1?('Uploading "'+files[0].name+'"...'):('Uploading '+files.length+' invoices for '+name+'...'));
   Inv.tab='processing';
 
   let queued=0;
@@ -8659,13 +8676,13 @@ async function InvHandleUpload(input){
           await InvRefresh();
         });
       }catch(err){
-        toast('Could not upload "'+(file&&file.name||'file')+'": '+String(err&&err.message||err),'warn');
+        invToast('Could not upload "'+(file&&file.name||'file')+'": '+String(err&&err.message||err),'warn');
       }
     }
   }
 
   await Promise.all(Array.from({length:Math.min(INV_UPLOAD_CONCURRENCY,files.length)},worker));
-  if(queued) toast(queued+' invoice'+(queued===1?'':'s')+' uploaded - coding now.','ok');
+  if(queued) invToast(queued+' invoice'+(queued===1?'':'s')+' uploaded - coding now.','ok');
   InvStartPolling();
 }
 
