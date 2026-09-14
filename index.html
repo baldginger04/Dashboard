@@ -13416,7 +13416,7 @@ init();
       const build = () => {
         let q = sb.from('reconciliations')
           .select('id,realm_id,company_name,vendor_name,statement_date,summary,run_by,created_at,' +
-                  'release_requested_at,release_requested_by,released_at');
+                  'release_requested_at,release_requested_by,released_at,held,held_reason');
         if(since) q = q.gte('created_at', since);
         return q;
       };
@@ -13634,10 +13634,12 @@ init();
   //
   // Computed here rather than stored — it is the same test the drain applies
   // (nothing matched, something missing), and both read the same summary.
-  function isHeld(r){
-    const s = sum(r);
-    return Number(s.matched || 0) === 0 && missingOf(r) > 0;
-  }
+  // Reads the decision the DRAIN recorded. Deliberately not recomputed from
+  // the match counts: the two facts that decide a hold — the other company
+  // names on the letterhead, and how much history the vendor has in QuickBooks
+  // — are only available at reconcile time and are not in this row. A rule
+  // re-derived here would mark statements held that were deliberately sent.
+  function isHeld(r){ return !!r.held && !r.released_at; }
 
   function heldPanel(r){
     if(!isHeld(r)) return '';
@@ -13658,12 +13660,12 @@ init();
       'background:rgba(185,50,50,.08);border:1px solid rgba(185,50,50,.35)">' +
       '<div style="font-weight:700;color:var(--red);margin-bottom:4px">' +
         'HELD — no chase email was sent</div>' +
-      '<div class="rc-muted" style="margin-bottom:9px">Not one of the ' + total +
-        ' lines on this statement matched a bill, which usually means it was ' +
-        'reconciled against the wrong vendor. Check the statement against ' +
-        '<strong>' + esc(r.vendor_name || 'the vendor') + '</strong> before sending. ' +
-        'If the vendor is wrong, reconcile it by hand in the Reconcile tab instead — ' +
-        'your choice is remembered.</div>' +
+      '<div class="rc-muted" style="margin-bottom:9px">' +
+        esc(r.held_reason || ('Not one of the ' + total +
+            ' lines on this statement matched a bill.')) +
+        ' Check the statement against <strong>' + esc(r.vendor_name || 'the vendor') +
+        '</strong> before sending. If the vendor is wrong, reconcile it by hand in ' +
+        'the Reconcile tab instead — your choice is remembered.</div>' +
       '<button class="btn btn-secondary btn-sm" data-rcrelease="' + esc(r.id) + '">' +
         'Send the ' + miss + ' missing item' + (miss===1?'':'s') + ' anyway</button>' +
       '</div>';
