@@ -13699,6 +13699,18 @@ init();
 (function () {
   const S = { clients: [], clientId: null, month: null, rows: [], loading: false, byDate: {} };
 
+  // sync_sources.source is a lowercase slug in the database. These are the
+  // display names — anything not listed falls back to the raw slug so a newly
+  // added POS still renders rather than showing blank.
+  const SOURCE_LABELS = {
+    square: 'Square',
+    shopware: 'Shopware',
+    zenoti: 'Zenoti',
+    ecrs: 'ECRS',
+    toast: 'Toast'
+  };
+  const sourceLabel = s => SOURCE_LABELS[String(s || '').toLowerCase()] || s || '';
+
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = n => (Number(n) || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -13733,7 +13745,7 @@ init();
     const sel = document.getElementById('smClient');
     if (!sel) return;
     sel.innerHTML = S.clients.map(c =>
-      `<option value="${esc(c.key)}">${esc(c.name)} — ${esc(c.source)}${c.enabled ? '' : ' (not live)'}</option>`
+      `<option value="${esc(c.key)}">${esc(c.name)} — ${esc(sourceLabel(c.source))}${c.enabled ? '' : ' (not live)'}</option>`
     ).join('');
     if (!S.clientId && S.clients.length) S.clientId = S.clients[0].key;
     if (S.clientId) sel.value = S.clientId;
@@ -13836,7 +13848,7 @@ init();
 
     const note = document.getElementById('smNote');
     if (c && !c.enabled) {
-      note.innerHTML = `<strong>${esc(c.name)} — ${esc(c.source)}</strong> is not live yet: <code>sync_sources.enabled</code> is false, so runs compute and log but never post.`;
+      note.innerHTML = `<strong>${esc(c.name)} — ${esc(sourceLabel(c.source))}</strong> is not live yet: <code>sync_sources.enabled</code> is false, so runs compute and log but never post.`;
     } else {
       note.textContent = 'Days with no chip were never run. Blank days inside a month that is otherwise green usually mean the cron did not fire.';
     }
@@ -13850,7 +13862,7 @@ init();
     document.getElementById('smModalTitle').textContent =
       localDate(dateKey).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     document.getElementById('smModalSub').textContent =
-      `${c.name} · ${c.source} · ${chipLabel(row.status)}${row.qbo_je_id ? ' · QBO JE ' + row.qbo_je_id : ''}`;
+      `${c.name} · ${sourceLabel(c.source)} · ${chipLabel(row.status)}${row.qbo_je_id ? ' · QBO JE ' + row.qbo_je_id : ''}`;
 
     let body = '';
 
