@@ -525,6 +525,8 @@
     .mp-foot .mp-status{font-size:12px;color:var(--text3);margin-right:auto}
     #mpReapply .modal{max-width:520px}
     .mp-warn{background:#FEF3C7;border:1px solid #FCD34D;color:#78350F;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.5;margin-top:10px}
+    .inv-rowdel{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;padding:2px 7px;border-radius:6px}
+    .inv-rowdel:hover{background:#FEE2E2;color:#DC2626}
     /* MODAL */
     .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center}
     .modal-overlay.open{display:flex}
@@ -8481,7 +8483,7 @@ async function InvRenderList(){
   const body=document.getElementById('invBody');
   if(error){ body.innerHTML='<div class="empty">Couldn’t load: '+invEsc(error.message)+'</div>'; return; }
   if(!rows.length){ body.innerHTML=InvEmptyFor(Inv.tab); return; }
-  body.innerHTML='<table class="inv-tbl"><thead><tr><th>Vendor</th><th>Invoice #</th><th>Date</th><th class="inv-r">Total</th>'+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
+  body.innerHTML='<table class="inv-tbl"><thead><tr><th>Vendor</th><th>Invoice #</th><th>Date</th><th class="inv-r">Total</th>'+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th><th></th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
   InvFillCoded(rows.map(r=>r.id));
 }
 function InvRowHtml(r){
@@ -8493,7 +8495,10 @@ function InvRowHtml(r){
     +'<td class="inv-r inv-mono">'+invMoney(r.total)+'</td>'
     +(Inv.client?'':'<td class="inv-dim">'+invEsc(Inv.clients[r.client_id]||'—')+'</td>')
     +'<td><span class="inv-pill inv-dim" data-coded="'+r.id+'">—</span></td>'
-    +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span>'+(r.status==='duplicate'&&r.qbo_bill_id?' <span class="inv-dim" style="font-size:11px">in QBO #'+invEsc(r.qbo_bill_id)+'</span>':'')+'</td></tr>';
+    +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span>'+(r.status==='duplicate'&&r.qbo_bill_id?' <span class="inv-dim" style="font-size:11px">in QBO #'+invEsc(r.qbo_bill_id)+'</span>':'')+'</td>'
+    // Reachable without opening the invoice, because a row stuck on Processing
+    // or Error has nothing worth opening.
+    +'<td class="inv-r"><button class="inv-rowdel" title="Delete this invoice" onclick="event.stopPropagation();InvDeleteRow(\''+r.id+'\')">&times;</button></td></tr>';
 }
 function InvEmptyFor(tab){
   const m={processing:'Nothing processing right now.',needs_review:'Nothing waiting on you.',pending:'Nothing ready to approve.',approved:'Nothing approved and waiting.',duplicate:'No duplicates flagged.',pushed:'Nothing posted to QBO yet.',all:'No invoices yet.'}[tab]||'Nothing here.';
@@ -8589,13 +8594,37 @@ async function InvApprove(){
   invToast('Approved — queued for the QBO push.', 'ok');
   Inv.tab='approved'; await InvRefresh();
 }
+// Removing the queue row alone would orphan the PDF in the bucket, so both go.
+async function invRemoveStoredFile(filePath){
+  if(!filePath) return;
+  const m=String(filePath).match(/^([^/]+)\/(.+)$/);
+  if(!m) return;
+  try{ await sb.storage.from(m[1]).remove([m[2]]); }
+  catch(e){ console.warn('[expo] could not remove stored file', filePath, e); }
+}
+
+async function InvDeleteRow(id){
+  const { data:inv }=await sb.from('invoice_queue').select('id,vendor,invoice_number,total,status,file_path').eq('id',id).maybeSingle();
+  if(!inv){ invToast('Already gone.'); await InvRefresh(); return; }
+  const label=(inv.vendor||'this invoice')+(inv.invoice_number?' · '+inv.invoice_number:'');
+  const extra = inv.status==='pushed'
+    ? '\n\n\u26A0 This one was already PUSHED to QuickBooks. Deleting here clears the queue only \u2014 the QBO bill must be handled in QuickBooks.'
+    : '\n\nRemoves it from the queue and deletes the stored PDF. Nothing has been posted to QuickBooks.';
+  if(!confirm('Delete '+label+'?'+extra)) return;
+  await invRemoveStoredFile(inv.file_path);
+  await sb.from('invoice_queue').delete().eq('id',id);
+  invToast('Deleted.', 'ok');
+  await InvRefresh();
+}
+
 async function InvDelete(){
   const { inv }=Inv.current;
   const head='Delete this invoice?\n'+inv.vendor+' · '+(inv.invoice_number||'no #')+' · '+invMoney(inv.total);
-  const msg = inv.status==='pushed' ? head+'\n\n⚠ This one was already PUSHED to QuickBooks. Deleting here clears the queue only — the QBO bill must be handled in QuickBooks.' : head+'\n\nRemoves it from the queue. Nothing has been posted to QuickBooks.';
+  const msg = inv.status==='pushed' ? head+'\n\n⚠ This one was already PUSHED to QuickBooks. Deleting here clears the queue only — the QBO bill must be handled in QuickBooks.' : head+'\n\nRemoves it from the queue and deletes the stored PDF. Nothing has been posted to QuickBooks.';
   if(!confirm(msg)) return;
+  await invRemoveStoredFile(inv.file_path);
   await sb.from('invoice_queue').delete().eq('id',inv.id);
-  invToast('Removed from the queue.', 'ok'); await InvRefresh();
+  invToast('Deleted.', 'ok'); await InvRefresh();
 }
 
 function InvStartUpload(){
