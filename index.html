@@ -1067,7 +1067,7 @@
         <a class="nav-item" id="nav-portal" href="https://client.baldginger.com/" target="_blank" rel="noopener">
           <span>🌐</span> Client Portal <span class="nav-badge" id="portalBadge" style="display:none">0</span>
         </a>
-        <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> MasJefe</div>
+        <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Expo</div>
         <div class="nav-item" onclick="showPage('syncmon')" id="nav-syncmon"><span>📆</span> Daily Sales Sync Monitor</div>
         <div class="nav-item" onclick="showPage('salesmap')" id="nav-salesmap"><span>🔗</span> Sales Mapping</div>
         <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
@@ -1912,7 +1912,7 @@
           #page-invoices .inv-note{font-size:12px;color:var(--text3)}
         </style>
         <div class="page-header">
-          <div><div class="page-title">MasJefe</div><div class="page-sub">Code and approve vendor invoices before they post to QuickBooks</div></div>
+          <div><div class="page-title">Expo</div><div class="page-sub">Code and approve vendor invoices before they post to QuickBooks</div></div>
           <div style="display:flex;gap:10px;align-items:center">
             <div class="inv-switch" id="invSwitch"></div>
             <button class="btn btn-primary" id="invUploadBtn" onclick="InvStartUpload()">&#8593; Upload</button>
@@ -8609,7 +8609,7 @@ function InvStartUpload(){
 const INV_UPLOAD_CONCURRENCY = 4;
 
 // The app's `toast` lives inside the Statement Reconciler IIFE and is not
-// reachable from here, so MasJefe gets its own. Self-contained on purpose:
+// reachable from here, so Expo gets its own. Self-contained on purpose:
 // a missing notifier must never be what stops an upload.
 function invToast(msg, kind){
   try{
@@ -8622,7 +8622,7 @@ function invToast(msg, kind){
     t.style.background = kind==='warn' ? '#b93232' : (kind==='ok' ? '#1e7a45' : '#1B2A4B');
     t.textContent=String(msg); t.style.opacity='1';
     clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.opacity='0'; }, 4200);
-  }catch(_){ console.log('[masjefe]', msg); }
+  }catch(_){ console.log('[expo]', msg); }
 }
 
 function invSlug(s){ return String(s||'client').replace(/[^A-Za-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,60)||'client'; }
