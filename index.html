@@ -7556,9 +7556,9 @@ function taxChecks(cfg, r, prev) {
   if (cfg.mb_enabled && r.mbTotal > 0 && r.comps / r.mbTotal > 0.35)
     add('warn', 'comps_ratio', 'Comps are ' + Math.round(r.comps / r.mbTotal * 100) + '% of gross alcohol — unusually high, check the comps rule.');
   if (r.compsSource === 'detail_pending')
-    add('warn', 'comps_detail_pending', 'Discount detail pulled but no memo patterns are set yet \\u2014 comps read 0. Open "Discount account detail" below, then set comps_detail.patterns.');
+    add('warn', 'comps_detail_pending', 'Discount detail pulled but no memo patterns are set yet \u2014 comps read 0. Open "Discount account detail" below, then set comps_detail.patterns.');
   if (r.compsSource === 'detail_no_lines' || r.compsSource === 'detail_unavailable')
-    add('error', 'comps_detail_missing', 'Comps are configured to come from transaction detail, but no detail lines were returned \\u2014 Re-run this client (a Recompute cannot fetch them; a config change also needs the page reloaded before the Run picks it up), and check comps_detail.accounts names the right account.');
+    add('error', 'comps_detail_missing', 'Comps are configured to come from transaction detail, but no detail lines were returned \u2014 Re-run this client (a Recompute cannot fetch them; a config change also needs the page reloaded before the Run picks it up), and check comps_detail.accounts names the right account.');
   if (r.compsSource === 'detail' && (r.compsMatched || []).length === 0)
     add('error', 'comps_detail_no_match', 'No transaction in the discount account matched the comps memo patterns \u2014 complimentary drinks would report as 0.');
   if (cfg.mb_enabled && r.comps === 0)
@@ -7760,8 +7760,29 @@ async function saveTaxAdjustment(clientId, key, raw) {
   if (card) card.innerHTML = renderTaxCard(cfg, f.data.results, f);
 }
 
+// Fetch THIS client's config row fresh from the database and swap it into
+// Tax.cfgs. Run and Recompute both go through here, so a rules edit made in
+// SQL is picked up on the very next click — no page reload, no month change.
+// Before this, Recompute used whatever config the page had loaded, and then
+// stamped THAT stale config into the filing's snapshot, which is how Bill's
+// Oyster came to show "no patterns set yet" minutes after the patterns were
+// written (9/17). A fetch failure falls back to the cached row, and says so.
+async function taxFreshCfg(clientId) {
+  const cached = Tax.cfgs.find(c => c.client_id === clientId) || null;
+  try {
+    const { data, error } = await sb.from('tax_client_config').select('*, clients(name)').eq('client_id', clientId).maybeSingle();
+    if (error || !data) throw new Error(error ? error.message : 'no row');
+    const i = Tax.cfgs.findIndex(c => c.client_id === clientId);
+    if (i >= 0) Tax.cfgs[i] = data; else Tax.cfgs.push(data);
+    return data;
+  } catch (e) {
+    console.warn('tax config refresh failed, using cached config:', e.message || e);
+    return cached;
+  }
+}
+
 async function runTax(clientId) {
-  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const cfg = await taxFreshCfg(clientId); if (!cfg) return;
   const btn = document.getElementById('taxRun_' + clientId);
   const card = document.getElementById('taxCard_' + clientId);
   btn.disabled = true; btn.textContent = 'Running\u2026';
@@ -7854,12 +7875,13 @@ function taxKeyFigures(r) {
 // change to how collected lines are counted, this retests a month instantly
 // instead of re-pulling. If the inputs themselves are wrong, use Re-run.
 async function recomputeTax(clientId) {
-  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
-  const period = taxPeriodKey(cfg);
-  const f = Tax.saved[clientId + '|' + period];
-  if (!f || !f.data) return;
   const btn = document.getElementById('taxRecompute_' + clientId);
   if (btn) { btn.disabled = true; btn.textContent = 'Recomputing\u2026'; }
+  const cfg = await taxFreshCfg(clientId);
+  if (!cfg) { if (btn) { btn.disabled = false; btn.textContent = 'Recompute'; } return; }
+  const period = taxPeriodKey(cfg);
+  const f = Tax.saved[clientId + '|' + period];
+  if (!f || !f.data) { if (btn) { btn.disabled = false; btn.textContent = 'Recompute'; } return; }
   try {
     const results = computeTax(cfg, f.data.income || [], f.data.gl || [], f.data.detail || []);
     const changed = JSON.stringify(taxKeyFigures(f.data.results)) !== JSON.stringify(taxKeyFigures(results));
