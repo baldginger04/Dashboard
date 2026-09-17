@@ -7483,10 +7483,24 @@ function taxChecks(cfg, r, prev) {
     // Without classification, fall back to the computed component itself: a
     // role that matched nothing necessarily produces 0. That keeps this check
     // working on older filings instead of firing on every one of them.
+    // A client can DECLARE it doesn't sell a category — rules.mb_none, e.g.
+    // ["wine"] (Down N Out, 9/17). That is a standing fact about the business,
+    // not a broken rule, so the check is skipped for that role. Accepts
+    // "wine" or "mb_wine"; a role NOT declared still errors when empty, so a
+    // misconfigured rule can't hide behind the declaration.
+    const mbNone = ((cfg.rules || {}).mb_none || []).map(x => String(x).toLowerCase().replace(/^mb_/, ''));
     [['mb_liquor', r.liq], ['mb_beer', r.beer], ['mb_wine', r.wine]].forEach(([role, amt]) => {
+      if (mbNone.includes(role.replace(/^mb_/, ''))) return;
       const empty = hasCls ? !cls.some(a => a.roles.includes(role)) : (Number(amt) || 0) === 0;
       if (empty)
-        add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0.');
+        add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0. If this client genuinely doesn\u2019t sell it, declare it: rules.mb_none = ["' + role.replace(/^mb_/, '') + '"].');
+    });
+    // The reverse: declared none, but a rule still matched something.
+    mbNone.forEach(n => {
+      const role = 'mb_' + n, amt = { liquor: r.liq, beer: r.beer, wine: r.wine }[n];
+      const matched = hasCls ? cls.some(a => a.roles.includes(role)) : (Number(amt) || 0) !== 0;
+      if (matched)
+        add('warn', 'mb_none_but_matched', 'mb_none declares no ' + n + ', but ' + role + ' matched ' + money(amt || 0) + ' \u2014 either the declaration or the rule is wrong.');
     });
     // A discount/comp account caught by a GROSS rule is the Murray's fault.
     cls.forEach(a => {
