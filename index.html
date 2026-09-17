@@ -7489,11 +7489,17 @@ function taxChecks(cfg, r, prev) {
     // "wine" or "mb_wine"; a role NOT declared still errors when empty, so a
     // misconfigured rule can't hide behind the declaration.
     const mbNone = ((cfg.rules || {}).mb_none || []).map(x => String(x).toLowerCase().replace(/^mb_/, ''));
+    // mb_optional is the softer sibling (Hopscotch, 9/17): the client DOES
+    // sell it, just not every month. QBO drops zero rows from the P&L, so a
+    // no-sales month looks identical to a broken rule. Declared optional:
+    // an empty month is silent and a match is normal — no reverse warning.
+    const mbOptional = ((cfg.rules || {}).mb_optional || []).map(x => String(x).toLowerCase().replace(/^mb_/, ''));
     [['mb_liquor', r.liq], ['mb_beer', r.beer], ['mb_wine', r.wine]].forEach(([role, amt]) => {
       if (mbNone.includes(role.replace(/^mb_/, ''))) return;
+      if (mbOptional.includes(role.replace(/^mb_/, ''))) return;
       const empty = hasCls ? !cls.some(a => a.roles.includes(role)) : (Number(amt) || 0) === 0;
       if (empty)
-        add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0. If this client genuinely doesn\u2019t sell it, declare it: rules.mb_none = ["' + role.replace(/^mb_/, '') + '"].');
+        add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0. If this client never sells it, declare rules.mb_none = ["' + role.replace(/^mb_/, '') + '"]; if only some months, rules.mb_optional = ["' + role.replace(/^mb_/, '') + '"].');
     });
     // The reverse: declared none, but a rule still matched something.
     mbNone.forEach(n => {
