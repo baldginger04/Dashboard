@@ -9541,9 +9541,13 @@ init();
         .eq('realm_id', cur.realm_id).order('created_at',{ascending:false}).limit(15);
       if(error) throw error;
       if(!data.length){ h.innerHTML='<div class="rc-muted">No reconciliations saved for this client yet.</div>'; return; }
-      h.innerHTML = '<table class="rc-tbl"><thead><tr><th>When</th><th>Vendor</th><th>Statement</th><th style="text-align:right">Matched / Total</th></tr></thead><tbody>'+
-        data.map(r=>{ const s=r.summary||{}; const w=new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-          return '<tr><td>'+w+'</td><td>'+(r.vendor_name||'\u2014')+'</td><td>'+(r.statement_date||'\u2014')+'</td><td style="text-align:right">'+(s.matched||0)+' / '+(s.total||0)+'</td></tr>'; }).join('')+
+      h.innerHTML = '<table class="rc-tbl"><thead><tr><th>When</th><th>Vendor</th><th>Statement</th><th style="text-align:right">Matched / on stmt</th></tr></thead><tbody>'+
+        data.map(r=>{ const s=r.summary||{};
+          // Statement lines only. summary.total also counts open QBO bills the
+          // statement never listed, which made clean runs look like failures.
+          const os=Math.max(0,Number(s.total||0)-Number(s.not_in_statement||0));
+          const w=new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+          return '<tr><td>'+w+'</td><td>'+(r.vendor_name||'\u2014')+'</td><td>'+(r.statement_date||'\u2014')+'</td><td style="text-align:right">'+(s.matched||0)+' / '+os+'</td></tr>'; }).join('')+
         '</tbody></table>';
     } catch(e){ h.innerHTML='<div class="rc-muted">Could not load history.</div>'; }
   }
@@ -13616,6 +13620,13 @@ init();
   const missingOf = r => Number(sum(r).missing_in_qbo || 0);
   const mismatchOf= r => Number(sum(r).amount_mismatch || 0) + Number(sum(r).date_mismatch || 0);
   const strayOf   = r => Number(sum(r).not_in_statement || 0);
+  // What the STATEMENT actually listed. summary.total is the union of BOTH
+  // sides — the statement's own lines plus open QBO bills the statement never
+  // named — so scoring matches against it reads as catastrophic failure
+  // whenever a client's AP ledger is untidy. Radius/KeHE showed "0 of 49" for
+  // a statement carrying a single invoice, against 48 stale open bills in
+  // QuickBooks. The statement was read correctly; only the denominator lied.
+  const stmtOf    = r => Math.max(0, Number(sum(r).total || 0) - strayOf(r));
 
   function when(ts){
     if(!ts) return '—';
@@ -13736,7 +13747,7 @@ init();
 
     const head = '<thead><tr>' +
       '<th>When</th><th>Client</th><th>Vendor</th><th>Statement</th>' +
-      '<th class="rc-num">Lines</th><th class="rc-num">Matched</th>' +
+      '<th class="rc-num">Stmt lines</th><th class="rc-num">Matched</th>' +
       '<th class="rc-num">Missing</th><th class="rc-num">Mismatch</th>' +
       '<th class="rc-num">Not on stmt</th><th>Outcome</th><th>Run by</th>' +
       '</tr></thead>';
@@ -13768,7 +13779,7 @@ init();
         '<td>' + esc(r.company_name || '—') + '</td>' +
         '<td>' + esc(r.vendor_name || '—') + '</td>' +
         '<td>' + esc(r.statement_date || '—') + '</td>' +
-        n(s.total) + n(s.matched) + n(miss, 'var(--red)') + n(mis, 'var(--yellow)') + n(strayOf(r)) +
+        n(stmtOf(r)) + n(s.matched) + n(miss, 'var(--red)') + n(mis, 'var(--yellow)') + n(strayOf(r)) +
         '<td>' + chip + '</td>' +
         '<td>' + esc(people[r.run_by] || '') + '</td>' +
         '</tr>';
@@ -13877,7 +13888,7 @@ init();
   function heldPanel(r){
     if(!isHeld(r)) return '';
     const miss = missingOf(r);
-    const total = ((r.summary && r.summary.total) || 0);
+    const total = stmtOf(r);   // the statement's own lines, not the union
 
     if(r.released_at){
       return '<div class="rc-dnone" style="margin-top:12px;color:var(--green)">' +
@@ -13894,8 +13905,10 @@ init();
       '<div style="font-weight:700;color:var(--red);margin-bottom:4px">' +
         'HELD — no chase email was sent</div>' +
       '<div class="rc-muted" style="margin-bottom:9px">' +
-        esc(r.held_reason || ('Not one of the ' + total +
-            ' lines on this statement matched a bill.')) +
+        esc(r.held_reason || (total === 1
+            ? 'The single line on this statement did not match a bill.'
+            : 'Not one of the ' + total +
+              ' lines on this statement matched a bill.')) +
         ' Check the statement against <strong>' + esc(r.vendor_name || 'the vendor') +
         '</strong> before sending. If the vendor is wrong, reconcile it by hand in ' +
         'the Reconcile tab instead — your choice is remembered.</div>' +
