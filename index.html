@@ -605,7 +605,7 @@
     .task-sel{width:20px;height:20px;border:2px solid #cbd2da;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1;color:#fff;flex-shrink:0;margin-right:10px;align-self:center;transition:background .12s,border-color .12s}
     .task-sel.checked{background:var(--accent);border-color:var(--accent)}
     .task-item.selected,.myday-item.selected{background:#fff7f2;box-shadow:inset 3px 0 0 var(--accent)}
-    .bulk-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:80;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:#1a1c1e;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.32)}
+    .bulk-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:10000;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:#1a1c1e;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.32)}
     .bulk-count{font-size:13px;font-weight:600;white-space:nowrap}
     .bulk-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
     .bulk-actions button{border:0;border-radius:7px;padding:7px 11px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit}
@@ -8687,12 +8687,18 @@ function invToast(msg, kind){
     let t=document.getElementById('invToast');
     if(!t){
       t=document.createElement('div'); t.id='invToast';
-      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%;transition:opacity .25s';
+      // pointer-events:none — a toast is informational only. Without it, the
+      // faded (opacity 0) toast stayed in the DOM at the bottom-centre of the
+      // viewport and silently swallowed clicks on anything underneath it —
+      // notably the My Day / client-list bulk-status bar (In Progress / Waiting /
+      // Stuck / Done), which sits in exactly the same spot. (Jen, 9/16.)
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%;transition:opacity .25s;pointer-events:none';
       document.body.appendChild(t);
     }
     t.style.background = kind==='warn' ? '#b93232' : (kind==='ok' ? '#1e7a45' : '#1B2A4B');
-    t.textContent=String(msg); t.style.opacity='1';
-    clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.opacity='0'; }, 4200);
+    t.textContent=String(msg); t.style.display='block'; t.style.opacity='1';
+    clearTimeout(t._h); clearTimeout(t._h2);
+    t._h=setTimeout(()=>{ t.style.opacity='0'; t._h2=setTimeout(()=>{ if(t.style.opacity==='0') t.style.display='none'; }, 300); }, 4200);
   }catch(_){ console.log('[expo]', msg); }
 }
 
@@ -9305,11 +9311,14 @@ init();
   function toast(msg, kind){
     let t = document.getElementById('rcToast');
     if(!t){ t=document.createElement('div'); t.id='rcToast';
-      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%';
+      // pointer-events:none + display:none after the fade — see invToast for why.
+      // The invisible faded toast was sitting on top of the bulk-status bar.
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%;pointer-events:none';
       document.body.appendChild(t); }
     t.style.background = kind==='warn' ? '#b93232' : (kind==='ok' ? '#1e7a45' : '#1B2A4B');
-    t.textContent = msg; t.style.opacity='1';
-    clearTimeout(t.__h); t.__h=setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; }, 4200);
+    t.textContent = msg; t.style.transition=''; t.style.display='block'; t.style.opacity='1';
+    clearTimeout(t.__h); clearTimeout(t.__h2);
+    t.__h=setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; t.__h2=setTimeout(()=>{ if(t.style.opacity==='0') t.style.display='none'; }, 450); }, 4200);
   }
 
   async function invoke(name, body){
