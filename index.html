@@ -484,6 +484,9 @@
     .sm-c-error{background:#FEE2E2;border-left-color:#DC2626;color:#7F1D1D}
     .sm-c-dry{background:#FEF3C7;border-left-color:#D97706;color:#78350F}
     .sm-c-skip{background:#F1F0EC;border-left-color:#9CA3AF;color:#6B7280}
+    .sm-c-posted.sm-has-note{border-left-color:#D97706}
+    .sm-note{background:#FEF3C7;border:1px solid #FCD34D;color:#78350F;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5}
+    .sm-note b{display:block;margin-bottom:3px}
     .sm-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1rem}
     #smModal .modal{max-width:760px}
     .sm-err{background:#FEE2E2;border:1px solid #FCA5A5;color:#7F1D1D;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5}
@@ -605,7 +608,7 @@
     .task-sel{width:20px;height:20px;border:2px solid #cbd2da;border-radius:5px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;line-height:1;color:#fff;flex-shrink:0;margin-right:10px;align-self:center;transition:background .12s,border-color .12s}
     .task-sel.checked{background:var(--accent);border-color:var(--accent)}
     .task-item.selected,.myday-item.selected{background:#fff7f2;box-shadow:inset 3px 0 0 var(--accent)}
-    .bulk-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:10000;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:#1a1c1e;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.32)}
+    .bulk-bar{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:80;display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;max-width:calc(100vw - 24px);background:#1a1c1e;color:#fff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.32)}
     .bulk-count{font-size:13px;font-weight:600;white-space:nowrap}
     .bulk-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
     .bulk-actions button{border:0;border-radius:7px;padding:7px 11px;font-size:12px;font-weight:600;color:#fff;cursor:pointer;font-family:inherit}
@@ -7483,30 +7486,10 @@ function taxChecks(cfg, r, prev) {
     // Without classification, fall back to the computed component itself: a
     // role that matched nothing necessarily produces 0. That keeps this check
     // working on older filings instead of firing on every one of them.
-    // A client can DECLARE it doesn't sell a category — rules.mb_none, e.g.
-    // ["wine"] (Down N Out, 9/17). That is a standing fact about the business,
-    // not a broken rule, so the check is skipped for that role. Accepts
-    // "wine" or "mb_wine"; a role NOT declared still errors when empty, so a
-    // misconfigured rule can't hide behind the declaration.
-    const mbNone = ((cfg.rules || {}).mb_none || []).map(x => String(x).toLowerCase().replace(/^mb_/, ''));
-    // mb_optional is the softer sibling (Hopscotch, 9/17): the client DOES
-    // sell it, just not every month. QBO drops zero rows from the P&L, so a
-    // no-sales month looks identical to a broken rule. Declared optional:
-    // an empty month is silent and a match is normal — no reverse warning.
-    const mbOptional = ((cfg.rules || {}).mb_optional || []).map(x => String(x).toLowerCase().replace(/^mb_/, ''));
     [['mb_liquor', r.liq], ['mb_beer', r.beer], ['mb_wine', r.wine]].forEach(([role, amt]) => {
-      if (mbNone.includes(role.replace(/^mb_/, ''))) return;
-      if (mbOptional.includes(role.replace(/^mb_/, ''))) return;
       const empty = hasCls ? !cls.some(a => a.roles.includes(role)) : (Number(amt) || 0) === 0;
       if (empty)
-        add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0. If this client never sells it, declare rules.mb_none = ["' + role.replace(/^mb_/, '') + '"]; if only some months, rules.mb_optional = ["' + role.replace(/^mb_/, '') + '"].');
-    });
-    // The reverse: declared none, but a rule still matched something.
-    mbNone.forEach(n => {
-      const role = 'mb_' + n, amt = { liquor: r.liq, beer: r.beer, wine: r.wine }[n];
-      const matched = hasCls ? cls.some(a => a.roles.includes(role)) : (Number(amt) || 0) !== 0;
-      if (matched)
-        add('warn', 'mb_none_but_matched', 'mb_none declares no ' + n + ', but ' + role + ' matched ' + money(amt || 0) + ' \u2014 either the declaration or the rule is wrong.');
+        add('error', 'mb_role_empty', 'No account matches ' + role + ' — that component of the MB base is 0.');
     });
     // A discount/comp account caught by a GROSS rule is the Murray's fault.
     cls.forEach(a => {
@@ -7576,9 +7559,9 @@ function taxChecks(cfg, r, prev) {
   if (cfg.mb_enabled && r.mbTotal > 0 && r.comps / r.mbTotal > 0.35)
     add('warn', 'comps_ratio', 'Comps are ' + Math.round(r.comps / r.mbTotal * 100) + '% of gross alcohol — unusually high, check the comps rule.');
   if (r.compsSource === 'detail_pending')
-    add('warn', 'comps_detail_pending', 'Discount detail pulled but no memo patterns are set yet \u2014 comps read 0. Open "Discount account detail" below, then set comps_detail.patterns.');
+    add('warn', 'comps_detail_pending', 'Discount detail pulled but no memo patterns are set yet \\u2014 comps read 0. Open "Discount account detail" below, then set comps_detail.patterns.');
   if (r.compsSource === 'detail_no_lines' || r.compsSource === 'detail_unavailable')
-    add('error', 'comps_detail_missing', 'Comps are configured to come from transaction detail, but no detail lines were returned \u2014 Re-run this client (a Recompute cannot fetch them; a config change also needs the page reloaded before the Run picks it up), and check comps_detail.accounts names the right account.');
+    add('error', 'comps_detail_missing', 'Comps are configured to come from transaction detail, but no detail lines were returned \\u2014 Re-run this client (a Recompute cannot fetch them; a config change also needs the page reloaded before the Run picks it up), and check comps_detail.accounts names the right account.');
   if (r.compsSource === 'detail' && (r.compsMatched || []).length === 0)
     add('error', 'comps_detail_no_match', 'No transaction in the discount account matched the comps memo patterns \u2014 complimentary drinks would report as 0.');
   if (cfg.mb_enabled && r.comps === 0)
@@ -7780,29 +7763,8 @@ async function saveTaxAdjustment(clientId, key, raw) {
   if (card) card.innerHTML = renderTaxCard(cfg, f.data.results, f);
 }
 
-// Fetch THIS client's config row fresh from the database and swap it into
-// Tax.cfgs. Run and Recompute both go through here, so a rules edit made in
-// SQL is picked up on the very next click — no page reload, no month change.
-// Before this, Recompute used whatever config the page had loaded, and then
-// stamped THAT stale config into the filing's snapshot, which is how Bill's
-// Oyster came to show "no patterns set yet" minutes after the patterns were
-// written (9/17). A fetch failure falls back to the cached row, and says so.
-async function taxFreshCfg(clientId) {
-  const cached = Tax.cfgs.find(c => c.client_id === clientId) || null;
-  try {
-    const { data, error } = await sb.from('tax_client_config').select('*, clients(name)').eq('client_id', clientId).maybeSingle();
-    if (error || !data) throw new Error(error ? error.message : 'no row');
-    const i = Tax.cfgs.findIndex(c => c.client_id === clientId);
-    if (i >= 0) Tax.cfgs[i] = data; else Tax.cfgs.push(data);
-    return data;
-  } catch (e) {
-    console.warn('tax config refresh failed, using cached config:', e.message || e);
-    return cached;
-  }
-}
-
 async function runTax(clientId) {
-  const cfg = await taxFreshCfg(clientId); if (!cfg) return;
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
   const btn = document.getElementById('taxRun_' + clientId);
   const card = document.getElementById('taxCard_' + clientId);
   btn.disabled = true; btn.textContent = 'Running\u2026';
@@ -7895,13 +7857,12 @@ function taxKeyFigures(r) {
 // change to how collected lines are counted, this retests a month instantly
 // instead of re-pulling. If the inputs themselves are wrong, use Re-run.
 async function recomputeTax(clientId) {
-  const btn = document.getElementById('taxRecompute_' + clientId);
-  if (btn) { btn.disabled = true; btn.textContent = 'Recomputing\u2026'; }
-  const cfg = await taxFreshCfg(clientId);
-  if (!cfg) { if (btn) { btn.disabled = false; btn.textContent = 'Recompute'; } return; }
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
   const period = taxPeriodKey(cfg);
   const f = Tax.saved[clientId + '|' + period];
-  if (!f || !f.data) { if (btn) { btn.disabled = false; btn.textContent = 'Recompute'; } return; }
+  if (!f || !f.data) return;
+  const btn = document.getElementById('taxRecompute_' + clientId);
+  if (btn) { btn.disabled = true; btn.textContent = 'Recomputing\u2026'; }
   try {
     const results = computeTax(cfg, f.data.income || [], f.data.gl || [], f.data.detail || []);
     const changed = JSON.stringify(taxKeyFigures(f.data.results)) !== JSON.stringify(taxKeyFigures(results));
@@ -8687,18 +8648,12 @@ function invToast(msg, kind){
     let t=document.getElementById('invToast');
     if(!t){
       t=document.createElement('div'); t.id='invToast';
-      // pointer-events:none — a toast is informational only. Without it, the
-      // faded (opacity 0) toast stayed in the DOM at the bottom-centre of the
-      // viewport and silently swallowed clicks on anything underneath it —
-      // notably the My Day / client-list bulk-status bar (In Progress / Waiting /
-      // Stuck / Done), which sits in exactly the same spot. (Jen, 9/16.)
-      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%;transition:opacity .25s;pointer-events:none';
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%;transition:opacity .25s';
       document.body.appendChild(t);
     }
     t.style.background = kind==='warn' ? '#b93232' : (kind==='ok' ? '#1e7a45' : '#1B2A4B');
-    t.textContent=String(msg); t.style.display='block'; t.style.opacity='1';
-    clearTimeout(t._h); clearTimeout(t._h2);
-    t._h=setTimeout(()=>{ t.style.opacity='0'; t._h2=setTimeout(()=>{ if(t.style.opacity==='0') t.style.display='none'; }, 300); }, 4200);
+    t.textContent=String(msg); t.style.opacity='1';
+    clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.opacity='0'; }, 4200);
   }catch(_){ console.log('[expo]', msg); }
 }
 
@@ -9311,14 +9266,11 @@ init();
   function toast(msg, kind){
     let t = document.getElementById('rcToast');
     if(!t){ t=document.createElement('div'); t.id='rcToast';
-      // pointer-events:none + display:none after the fade — see invToast for why.
-      // The invisible faded toast was sitting on top of the bulk-status bar.
-      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%;pointer-events:none';
+      t.style.cssText='position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 18px;border-radius:10px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 18px rgba(0,0,0,.18);max-width:90%';
       document.body.appendChild(t); }
     t.style.background = kind==='warn' ? '#b93232' : (kind==='ok' ? '#1e7a45' : '#1B2A4B');
-    t.textContent = msg; t.style.transition=''; t.style.display='block'; t.style.opacity='1';
-    clearTimeout(t.__h); clearTimeout(t.__h2);
-    t.__h=setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; t.__h2=setTimeout(()=>{ if(t.style.opacity==='0') t.style.display='none'; }, 450); }, 4200);
+    t.textContent = msg; t.style.opacity='1';
+    clearTimeout(t.__h); t.__h=setTimeout(()=>{ t.style.transition='opacity .4s'; t.style.opacity='0'; }, 4200);
   }
 
   async function invoke(name, body){
@@ -9550,13 +9502,9 @@ init();
         .eq('realm_id', cur.realm_id).order('created_at',{ascending:false}).limit(15);
       if(error) throw error;
       if(!data.length){ h.innerHTML='<div class="rc-muted">No reconciliations saved for this client yet.</div>'; return; }
-      h.innerHTML = '<table class="rc-tbl"><thead><tr><th>When</th><th>Vendor</th><th>Statement</th><th style="text-align:right">Matched / on stmt</th></tr></thead><tbody>'+
-        data.map(r=>{ const s=r.summary||{};
-          // Statement lines only. summary.total also counts open QBO bills the
-          // statement never listed, which made clean runs look like failures.
-          const os=Math.max(0,Number(s.total||0)-Number(s.not_in_statement||0));
-          const w=new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-          return '<tr><td>'+w+'</td><td>'+(r.vendor_name||'\u2014')+'</td><td>'+(r.statement_date||'\u2014')+'</td><td style="text-align:right">'+(s.matched||0)+' / '+os+'</td></tr>'; }).join('')+
+      h.innerHTML = '<table class="rc-tbl"><thead><tr><th>When</th><th>Vendor</th><th>Statement</th><th style="text-align:right">Matched / Total</th></tr></thead><tbody>'+
+        data.map(r=>{ const s=r.summary||{}; const w=new Date(r.created_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+          return '<tr><td>'+w+'</td><td>'+(r.vendor_name||'\u2014')+'</td><td>'+(r.statement_date||'\u2014')+'</td><td style="text-align:right">'+(s.matched||0)+' / '+(s.total||0)+'</td></tr>'; }).join('')+
         '</tbody></table>';
     } catch(e){ h.innerHTML='<div class="rc-muted">Could not load history.</div>'; }
   }
@@ -13629,13 +13577,6 @@ init();
   const missingOf = r => Number(sum(r).missing_in_qbo || 0);
   const mismatchOf= r => Number(sum(r).amount_mismatch || 0) + Number(sum(r).date_mismatch || 0);
   const strayOf   = r => Number(sum(r).not_in_statement || 0);
-  // What the STATEMENT actually listed. summary.total is the union of BOTH
-  // sides — the statement's own lines plus open QBO bills the statement never
-  // named — so scoring matches against it reads as catastrophic failure
-  // whenever a client's AP ledger is untidy. Radius/KeHE showed "0 of 49" for
-  // a statement carrying a single invoice, against 48 stale open bills in
-  // QuickBooks. The statement was read correctly; only the denominator lied.
-  const stmtOf    = r => Math.max(0, Number(sum(r).total || 0) - strayOf(r));
 
   function when(ts){
     if(!ts) return '—';
@@ -13756,7 +13697,7 @@ init();
 
     const head = '<thead><tr>' +
       '<th>When</th><th>Client</th><th>Vendor</th><th>Statement</th>' +
-      '<th class="rc-num">Stmt lines</th><th class="rc-num">Matched</th>' +
+      '<th class="rc-num">Lines</th><th class="rc-num">Matched</th>' +
       '<th class="rc-num">Missing</th><th class="rc-num">Mismatch</th>' +
       '<th class="rc-num">Not on stmt</th><th>Outcome</th><th>Run by</th>' +
       '</tr></thead>';
@@ -13788,7 +13729,7 @@ init();
         '<td>' + esc(r.company_name || '—') + '</td>' +
         '<td>' + esc(r.vendor_name || '—') + '</td>' +
         '<td>' + esc(r.statement_date || '—') + '</td>' +
-        n(stmtOf(r)) + n(s.matched) + n(miss, 'var(--red)') + n(mis, 'var(--yellow)') + n(strayOf(r)) +
+        n(s.total) + n(s.matched) + n(miss, 'var(--red)') + n(mis, 'var(--yellow)') + n(strayOf(r)) +
         '<td>' + chip + '</td>' +
         '<td>' + esc(people[r.run_by] || '') + '</td>' +
         '</tr>';
@@ -13897,7 +13838,7 @@ init();
   function heldPanel(r){
     if(!isHeld(r)) return '';
     const miss = missingOf(r);
-    const total = stmtOf(r);   // the statement's own lines, not the union
+    const total = ((r.summary && r.summary.total) || 0);
 
     if(r.released_at){
       return '<div class="rc-dnone" style="margin-top:12px;color:var(--green)">' +
@@ -13914,10 +13855,8 @@ init();
       '<div style="font-weight:700;color:var(--red);margin-bottom:4px">' +
         'HELD — no chase email was sent</div>' +
       '<div class="rc-muted" style="margin-bottom:9px">' +
-        esc(r.held_reason || (total === 1
-            ? 'The single line on this statement did not match a bill.'
-            : 'Not one of the ' + total +
-              ' lines on this statement matched a bill.')) +
+        esc(r.held_reason || ('Not one of the ' + total +
+            ' lines on this statement matched a bill.')) +
         ' Check the statement against <strong>' + esc(r.vendor_name || 'the vendor') +
         '</strong> before sending. If the vendor is wrong, reconcile it by hand in ' +
         'the Reconcile tab instead — your choice is remembered.</div>' +
@@ -14179,9 +14118,14 @@ init();
       let chip = '';
       if (row) {
         const amt = Number(row.totals && row.totals.debits) || 0;
-        const label = chipLabel(row.status);
+        // A posted day can carry a note: the JE is locked on a bank deposit and
+        // Toast now differs, or a later re-run failed. It is still posted, so it
+        // stays green, with an amber edge so it is not missed.
+        const note = row.status === 'posted' && row.error_message;
+        const locked = row.raw && row.raw.locked;
+        const label = note ? (locked ? 'Posted · locked' : 'Posted · note') : chipLabel(row.status);
         const main = row.status === 'skipped' ? '—' : money(amt);
-        chip = `<button class="sm-chip ${chipClass(row.status)}" onclick="SyncMon.open('${key}')" title="${esc(row.error_message || label)}">${main}<small>${esc(label)}</small></button>`;
+        chip = `<button class="sm-chip ${chipClass(row.status)}${note ? ' sm-has-note' : ''}" onclick="SyncMon.open('${key}')" title="${esc(row.error_message || label)}">${main}<small>${esc(label)}</small></button>`;
       }
       html += `<div class="sm-cell${isToday}"><div class="sm-daynum">${day}</div>${chip}</div>`;
     }
@@ -14211,8 +14155,14 @@ init();
 
     let body = '';
 
-    if (row.error_message) {
+    if (row.error_message && row.status === 'posted') {
+      const head = row.raw && row.raw.locked ? 'Posted — locked in QuickBooks' : 'Posted — needs a look';
+      body += `<div class="sm-note"><b>${head}</b>${esc(row.error_message)}</div>`;
+    } else if (row.error_message) {
       body += `<div class="sm-err"><b>Not posted</b>${esc(row.error_message)}</div>`;
+    }
+    if (row.status === 'posted' && row.raw && row.raw.unpaid_orders_approved) {
+      body += `<div class="sm-note"><b>Unpaid Orders approved</b>${money(row.raw.unpaid_orders_approved.amount)} was over the automatic cap and was posted after approval.</div>`;
     }
 
     const lines = Array.isArray(row.lines) ? row.lines : [];
@@ -14250,34 +14200,53 @@ init();
     // is invoked with an empty body by its cron and has no per-date entry point,
     // so offering a button there would be a lie.
     const canRetry = c.source === 'toast';
+    // Over the unpaid-orders cap: offer an approval for that exact amount. The
+    // function refuses it if the residual has moved since.
+    const capHit = row.status === 'error' && /unpaid-orders cap/.test(row.error_message || '')
+      ? Number(((row.error_message || '').match(/residual of ([\d.]+)/) || [])[1]) : NaN;
+    const approveBtn = canRetry && Number.isFinite(capHit)
+      ? `<button class="btn btn-ghost" id="smApproveBtn" onclick="SyncMon.approveUnpaid('${dateKey}', ${capHit})">Approve ${money(capHit)} Unpaid Orders and post</button>`
+      : '';
+    const retryLabel = row.status === 'posted' ? 'Re-run this day' : 'Retry this day';
     document.getElementById('smModalFoot').innerHTML = canRetry
-      ? `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>` +
-        `<button class="btn" id="smRetryBtn" onclick="SyncMon.retry('${dateKey}')">Retry this day</button>`
+      ? `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>` + approveBtn +
+        `<button class="btn" id="smRetryBtn" onclick="SyncMon.retry('${dateKey}')">${retryLabel}</button>`
       : `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>`;
 
     openModal('smModal');
   }
 
-  async function retry(dateKey) {
+  async function retry(dateKey, approvedUnpaid) {
     const c = current();
     if (!c) return;
-    const btn = document.getElementById('smRetryBtn');
+    const btn = document.getElementById(approvedUnpaid ? 'smApproveBtn' : 'smRetryBtn');
+    const was = btn ? btn.textContent : '';
     if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
     try {
-      const { data, error } = await sb.functions.invoke('toast-sync', {
-        body: { client_id: c.client_id, business_date: ymd(dateKey), dry_run: false }
-      });
+      const body = { client_id: c.client_id, business_date: ymd(dateKey), dry_run: false };
+      if (approvedUnpaid) body.approved_unpaid_amount = approvedUnpaid;
+      const { data, error } = await sb.functions.invoke('toast-sync', { body });
       if (error) throw error;
       const res = (data && data.results && data.results[0]) || {};
       await loadMonth();
       closeModal('smModal');
       const ok = res.status === 'posted';
-      if (window.toast) window.toast(ok ? `Posted ${dateKey}` : `${dateKey}: ${res.status}${res.error ? ' — ' + res.error : ''}`);
-      else alert(ok ? `Posted ${dateKey}` : `${dateKey}: ${res.status}\n${res.error || ''}`);
+      const msg = ok
+        ? (res.error ? `${dateKey}: posted, with a note — ${res.error}` : `Posted ${dateKey}`)
+        : `${dateKey}: ${res.status}${res.error ? ' — ' + res.error : ''}`;
+      if (window.toast && ok && !res.error) window.toast(msg); else alert(msg);
     } catch (e) {
-      if (btn) { btn.disabled = false; btn.textContent = 'Retry this day'; }
+      if (btn) { btn.disabled = false; btn.textContent = was; }
       alert('Retry failed: ' + (e.message || e));
     }
+  }
+
+  function approveUnpaid(dateKey, amount) {
+    const ok = confirm(
+      `Post ${dateKey} with ${money(amount)} of Unpaid Orders to Cash Over/Short?\n\n` +
+      `This is above the automatic cap, so it only posts with your approval. ` +
+      `If a late payment has changed the figure since, nothing will post and the new amount will show.`);
+    if (ok) retry(dateKey, amount);
   }
 
   window.SyncMon = {
@@ -14291,7 +14260,8 @@ init();
     today() { S.month = monthStart(new Date()); loadMonth(); },
     reload() { loadClients().then(loadMonth); },
     open,
-    retry
+    retry,
+    approveUnpaid
   };
 
   const _spSync = window.showPage;
@@ -14604,10 +14574,15 @@ init();
       });
       if (error) throw error;
       const res = data?.results || [];
-      const posted = res.filter(r => r.status === 'posted').length;
+      const posted = res.filter(r => r.status === 'posted' && !r.error).length;
+      const lockedDiff = res.filter(r => r.action === 'locked_differs');
+      const noted = res.filter(r => r.status === 'posted' && r.error && r.action !== 'locked_differs');
       const errs = res.filter(r => r.status === 'error');
       closeModal('mpReapply');
-      alert(`Re-applied ${dates.length} days: ${posted} posted, ${errs.length} with errors.` +
+      alert(`Re-applied ${dates.length} days: ${posted} posted, ` +
+        `${lockedDiff.length} locked in QBO (on a bank deposit, left unchanged), ` +
+        `${noted.length} posted with a note, ${errs.length} with errors.` +
+        (lockedDiff.length ? `\n\nLocked: ${lockedDiff.map(r => r.business_date).join(', ')}. These keep the old accounts until they are taken off the deposit and re-run.` : '') +
         (errs.length ? `\n\nFirst error — ${errs[0].business_date}: ${errs[0].error}` : ''));
     } catch (e) {
       alert('Re-apply failed: ' + (e.message || e));
