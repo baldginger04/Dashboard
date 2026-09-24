@@ -15837,6 +15837,7 @@ init();
     if (!B) return '';
     const api = {}, file = {};
     for (const j of p.toast || []) api[j.job] = (api[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
+    for (const j of B.list) file[j.job] = (file[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
     // Which of the function's candidate rounding methods reproduces the file?
     const methods = (p.api_meta && p.api_meta.methods) || {};
     const scored = Object.entries(methods).map(([m, t]) => {
@@ -15844,7 +15845,6 @@ init();
       for (const j of keys) { const a = Math.round((t[j] || 0) * 100), f = file[j] || 0; if (!a && !f) continue; if (a === f) hit++; tot += a; }
       return { m, hit, tot };
     });
-    for (const j of B.list) file[j.job] = (file[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
     const jobs = [...new Set([...Object.keys(api), ...Object.keys(file)])].filter(j => api[j] || file[j]).sort();
     let ta = 0, tf = 0, diffs = 0;
     const rows = jobs.map(j => { const a = api[j] || 0, f = file[j] || 0; ta += a; tf += f; if (a !== f) diffs++;
