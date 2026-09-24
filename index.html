@@ -886,6 +886,49 @@
     #page-vendoraudit .va-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
     #page-vendoraudit .va-chip[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
     #page-vendoraudit .va-views{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+    /* PAYROLL ACCRUALS */
+    #page-labor .va-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+    #page-labor .va-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
+    #page-labor .va-field{display:flex;flex-direction:column;gap:.25rem}
+    #page-labor .va-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-labor select,#page-labor input[type=text],#page-labor input[type=number],#page-labor input[type=month],#page-labor input[type=date]{font:inherit;font-size:13px;padding:.4rem .55rem;border:1px solid var(--border);border-radius:7px;background:var(--bg)}
+    #page-labor .va-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.45rem 1rem;cursor:pointer}
+    #page-labor .va-btn:hover{filter:brightness(.93)}
+    #page-labor .va-ghost{font:inherit;font-weight:500;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.4rem .8rem;cursor:pointer}
+    #page-labor .va-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    #page-labor .va-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-labor .va-status.err{color:var(--red)}
+    #page-labor .la-drop{border:1.5px dashed var(--border2);border-radius:9px;padding:.7rem 1rem;background:var(--bg3);cursor:pointer;font-size:13px;color:var(--text2);min-width:260px}
+    #page-labor .la-drop:hover{border-color:var(--accent)}
+    #page-labor .la-files{font-size:12px;color:var(--text2);margin-top:.6rem;display:flex;flex-direction:column;gap:.15rem}
+    #page-labor .la-locs{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.45rem}
+    #page-labor .la-loc{font-size:11.5px;background:var(--green-bg);border:1px solid var(--green-border);color:var(--green);border-radius:20px;padding:.12rem .55rem}
+    #page-labor .la-loc.unused{background:var(--bg3);border-color:var(--border);color:var(--text3)}
+    #page-labor .la-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.6rem}
+    #page-labor .la-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.7rem 1rem;cursor:pointer;flex-wrap:wrap}
+    #page-labor .la-name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    #page-labor .la-sub{font-size:12px;color:var(--text3);margin-top:.15rem}
+    #page-labor .la-btns{display:flex;gap:.4rem;align-items:center}
+    #page-labor .la-body{border-top:1px solid var(--border);padding:.7rem 1rem .9rem}
+    #page-labor .la-chip{font-size:11px;font-weight:600;border-radius:20px;padding:.1rem .55rem;border:1px solid}
+    #page-labor .la-chip.ok{color:var(--green);background:var(--green-bg);border-color:var(--green-border)}
+    #page-labor .la-chip.ready{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-border)}
+    #page-labor .la-chip.bad{color:var(--red);background:var(--red-bg);border-color:var(--red-border)}
+    #page-labor .la-chip.mute{color:var(--text3);background:var(--bg3);border-color:var(--border)}
+    #page-labor .la-meta{font-size:12px;color:var(--text2);margin-bottom:.5rem}
+    #page-labor .la-muted{font-size:12px;color:var(--text3)}
+    #page-labor .la-err{font-size:12.5px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:7px;padding:.45rem .65rem;margin-bottom:.4rem}
+    #page-labor .la-warn{font-size:12.5px;color:var(--yellow);background:var(--yellow-bg);border:1px solid var(--yellow-border);border-radius:7px;padding:.4rem .65rem;margin-bottom:.4rem}
+    #page-labor .la-warn-t{color:var(--yellow)} #page-labor .la-ok-t{color:var(--green)}
+    #page-labor .la-maprow{display:flex;gap:.4rem;margin-top:.4rem;flex-wrap:wrap}
+    #page-labor .la-maprow select{max-width:420px}
+    #page-labor .la-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:.4rem}
+    #page-labor .la-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:600;padding:.35rem .5rem;border-bottom:1px solid var(--border)}
+    #page-labor .la-table td{padding:.3rem .5rem;border-bottom:1px solid var(--border)}
+    #page-labor .la-table .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #page-labor .la-table tfoot td{font-weight:600;border-bottom:none}
+    #page-labor .la-table tr.k-salary td,#page-labor .la-table tr.k-tax td{background:var(--bg3)}
+    #page-labor .la-set td{vertical-align:middle}
     #page-vendoraudit .va-panel,#page-mv .va-panel,#page-payroll .va-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
     #page-vendoraudit .va-controls,#page-mv .va-controls,#page-payroll .va-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
     #page-vendoraudit .va-field,#page-mv .va-field,#page-payroll .va-field{display:flex;flex-direction:column;gap:.25rem}
@@ -1161,6 +1204,7 @@
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('payroll')" id="nav-payroll"><span>💵</span> Payroll Review</div>
+        <div class="nav-item" onclick="showPage('labor')" id="nav-labor"><span>🧮</span> Payroll Accruals</div>
         <div class="nav-section">Monthly Tools</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
         <!-- Marketing holds only Prospects today, which is permission-gated, so
@@ -1505,6 +1549,25 @@
         </div>
 
         <div id="prResult"></div>
+      </div>
+
+      <div class="page" id="page-labor">
+        <div class="page-header"><div><div class="page-title">Payroll Accruals</div><div class="page-sub">Month-end labor accrual from Toast + the next payroll entry &#8212; posts &#8220;Labor Accrual&#8221; and reverses it on the 1st</div></div></div>
+        <div class="va-panel">
+          <div class="va-controls">
+            <div class="va-field"><label for="laMonth">Month</label><input type="month" id="laMonth"></div>
+            <div class="va-field"><label>Toast Payroll Export (CSV)</label>
+              <div class="la-drop" id="laDrop">Choose or drop file(s) &#8212; last Monday through month end</div>
+              <input type="file" id="laFile" accept=".csv,text/csv" multiple style="display:none"></div>
+            <button class="va-btn" id="laPreviewAll">Preview all</button>
+            <button class="va-ghost" id="laSettingsBtn">Settings</button>
+          </div>
+          <div class="la-muted" id="laPeriod" style="margin-top:.55rem"></div>
+          <div id="laFiles"></div>
+          <div class="va-status" id="laStatus"></div>
+        </div>
+        <div class="va-panel" id="laSettings" style="display:none"></div>
+        <div id="laCards"></div>
       </div>
 
       <div class="page" id="page-mv">
@@ -7260,6 +7323,7 @@ function showPage(name) {
   if (name === 'mv' && window.MvOpen) window.MvOpen();
   if (name === 'w9' && window.W9Open) window.W9Open();
   if (name === 'payroll' && window.PrOpen) window.PrOpen();
+  if (name === 'labor' && window.LaborAccrualOpen) window.LaborAccrualOpen();
   if (name === 'vendoraudit' && window.VendorAuditOpen) window.VendorAuditOpen();
   if (name === 'map' && window.ClientMap) window.ClientMap.open();
   if (name === 'prospects' && window.TxProspectsOpen) window.TxProspectsOpen();
@@ -15479,6 +15543,384 @@ init();
   window.W9Open = function () {
     if (S.clientId && $('w9Client').style.display !== 'none') return;
     showOverview();
+  };
+})();
+</script>
+<script>
+/* ============================================================
+   PAYROLL ACCRUALS — added 2026-09-24
+   Month-end labor accrual JEs for Toast clients, posted to QBO by the
+   labor-accrual Edge Function ("Labor Accrual" on the last day of the
+   month, "Labor AccrualR" on the 1st).
+
+   - Toast hours/pay come from Toast's Payroll Export CSV (the Excel icon
+     under the Labor Summary), run for last Monday → month end. One file
+     can hold several restaurants — rows are split by its Location column
+     and matched to clients by labor_accrual_config.toast_location.
+   - Salaries, job accounts and the tax account come from the client's
+     first-Sunday "Payroll (MM/DD/YYYY)" entry; the function reads it.
+   - Preview writes nothing. Post re-computes server-side and refuses if
+     the total moved since the preview.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => (n < 0 ? '-$' : '$') + Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const norm = s => String(s || '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]/g, '');
+  const clientName = id => { const c = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === id); return c ? c.name : id; };
+  const pad = n => String(n).padStart(2, '0');
+
+  const S = {
+    booted: false, month: '', cfgs: [], logs: {}, previews: {}, busy: {}, open: {},
+    files: [], byLoc: {}, accounts: {}, showSettings: false, status: ''
+  };
+
+  function defaultMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
+
+  // Same rule as the Edge Function (weekly): last Monday → month end; Sunday month-end = none.
+  function weeklyPeriod(month) {
+    const [y, m] = month.split('-').map(Number);
+    const last = new Date(Date.UTC(y, m, 0)); const dow = last.getUTCDay();
+    if (dow === 0) return null;
+    const start = new Date(last.getTime() - ((dow + 6) % 7) * 86400000);
+    return { start: start.toISOString().slice(0, 10), end: last.toISOString().slice(0, 10), days: (dow + 6) % 7 + 1 };
+  }
+  const mdy = iso => iso ? iso.slice(5, 7) + '/' + iso.slice(8, 10) + '/' + iso.slice(0, 4) : '';
+  const rangeTxt = p => p.start === p.end ? mdy(p.start) : mdy(p.start) + ' – ' + mdy(p.end);
+
+  function setStatus(msg, isErr) { S.status = msg || ''; const el = $('laStatus'); if (el) { el.textContent = S.status; el.className = 'va-status' + (isErr ? ' err' : ''); } }
+
+  // ---------------------------------------------------------------- CSV
+  function parseCsv(text) {
+    const rows = []; let row = [], cur = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === ',') { row.push(cur); cur = ''; }
+      else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); rows.push(row); row = []; cur = ''; }
+      else cur += ch;
+    }
+    if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
+    return rows.filter(r => r.some(c => c.trim() !== ''));
+  }
+  const num = v => { const n = parseFloat(String(v || '').replace(/[$,]/g, '')); return isFinite(n) ? n : 0; };
+
+  function fileRange(name) {
+    const m = String(name).match(/PayrollExport_(\d{4})_(\d{2})_(\d{2})(?:-(\d{4})_(\d{2})_(\d{2}))?/i);
+    if (!m) return null;
+    const a = m[1] + '-' + m[2] + '-' + m[3];
+    return { start: a, end: m[4] ? m[4] + '-' + m[5] + '-' + m[6] : a };
+  }
+
+  async function readFiles(fileList) {
+    for (const f of fileList) {
+      const text = await f.text();
+      const rows = parseCsv(text.replace(/^﻿/, ''));
+      if (!rows.length) continue;
+      const h = rows[0].map(x => x.trim().toLowerCase());
+      const ix = k => h.indexOf(k);
+      const iJob = ix('job title'), iLoc = ix('location'), iReg = ix('regular pay'), iOt = ix('overtime pay'), iRh = ix('regular hours'), iOh = ix('overtime hours');
+      if (iJob < 0 || iReg < 0 || iOt < 0) { setStatus(f.name + ' doesn’t look like a Toast Payroll Export (no Job Title / Regular Pay / Overtime Pay columns).', true); continue; }
+      S.files = S.files.filter(x => x.name !== f.name);
+      const locs = {};
+      for (const r of rows.slice(1)) {
+        const loc = iLoc >= 0 ? (r[iLoc] || '').trim() : '(no location column)';
+        const job = (r[iJob] || '').trim(); if (!job) continue;
+        const reg = num(r[iReg]), ot = num(r[iOt]), hrs = num(r[iRh]) + num(r[iOh]);
+        const L = locs[loc] || (locs[loc] = {});
+        const J = L[job] || (L[job] = { job, regular_pay: 0, overtime_pay: 0, hours: 0 });
+        J.regular_pay += reg; J.overtime_pay += ot; J.hours += hrs;
+      }
+      S.files.push({ name: f.name, range: fileRange(f.name), locs });
+    }
+    rebuildByLoc();
+    S.previews = {};
+    await autoMatchLocations();
+    render();
+  }
+
+  function rebuildByLoc() {
+    const by = {};
+    for (const f of S.files) for (const [loc, jobs] of Object.entries(f.locs)) {
+      const B = by[loc] || (by[loc] = { jobs: {}, files: [] });
+      if (!B.files.includes(f.name)) B.files.push(f.name);
+      for (const j of Object.values(jobs)) {
+        const J = B.jobs[j.job] || (B.jobs[j.job] = { job: j.job, regular_pay: 0, overtime_pay: 0, hours: 0 });
+        J.regular_pay += j.regular_pay; J.overtime_pay += j.overtime_pay; J.hours += j.hours;
+      }
+    }
+    for (const B of Object.values(by)) {
+      B.list = Object.values(B.jobs).map(j => ({ job: j.job, regular_pay: Math.round(j.regular_pay * 100) / 100, overtime_pay: Math.round(j.overtime_pay * 100) / 100, hours: Math.round(j.hours * 100) / 100 }));
+      B.total = B.list.reduce((s, j) => s + j.regular_pay + j.overtime_pay, 0);
+    }
+    S.byLoc = by;
+  }
+
+  // A client with no location yet gets one when exactly one location in the file matches its name.
+  async function autoMatchLocations() {
+    const locs = Object.keys(S.byLoc);
+    for (const cfg of S.cfgs) {
+      if (cfg.toast_location) continue;
+      const cn = norm(clientName(cfg.client_id));
+      // Exact name first; otherwise a location that CONTAINS the whole client name.
+      // Never the reverse ("Fort Worth" is inside "Dirdie Birdie Fort Worth" and
+      // belongs to Nickel City), and never a location another client already has.
+      const taken = new Set(S.cfgs.map(c => c.toast_location).filter(Boolean));
+      const free = locs.filter(l => !taken.has(l));
+      let hits = free.filter(l => norm(l) === cn);
+      if (!hits.length) hits = free.filter(l => { const ln = norm(l); return ln && cn && ln.includes(cn); });
+      if (hits.length === 1) await saveCfg(cfg.client_id, { toast_location: hits[0] }, true);
+    }
+  }
+
+  // ---------------------------------------------------------------- data
+  async function loadCfgs() {
+    const { data, error } = await sb.from('labor_accrual_config').select('*');
+    if (error) { setStatus('Couldn’t load settings: ' + error.message + ' (has labor-accrual.sql been run?)', true); S.cfgs = []; return; }
+    S.cfgs = (data || []).sort((a, b) => clientName(a.client_id).localeCompare(clientName(b.client_id)));
+  }
+  async function loadLogs() {
+    S.logs = {};
+    const { data } = await sb.from('labor_accruals').select('*').eq('period_month', S.month + '-01');
+    for (const r of data || []) S.logs[r.client_id] = r;
+  }
+  async function saveCfg(clientId, patch, quiet) {
+    const { error } = await sb.from('labor_accrual_config').update({ ...patch, updated_at: new Date().toISOString() }).eq('client_id', clientId);
+    if (error) { setStatus('Save failed: ' + error.message, true); return false; }
+    const c = S.cfgs.find(x => x.client_id === clientId); if (c) Object.assign(c, patch);
+    if (!quiet) setStatus('Saved.');
+    return true;
+  }
+  async function getAccounts(clientId) {
+    if (S.accounts[clientId]) return S.accounts[clientId];
+    try {
+      const { data } = await sb.functions.invoke('qbo-accounts', { body: { client_id: clientId, all: true } });
+      const all = data?.accounts ?? [];
+      S.accounts[clientId] = all.map(a => {
+        const name = a.name ?? a.Name, fq = a.fully_qualified_name ?? a.FullyQualifiedName ?? name, n = a.acct_num ?? a.AcctNum;
+        return { id: String(a.id ?? a.Id), label: a.label || (n ? n + ' ' + fq : fq) };
+      }).filter(a => a.id && a.label).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    } catch (e) { S.accounts[clientId] = []; }
+    return S.accounts[clientId];
+  }
+
+  async function call(body) {
+    const { data, error } = await sb.functions.invoke('labor-accrual', { body });
+    if (error) {
+      let detail = error.message;
+      try { const j = await error.context.json(); detail = j.detail || j.error || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    if (data && data.ok === false) throw new Error(data.detail || data.error);
+    return data;
+  }
+
+  // ---------------------------------------------------------------- actions
+  function jobsFor(cfg) { const B = cfg.toast_location ? S.byLoc[cfg.toast_location] : null; return { jobs: B ? B.list : [], present: !!B }; }
+
+  async function preview(clientId) {
+    const cfg = S.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+    const { jobs, present } = jobsFor(cfg);
+    S.busy[clientId] = 'Previewing…'; S.open[clientId] = true; render();
+    try {
+      S.previews[clientId] = await call({ action: 'preview', client_id: clientId, month: S.month, jobs, toast_present: present, source: 'upload' });
+      S.previews[clientId]._files = S.files.length;
+    } catch (e) { S.previews[clientId] = { ok: false, fatal: e.message }; }
+    delete S.busy[clientId]; render();
+  }
+  async function previewAll() {
+    for (const c of S.cfgs.filter(c => c.enabled)) {
+      if (S.logs[c.client_id]?.status === 'posted') continue;
+      await preview(c.client_id);
+    }
+  }
+  async function post(clientId) {
+    const p = S.previews[clientId]; if (!p || p.blocked || p.skip) return;
+    if (!S.files.length && !confirm('No Toast file is loaded, so this posts salary only. Continue?')) return;
+    if (!confirm('Post the accrual for ' + clientName(clientId) + ' — ' + money(p.total) + ' on ' + mdy(p.period.end) + ', reversed ' + mdy(p.period.reversal_date) + '?')) return;
+    const cfg = S.cfgs.find(c => c.client_id === clientId); const { jobs, present } = jobsFor(cfg);
+    S.busy[clientId] = 'Posting…'; render();
+    try {
+      const r = await call({ action: 'post', client_id: clientId, month: S.month, jobs, toast_present: present, source: 'upload', expected_total: p.total });
+      setStatus(clientName(clientId) + ': posted ' + money(r.total) + ' (QBO #' + r.accrual_je_id + ' / reversal #' + r.reversal_je_id + ').');
+    } catch (e) { setStatus(clientName(clientId) + ': ' + e.message, true); }
+    await loadLogs(); delete S.busy[clientId]; render();
+  }
+  async function unpost(clientId) {
+    const log = S.logs[clientId]; if (!log) return;
+    if (!confirm('Delete both QuickBooks entries for ' + clientName(clientId) + ' (' + S.month + ') and clear the log so it can be posted again?')) return;
+    S.busy[clientId] = 'Removing…'; render();
+    try { const r = await call({ action: 'unpost', client_id: clientId, month: S.month }); setStatus(clientName(clientId) + ': removed ' + (r.deleted.length ? 'QBO #' + r.deleted.join(', #') : 'the log row') + '.'); delete S.previews[clientId]; }
+    catch (e) { setStatus(clientName(clientId) + ': ' + e.message, true); }
+    await loadLogs(); delete S.busy[clientId]; render();
+  }
+  async function saveMapping(clientId, job, payType, selId) {
+    const sel = $(selId); if (!sel || !sel.value) return;
+    const acct = (S.accounts[clientId] || []).find(a => a.id === sel.value);
+    const { error } = await sb.from('labor_job_map').upsert({
+      client_id: clientId, job_key: job.toLowerCase().replace(/\s+/g, ' ').trim(), job_title: job, pay_type: payType,
+      account_id: sel.value, account_label: acct ? acct.label : sel.value, source: 'manual', updated_at: new Date().toISOString()
+    }, { onConflict: 'client_id,job_key,pay_type' });
+    if (error) { setStatus('Mapping not saved: ' + error.message, true); return; }
+    await preview(clientId);
+  }
+  async function addClient() {
+    const sel = $('laAddClient'); if (!sel || !sel.value) return;
+    const { error } = await sb.from('labor_accrual_config').insert({ client_id: sel.value });
+    if (error) { setStatus('Couldn’t add: ' + error.message, true); return; }
+    await loadCfgs(); render();
+  }
+
+  // ---------------------------------------------------------------- render
+  function chip(cls, txt) { return '<span class="la-chip ' + cls + '">' + esc(txt) + '</span>'; }
+  const qboLink = id => id ? '<a href="https://app.qbo.intuit.com/app/journal?txnId=' + encodeURIComponent(id) + '" target="_blank" rel="noopener">#' + esc(id) + '</a>' : '—';
+
+  function renderFiles() {
+    const el = $('laFiles'); if (!el) return;
+    if (!S.files.length) { el.innerHTML = ''; return; }
+    const wp = weeklyPeriod(S.month);
+    const fileLines = S.files.map(f => {
+      let note = '';
+      if (!f.range) note = ' <span class="la-warn-t">couldn’t read the date range from the file name</span>';
+      else if (wp && (f.range.start !== wp.start || f.range.end !== wp.end)) note = ' <span class="la-warn-t">covers ' + esc(rangeTxt(f.range)) + ', but this month’s period is ' + esc(rangeTxt(wp)) + '</span>';
+      else if (wp) note = ' <span class="la-ok-t">matches ' + esc(rangeTxt(wp)) + '</span>';
+      return '<div>' + esc(f.name) + note + '</div>';
+    }).join('');
+    const used = new Set(S.cfgs.map(c => c.toast_location).filter(Boolean));
+    const locs = Object.entries(S.byLoc).sort((a, b) => a[0].localeCompare(b[0])).map(([loc, B]) =>
+      '<span class="la-loc' + (used.has(loc) ? '' : ' unused') + '" title="' + (used.has(loc) ? 'Matched to a client' : 'Not matched to any client') + '">' + esc(loc) + ' · ' + money(B.total) + '</span>').join('');
+    el.innerHTML = '<div class="la-files">' + fileLines + '</div><div class="la-locs">' + locs + '</div>' +
+      '<button class="va-ghost" onclick="LA.clearFiles()" style="margin-top:.4rem">Clear files</button>';
+  }
+
+  function renderPreview(cid, p) {
+    if (p.fatal) return '<div class="la-err">' + esc(p.fatal) + '</div>';
+    if (p.skip) return '<div class="la-muted">' + esc(p.reason) + '</div>';
+    let h = '';
+    const per = p.period;
+    h += '<div class="la-meta">' + esc(rangeTxt(per)) + ' · ' + per.days + '/' + per.divisor + ' days' +
+      (p.payroll_doc ? ' · salaries from <b>' + esc(p.payroll_doc) + '</b>' : '') + '</div>';
+    for (const e of p.errors || []) {
+      if (e.code === 'unmapped_job') {
+        const sid = 'laMap_' + cid.replace(/-/g, '') + '_' + Math.abs(hash(e.job + e.pay_type));
+        const accts = S.accounts[cid];
+        h += '<div class="la-err">' + esc(e.message) +
+          '<div class="la-maprow">' + (accts
+            ? '<select id="' + sid + '"><option value="">Pick an account…</option>' + accts.map(a => '<option value="' + esc(a.id) + '">' + esc(a.label) + '</option>').join('') + '</select>' +
+              '<button class="va-ghost" onclick="LA.saveMapping(\'' + cid + '\',' + esc(JSON.stringify(e.job)) + ',\'' + e.pay_type + '\',\'' + sid + '\')">Save &amp; re-preview</button>'
+            : '<button class="va-ghost" onclick="LA.loadAccounts(\'' + cid + '\')">Map it…</button>') +
+          '</div></div>';
+      } else h += '<div class="la-err">' + esc(e.message) + '</div>';
+    }
+    for (const w of p.warnings || []) h += '<div class="la-warn">' + esc(w) + '</div>';
+    if (p.lines && p.lines.length) {
+      h += '<table class="la-table"><thead><tr><th>Account</th><th>Description</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>' +
+        p.lines.map(l => '<tr class="k-' + l.kind + '"><td>' + esc(l.account_label) + '</td><td>' + esc(l.description) + '</td>' +
+          '<td class="n">' + (l.posting === 'Debit' ? money(l.amount) : '') + '</td><td class="n">' + (l.posting === 'Credit' ? money(l.amount) : '') + '</td></tr>').join('') +
+        '</tbody><tfoot><tr><td colspan="2">Hourly ' + money(p.hourly) + ' · Salary ' + money(p.salary) + ' · Tax ' + money(p.tax) + '</td><td class="n">' + money(p.total) + '</td><td class="n">' + money(p.total) + '</td></tr></tfoot></table>';
+    }
+    return h;
+  }
+  function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
+
+  function renderCards() {
+    const el = $('laCards'); if (!el) return;
+    const wp = weeklyPeriod(S.month);
+    const [py, pm] = S.month.split('-').map(Number);
+    const rev = mdy(new Date(Date.UTC(py, pm, 1)).toISOString().slice(0, 10));
+    $('laPeriod').textContent = wp ? 'Weekly clients: ' + rangeTxt(wp) + ' (' + wp.days + ' day' + (wp.days === 1 ? '' : 's') + '), reversed ' + rev : 'This month ends on a Sunday \u2014 no accrual for weekly clients.';
+    const cfgs = S.cfgs.filter(c => c.enabled);
+    if (!cfgs.length) { el.innerHTML = '<div class="empty">No clients set up yet. Open Settings to add them.</div>'; return; }
+    el.innerHTML = cfgs.map(cfg => {
+      const cid = cfg.client_id, log = S.logs[cid], p = S.previews[cid], busy = S.busy[cid];
+      const B = cfg.toast_location ? S.byLoc[cfg.toast_location] : null;
+      let st;
+      if (log && log.status === 'posted') st = chip('ok', 'Posted ' + money(log.total));
+      else if (log && log.status === 'partial') st = chip('bad', 'Reversal missing');
+      else if (log && log.status === 'failed') st = chip('bad', 'Last post failed');
+      else if (log && log.status === 'posting') st = chip('bad', 'Interrupted');
+      else if (p && p.skip) st = chip('mute', 'No accrual');
+      else if (p && (p.blocked || p.fatal)) st = chip('bad', 'Needs attention');
+      else if (p) st = chip('ready', 'Ready ' + money(p.total));
+      else st = chip('mute', 'Not previewed');
+      const loc = !cfg.toast_location ? '<span class="la-warn-t">no Toast location</span>'
+        : B ? esc(cfg.toast_location) + ' · ' + money(B.total) + ' in file' : esc(cfg.toast_location) + (S.files.length ? ' · <span class="la-warn-t">not in the loaded file(s)</span>' : '');
+      const open = S.open[cid] !== false && (p || log);
+      let body = '';
+      if (open) {
+        if (log) body += '<div class="la-meta">Accrual ' + qboLink(log.accrual_je_id) + ' on ' + mdy(log.period_end) + ' · reversal ' + qboLink(log.reversal_je_id) +
+          ' · by ' + esc(log.posted_by || '') + ' ' + (log.posted_at ? new Date(log.posted_at).toLocaleString() : '') + (log.error ? '<div class="la-err">' + esc(log.error) + '</div>' : '') + '</div>';
+        if (log && log.status === 'posted' && log.lines && !p) body += renderPreview(cid, { period: { start: log.period_start, end: log.period_end, days: log.days, divisor: 7 }, payroll_doc: log.payroll_doc, lines: log.lines, hourly: log.hourly_total, salary: log.salary_total, tax: log.tax_total, total: log.total });
+        else if (p) body += renderPreview(cid, p);
+      }
+      const canPost = p && !p.skip && !p.blocked && !p.fatal && (!log || log.status === 'failed' || log.status === 'partial');
+      const btns = busy ? '<span class="la-muted"><span class="spinner"></span> ' + esc(busy) + '</span>'
+        : (log && log.status === 'posted' ? '' : '<button class="va-ghost" onclick="LA.preview(\'' + cid + '\')">Preview</button>') +
+          (canPost ? '<button class="va-btn" onclick="LA.post(\'' + cid + '\')">' + (log && log.status === 'partial' ? 'Retry reversal' : 'Post') + '</button>' : '') +
+          (log ? '<button class="va-ghost" onclick="LA.unpost(\'' + cid + '\')">Undo</button>' : '');
+      return '<div class="la-card"><div class="la-head" onclick="LA.toggle(\'' + cid + '\')"><div><div class="la-name">' + esc(clientName(cid)) + ' ' + st + '</div><div class="la-sub">' + loc + '</div></div>' +
+        '<div class="la-btns" onclick="event.stopPropagation()">' + btns + '</div></div>' + (body ? '<div class="la-body">' + body + '</div>' : '') + '</div>';
+    }).join('');
+  }
+
+  function renderSettings() {
+    const el = $('laSettings'); if (!el) return;
+    el.style.display = S.showSettings ? '' : 'none';
+    if (!S.showSettings) return;
+    const locs = Object.keys(S.byLoc).sort();
+    const have = new Set(S.cfgs.map(c => c.client_id));
+    const addable = (typeof allClients !== 'undefined' ? allClients : []).filter(c => c && !c.is_firm && !have.has(c.id)).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const rows = S.cfgs.map(c => {
+      const id = c.client_id, f = k => 'LA.set(\'' + id + '\',\'' + k + '\',this)';
+      const locInput = '<input type="text" list="laLocList" value="' + esc(c.toast_location || '') + '" onchange="' + f('toast_location') + '" style="width:190px">';
+      return '<tr><td><input type="checkbox" ' + (c.enabled ? 'checked' : '') + ' onchange="' + f('enabled') + '"></td><td>' + esc(clientName(id)) + '</td><td>' + locInput + '</td>' +
+        '<td><select onchange="' + f('pay_frequency') + '"><option value="weekly"' + (c.pay_frequency === 'weekly' ? ' selected' : '') + '>Weekly</option><option value="biweekly"' + (c.pay_frequency === 'biweekly' ? ' selected' : '') + '>Biweekly</option></select></td>' +
+        '<td><input type="date" value="' + esc(c.biweekly_anchor || '') + '" onchange="' + f('biweekly_anchor') + '" ' + (c.pay_frequency === 'biweekly' ? '' : 'disabled') + '></td>' +
+        '<td><input type="number" step="0.0001" value="' + esc(c.tax_rate) + '" onchange="' + f('tax_rate') + '" style="width:80px"></td>' +
+        '<td><input type="month" value="' + esc(c.start_month ? String(c.start_month).slice(0, 7) : '') + '" onchange="' + f('start_month') + '"></td>' +
+        '<td>' + esc(c.accrual_account_label || 'Auto: Accrued Expenses') + '</td></tr>';
+    }).join('');
+    el.innerHTML = '<datalist id="laLocList">' + locs.map(l => '<option value="' + esc(l) + '">').join('') + '</datalist>' +
+      '<table class="la-table la-set"><thead><tr><th>On</th><th>Client</th><th>Toast location</th><th>Pay</th><th>Biweekly period start</th><th>Tax rate</th><th>First month</th><th>Accrual account</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div class="va-controls" style="margin-top:.6rem"><select id="laAddClient"><option value="">Add a client…</option>' + addable.map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('') + '</select>' +
+      '<button class="va-ghost" onclick="LA.addClient()">Add</button></div>' +
+      '<div class="la-muted" style="margin-top:.4rem">Toast location = the Location column in the Payroll Export (suggestions come from the loaded file). Job accounts are learned from each payroll entry; unmapped jobs are fixed from the client card.</div>';
+  }
+
+  function render() { renderFiles(); renderCards(); renderSettings(); setStatus(S.status, /fail|couldn|error|not saved/i.test(S.status)); }
+
+  // ---------------------------------------------------------------- wiring
+  window.LA = {
+    preview, post, unpost, saveMapping, addClient,
+    toggle(cid) { S.open[cid] = S.open[cid] === false; render(); },
+    async loadAccounts(cid) { setStatus('Loading ' + clientName(cid) + '’s chart of accounts…'); await getAccounts(cid); setStatus(''); render(); },
+    clearFiles() { S.files = []; S.byLoc = {}; S.previews = {}; $('laFile').value = ''; render(); },
+    async set(cid, key, el) {
+      let v = el.type === 'checkbox' ? el.checked : el.value;
+      if (key === 'tax_rate') v = Number(v) || 0.0765;
+      if (key === 'start_month') v = v ? v + '-01' : null;
+      if ((key === 'biweekly_anchor' || key === 'toast_location') && !v) v = null;
+      if (await saveCfg(cid, { [key]: v })) { delete S.previews[cid]; render(); }
+    },
+  };
+
+  window.LaborAccrualOpen = async function () {
+    if (!S.booted) {
+      S.booted = true;
+      S.month = defaultMonth();
+      $('laMonth').value = S.month;
+      $('laMonth').addEventListener('change', async e => { S.month = e.target.value || defaultMonth(); S.previews = {}; await loadLogs(); render(); });
+      $('laDrop').addEventListener('click', () => $('laFile').click());
+      $('laDrop').addEventListener('dragover', e => { e.preventDefault(); });
+      $('laDrop').addEventListener('drop', e => { e.preventDefault(); readFiles([...e.dataTransfer.files]); });
+      $('laFile').addEventListener('change', e => readFiles([...e.target.files]));
+      $('laPreviewAll').addEventListener('click', previewAll);
+      $('laSettingsBtn').addEventListener('click', () => { S.showSettings = !S.showSettings; render(); });
+    }
+    await loadCfgs(); await loadLogs(); render();
   };
 })();
 </script>
