@@ -463,6 +463,74 @@
     .msg-input{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:white;transition:border-color .15s;resize:none}
     .msg-input:focus{border-color:var(--accent)}
 
+    /* W-9 AUDIT */
+    #page-w9 .w9-panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+    #page-w9 .w9-controls{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+    #page-w9 .w9-field{display:flex;flex-direction:column;gap:4px}
+    #page-w9 .w9-field label{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3)}
+    #page-w9 select,#page-w9 input[type=text],#page-w9 input[type=search]{font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--border2);border-radius:7px;background:#fff}
+    .w9-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1.05rem;cursor:pointer}
+    .w9-btn:hover{filter:brightness(.93)}
+    .w9-btn:disabled{opacity:.5;cursor:default;filter:none}
+    .w9-ghost{font:inherit;font-weight:500;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.45rem .85rem;cursor:pointer}
+    .w9-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    .w9-ghost:disabled{opacity:.5;cursor:default}
+    .w9-link{background:none;border:none;color:var(--accent);font:inherit;font-size:13px;cursor:pointer;padding:0}
+    #page-w9 .w9-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-w9 .w9-status.err{color:var(--red)}
+    .w9-flash{border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5}
+    .w9-flash.good{background:#DCFCE7;border:1px solid #86EFAC;color:#14532D}
+    .w9-flash.bad{background:#FEE2E2;border:1px solid #FCA5A5;color:#7F1D1D}
+    .w9-chips{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 10px}
+    .w9-chip{font:inherit;font-size:12px;font-weight:600;border:1px solid var(--border2);background:#fff;color:var(--text2);border-radius:999px;padding:5px 12px;cursor:pointer}
+    .w9-chip.on{background:var(--text);border-color:var(--text);color:#fff}
+    .w9-chip .n{opacity:.7;margin-left:4px;font-variant-numeric:tabular-nums}
+    .w9-tbl{width:100%;border-collapse:collapse;font-size:13px;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+    .w9-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);background:var(--bg3);padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap}
+    .w9-tbl td{padding:8px 10px;border-bottom:1px solid var(--bg3);vertical-align:top}
+    .w9-tbl tr:last-child td{border-bottom:none}
+    .w9-tbl td.num{text-align:right;font-variant-numeric:tabular-nums}
+    .w9-tbl tr.w9-click{cursor:pointer}
+    .w9-tbl tr.w9-click:hover td{background:#FAF9F6}
+    .w9-tbl tr.w9-sel td{background:#FFF7ED}
+    .w9-tbl input[type=checkbox]{width:auto;cursor:pointer}
+    .w9-sub{display:block;font-size:11px;color:var(--text3);margin-top:1px}
+    .w9-pill{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
+    .w9-p-has{background:#DCFCE7;color:#14532D}
+    .w9-p-missing{background:#FEE2E2;color:#7F1D1D}
+    .w9-p-not_needed{background:#F1F0EC;color:#57534E}
+    .w9-p-none{background:#FEF3C7;color:#78350F}
+    .w9-sugg{font-size:12px;color:var(--text2)}
+    .w9-sugg small{display:block;color:var(--text3);font-size:11px;line-height:1.35;margin-top:1px}
+    .w9-new{font-size:10px;font-weight:700;letter-spacing:.05em;color:#fff;background:var(--accent);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+    .w9-bulk{position:sticky;bottom:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--text);color:#fff;border-radius:10px;padding:10px 14px;margin-top:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);z-index:5}
+    .w9-bulk .w9-ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
+    .w9-bulk .w9-ghost:hover{border-color:#fff;color:#fff}
+    .w9-sign{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+    .w9-sign.todo{background:#FEF3C7;border:1px solid #FCD34D;color:#78350F}
+    .w9-sign.ready{background:#EFF6FF;border:1px solid #93C5FD;color:#1E3A8A}
+    .w9-sign.done{background:#DCFCE7;border:1px solid #86EFAC;color:#14532D}
+    #w9Modal .modal{max-width:760px}
+    #w9ReqModal .modal{max-width:620px}
+    .w9-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+    .w9-grid .full{grid-column:1/-1}
+    .w9-grid label{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);margin-bottom:4px}
+    .w9-grid input,.w9-grid select,.w9-grid textarea{width:100%;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border2);border-radius:7px;background:#fff;box-sizing:border-box}
+    .w9-grid input.w9-filled,.w9-grid select.w9-filled{border-color:#7C3AED;background:#F5F3FF}
+    .w9-check{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer}
+    .w9-check input{width:auto !important}
+    .w9-grid label.w9-check{text-transform:none;letter-spacing:0;font-size:13px;color:var(--text);margin:0}
+    .w9-drop{border:2px dashed var(--border2);border-radius:10px;padding:14px;text-align:center;font-size:13px;color:var(--text2);cursor:pointer;margin-bottom:14px}
+    .w9-drop:hover,.w9-drop.over{border-color:var(--accent);background:#FFF7ED}
+    .w9-drop b{color:var(--text)}
+    .w9-read{background:#F5F3FF;border:1px solid #C4B5FD;color:#3B0764;border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.5;margin-bottom:14px}
+    .w9-read ul{margin:6px 0 0 18px;padding:0}
+    .w9-sect{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin:18px 0 8px}
+    .w9-atts{font-size:12px;color:var(--text2);line-height:1.7}
+    .w9-hint{font-size:11px;color:var(--text3);margin-top:4px;line-height:1.4}
+    .w9-mstatus{font-size:12px;color:var(--text3);margin-right:auto;align-self:center}
+    .w9-mstatus.err{color:var(--red)}
+    @media (max-width:700px){.w9-grid{grid-template-columns:1fr}}
     /* DAILY SALES SYNC MONITOR */
     .sm-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:1rem}
     .sm-sel{padding:7px 10px;border:1px solid var(--border2);border-radius:8px;background:#fff;font-size:13px;font-family:inherit;min-width:220px}
@@ -1089,6 +1157,7 @@
         <div class="nav-item" onclick="showPage('salesmap')" id="nav-salesmap"><span>🔗</span> Sales Mapping</div>
         <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('mv')" id="nav-mv"><span>🏷️</span> Missing Vendors</div>
+        <div class="nav-item" onclick="showPage('w9')" id="nav-w9"><span>📄</span> W-9 Audit</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('payroll')" id="nav-payroll"><span>💵</span> Payroll Review</div>
@@ -1940,6 +2009,43 @@
         <div id="invBody"><div class="empty"><span class="spinner"></span> Loading&hellip;</div></div>
       </div>
 
+      <!-- W-9 AUDIT -->
+      <div class="page" id="page-w9">
+        <div class="page-header">
+          <div>
+            <div class="page-title">W-9 Audit</div>
+            <div class="page-sub">Every vendor in every client's QuickBooks — Has W-9, Missing W-9 or W-9 Not needed</div>
+          </div>
+        </div>
+        <div id="w9Flash"></div>
+        <div id="w9Overview">
+          <div class="w9-panel">
+            <div class="w9-controls">
+              <button class="w9-btn" id="w9RefreshAllBtn" onclick="W9.refreshAll()">Refresh all clients from QuickBooks</button>
+              <span style="font-size:12px;color:var(--text3)">Reads each client's vendors, spots new ones, and updates Triple's suggestions. Statuses you've set are never changed.</span>
+            </div>
+            <div class="w9-status" id="w9OvStatus"></div>
+          </div>
+          <div id="w9OvTable"><div class="empty"><span class="spinner"></span></div></div>
+        </div>
+        <div id="w9Client" style="display:none">
+          <div class="w9-panel">
+            <div class="w9-controls">
+              <button class="w9-link" onclick="W9.showOverview()">&larr; All clients</button>
+              <div class="w9-field"><label for="w9ClientSel">Client</label>
+                <select id="w9ClientSel" style="min-width:240px" onchange="W9.openClient(this.value)"></select></div>
+              <button class="w9-ghost" onclick="W9.loadClient()">Refresh from QuickBooks</button>
+              <div class="w9-field" style="margin-left:auto"><label for="w9Search">Search</label>
+                <input type="search" id="w9Search" placeholder="vendor or email" oninput="W9.setSearch(this.value)" style="min-width:200px"></div>
+            </div>
+            <div class="w9-status" id="w9Status"></div>
+          </div>
+          <div id="w9Sign"></div>
+          <div class="w9-chips" id="w9Chips"></div>
+          <div id="w9List"></div>
+          <div id="w9Bulk"></div>
+        </div>
+      </div>
       <!-- QUICK LINKS -->
       <!-- DAILY SALES SYNC MONITOR -->
       <div class="page" id="page-syncmon">
@@ -2063,6 +2169,41 @@
 </div>
 
 <!-- TASK MODAL -->
+<div class="modal-overlay" id="w9Modal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title" id="w9MTitle">Vendor</div>
+        <div class="page-sub" id="w9MSub" style="margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('w9Modal')">&times;</button>
+    </div>
+    <div class="modal-body" id="w9MBody"></div>
+    <div class="modal-footer">
+      <span class="w9-mstatus" id="w9MStatus"></span>
+      <button class="w9-ghost" onclick="closeModal('w9Modal')">Close</button>
+      <button class="w9-ghost" id="w9MReqBtn" onclick="W9.openRequest()">Request W-9&hellip;</button>
+      <button class="w9-btn" id="w9MSaveBtn" onclick="W9.save()">Save to QuickBooks</button>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="w9ReqModal">
+  <div class="modal">
+    <div class="modal-hdr">
+      <div>
+        <div class="modal-title">Request a W-9</div>
+        <div class="page-sub" id="w9RSub" style="margin-top:2px"></div>
+      </div>
+      <button class="modal-close" onclick="closeModal('w9ReqModal')">&times;</button>
+    </div>
+    <div class="modal-body" id="w9RBody"></div>
+    <div class="modal-footer">
+      <span class="w9-mstatus" id="w9RStatus"></span>
+      <button class="w9-ghost" onclick="closeModal('w9ReqModal')">Cancel</button>
+      <button class="w9-btn" id="w9RSendBtn" onclick="W9.sendRequest()">Send</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="smModal">
   <div class="modal">
     <div class="modal-hdr">
@@ -7117,6 +7258,7 @@ function showPage(name) {
   if (name === 'salestax') loadTaxPage();
   if (name === 'flbz' && window.FlbzOpen) window.FlbzOpen();
   if (name === 'mv' && window.MvOpen) window.MvOpen();
+  if (name === 'w9' && window.W9Open) window.W9Open();
   if (name === 'payroll' && window.PrOpen) window.PrOpen();
   if (name === 'vendoraudit' && window.VendorAuditOpen) window.VendorAuditOpen();
   if (name === 'map' && window.ClientMap) window.ClientMap.open();
@@ -14773,6 +14915,572 @@ init();
   };
 })();
 
+</script>
+<script>
+/* ============================================================
+   W-9 AUDIT — added 2026-09-24
+
+   Every active vendor in every connected client's QuickBooks gets one
+   of: Has W-9 / Missing W-9 / W-9 Not needed. The status lives in
+   Triple (w9_vendors) because QuickBooks has no field for it; the
+   facts behind it (email, 1099 box, tax ID, the W-9 file) live in
+   QuickBooks and are written back there by the qbo-w9 function.
+
+   Tax IDs and W-9 files never touch Supabase: the browser sends them
+   to qbo-w9, which passes them straight to QuickBooks.
+
+   After the first pass every vendor has a status, so each month the
+   work is only the vendors QuickBooks has gained since — shown under
+   "Needs a decision" — then the month is signed off per client.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const LABEL = { has: 'Has W-9', missing: 'Missing W-9', not_needed: 'W-9 Not needed' };
+  const pill = s => s ? `<span class="w9-pill w9-p-${s}">${LABEL[s]}</span>` : '<span class="w9-pill w9-p-none">Needs a decision</span>';
+  const when = t => t ? new Date(t).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const me = () => (($('sidebarName') || {}).textContent || '').trim() || (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || 'team';
+
+  function chicagoPeriod() {
+    const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit' }).formatToParts(new Date());
+    const y = p.find(x => x.type === 'year').value, m = p.find(x => x.type === 'month').value;
+    return { key: `${y}-${m}`, label: new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) };
+  }
+
+  const S = {
+    clients: [], summary: {}, signoffs: {}, clientId: '', vendors: [], meta: null,
+    filter: 'undecided', search: '', selected: new Set(), loading: false,
+    ed: null, req: null,
+  };
+
+  async function call(body) {
+    const { data, error } = await sb.functions.invoke('qbo-w9', { body });
+    if (error) throw new Error(error.message || String(error));
+    if (!data || data.ok === false) {
+      const msg = (data && data.error) || 'no response';
+      throw new Error(data && data.code === 'reauth_needed' ? msg + ' — reconnect this client to QuickBooks.' : msg);
+    }
+    return data;
+  }
+
+  function flash(msg, bad) {
+    const el = $('w9Flash');
+    if (!el) return;
+    el.innerHTML = msg ? `<div class="w9-flash ${bad ? 'bad' : 'good'}">${esc(msg)}</div>` : '';
+    if (msg && !bad) setTimeout(() => { if (el.textContent.includes(msg.slice(0, 20))) el.innerHTML = ''; }, 8000);
+  }
+  function status(id, msg, bad) { const el = $(id); if (el) { el.textContent = msg || ''; el.className = el.className.replace(/\berr\b/, '').trim() + (bad ? ' err' : ''); } }
+
+  // ------------------------------------------------------------ overview
+
+  async function loadOverview() {
+    const nameOf = {};
+    (typeof allClients !== 'undefined' ? allClients : []).forEach(c => { if (c && !c.is_firm) nameOf[c.id] = c.name; });
+    const period = chicagoPeriod();
+    const [conn, sum, sign] = await Promise.all([
+      sb.from('qbo_connections').select('client_id'),
+      sb.from('w9_client_summary').select('*'),
+      sb.from('w9_signoffs').select('client_id,period,signed_by,signed_at').eq('period', period.key),
+    ]);
+    if (conn.error) { status('w9OvStatus', 'Could not read QuickBooks connections: ' + conn.error.message, true); return; }
+    if (sum.error) { status('w9OvStatus', 'Could not read the W-9 summary — has w9-audit.sql been run? ' + sum.error.message, true); return; }
+    S.summary = {}; (sum.data || []).forEach(r => { S.summary[r.client_id] = r; });
+    S.signoffs = {}; (sign.data || []).forEach(r => { S.signoffs[r.client_id] = r; });
+    const ids = [...new Set((conn.data || []).map(r => r.client_id))].filter(id => nameOf[id]);
+    S.clients = ids.map(id => ({ id, name: nameOf[id] })).sort((a, b) => a.name.localeCompare(b.name));
+    renderOverview();
+    fillClientSel();
+  }
+
+  function renderOverview() {
+    const period = chicagoPeriod();
+    const el = $('w9OvTable');
+    if (!S.clients.length) { el.innerHTML = '<div class="empty">No clients are connected to QuickBooks.</div>'; return; }
+    let html = `<table class="w9-tbl"><thead><tr><th>Client</th><th class="num">Vendors</th><th class="num">Needs a decision</th>
+      <th class="num">Missing</th><th class="num">Requested</th><th class="num">Has W-9</th><th class="num">Not needed</th>
+      <th>Last refreshed</th><th>${esc(period.label)}</th></tr></thead><tbody>`;
+    S.clients.forEach(c => {
+      const s = S.summary[c.id];
+      const so = S.signoffs[c.id];
+      const audit = so ? `<span class="w9-pill w9-p-has">Signed off</span><span class="w9-sub">${esc(so.signed_by || '')} · ${esc(when(so.signed_at))}</span>`
+        : !s ? '<span class="w9-sub">Not run yet</span>'
+        : Number(s.undecided) ? `<span class="w9-pill w9-p-none">${s.undecided} to decide</span>`
+        : '<span class="w9-pill w9-p-not_needed">Ready to sign off</span>';
+      html += `<tr class="w9-click" onclick="W9.openClient('${c.id}')"><td><b>${esc(c.name)}</b></td>` +
+        (s ? `<td class="num">${s.vendors}</td><td class="num">${Number(s.undecided) ? '<b>' + s.undecided + '</b>' : 0}</td>
+               <td class="num">${s.missing}</td><td class="num">${s.requested}</td><td class="num">${s.has_w9}</td><td class="num">${s.not_needed}</td>
+               <td>${esc(when(s.last_refreshed))}</td>`
+           : '<td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td>—</td>') +
+        `<td>${audit}</td></tr>`;
+    });
+    el.innerHTML = html + '</tbody></table>';
+  }
+
+  async function refreshAll() {
+    const btn = $('w9RefreshAllBtn');
+    if (btn) btn.disabled = true;
+    const failed = [];
+    for (let i = 0; i < S.clients.length; i++) {
+      const c = S.clients[i];
+      status('w9OvStatus', `Refreshing ${c.name} (${i + 1} of ${S.clients.length})…`);
+      try { await call({ action: 'list', client_id: c.id }); }
+      catch (e) { failed.push(`${c.name}: ${e.message}`); }
+    }
+    if (btn) btn.disabled = false;
+    status('w9OvStatus', failed.length ? `Done, with ${failed.length} problem(s): ${failed.join(' | ')}` : `All ${S.clients.length} clients refreshed.`, !!failed.length);
+    await loadOverview();
+  }
+
+  function fillClientSel() {
+    const sel = $('w9ClientSel');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select client…</option>' + S.clients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    if (S.clientId) sel.value = S.clientId;
+  }
+
+  function showOverview() {
+    $('w9Client').style.display = 'none';
+    $('w9Overview').style.display = '';
+    loadOverview();
+  }
+
+  // ------------------------------------------------------------ one client
+
+  async function openClient(id) {
+    if (!id) return;
+    S.clientId = id; S.selected.clear(); S.filter = 'undecided'; S.search = '';
+    const s = $('w9Search'); if (s) s.value = '';
+    $('w9Overview').style.display = 'none';
+    $('w9Client').style.display = '';
+    fillClientSel();
+    await loadClient();
+  }
+
+  async function loadClient() {
+    if (!S.clientId) return;
+    S.loading = true; S.vendors = []; S.selected.clear();
+    $('w9List').innerHTML = '<div class="empty"><span class="spinner"></span> Reading vendors from QuickBooks…</div>';
+    $('w9Chips').innerHTML = ''; $('w9Bulk').innerHTML = ''; $('w9Sign').innerHTML = '';
+    status('w9Status', '');
+    try {
+      const d = await call({ action: 'list', client_id: S.clientId });
+      S.vendors = d.vendors || []; S.meta = d.meta;
+      const newCount = S.vendors.filter(v => v.is_new).length;
+      status('w9Status', `${S.vendors.length} active vendors read from QuickBooks` +
+        (newCount ? ` · ${newCount} new since the last refresh` : '') +
+        (d.meta && d.meta.attachment_lookup === 'full_scan' ? ' · attachments found by scanning every file in the company' : ''));
+      const so = await sb.from('w9_signoffs').select('client_id,period,signed_by,signed_at').eq('client_id', S.clientId).eq('period', chicagoPeriod().key);
+      if (so.data && so.data[0]) S.signoffs[S.clientId] = so.data[0]; else delete S.signoffs[S.clientId];
+      if (!S.vendors.some(v => !v.status)) S.filter = 'all';
+    } catch (e) {
+      status('w9Status', e.message, true);
+    }
+    S.loading = false;
+    renderClient();
+  }
+
+  const counts = () => {
+    const c = { undecided: 0, missing: 0, has: 0, not_needed: 0, all: S.vendors.length };
+    S.vendors.forEach(v => { c[v.status || 'undecided']++; });
+    return c;
+  };
+
+  function shown() {
+    const q = S.search.trim().toLowerCase();
+    return S.vendors.filter(v => {
+      if (S.filter !== 'all' && (v.status || 'undecided') !== S.filter) return false;
+      if (!q) return true;
+      return `${v.display_name} ${v.company_name} ${v.email || ''}`.toLowerCase().includes(q);
+    });
+  }
+
+  function renderClient() {
+    if (S.loading) return;
+    const c = counts();
+    const chip = (k, label) => `<button class="w9-chip${S.filter === k ? ' on' : ''}" onclick="W9.setFilter('${k}')">${label}<span class="n">${c[k]}</span></button>`;
+    $('w9Chips').innerHTML = S.vendors.length
+      ? chip('undecided', 'Needs a decision') + chip('missing', 'Missing W-9') + chip('has', 'Has W-9') + chip('not_needed', 'Not needed') + chip('all', 'All')
+      : '';
+    renderSign(c);
+    renderList();
+    renderBulk();
+  }
+
+  function renderSign(c) {
+    const el = $('w9Sign');
+    if (!S.vendors.length) { el.innerHTML = ''; return; }
+    const p = chicagoPeriod();
+    const so = S.signoffs[S.clientId];
+    if (so) {
+      el.innerHTML = `<div class="w9-sign done"><span><b>${esc(p.label)} audit signed off</b> by ${esc(so.signed_by || '')} on ${esc(when(so.signed_at))}.</span></div>`;
+    } else if (c.undecided) {
+      el.innerHTML = `<div class="w9-sign todo"><span><b>${c.undecided} vendor${c.undecided === 1 ? '' : 's'} still need${c.undecided === 1 ? 's' : ''} a decision</b> before ${esc(p.label)} can be signed off.</span></div>`;
+    } else {
+      el.innerHTML = `<div class="w9-sign ready"><span>Every vendor has a status. ${c.missing} missing W-9${c.missing === 1 ? '' : 's'}.</span>
+        <button class="w9-btn" onclick="W9.signOff()">Mark ${esc(p.label)} audited</button></div>`;
+    }
+  }
+
+  function renderList() {
+    const el = $('w9List');
+    if (!S.vendors.length) { el.innerHTML = S.clientId ? '<div class="empty">No active vendors found.</div>' : ''; return; }
+    const rows = shown();
+    if (!rows.length) { el.innerHTML = '<div class="empty">Nothing here.</div>'; return; }
+    const allSel = rows.every(v => S.selected.has(v.id));
+    let html = `<table class="w9-tbl"><thead><tr>
+      <th style="width:28px"><input type="checkbox" ${allSel ? 'checked' : ''} onclick="event.stopPropagation();W9.selectShown(this.checked)" title="Select all shown"></th>
+      <th>Vendor</th><th>1099</th><th>Tax ID</th><th>Attachments</th><th>Triple suggests</th><th>Status</th><th>Requested</th></tr></thead><tbody>`;
+    rows.forEach(v => {
+      const files = (v.attachments || []).filter(a => a.file_name);
+      html += `<tr class="w9-click${S.selected.has(v.id) ? ' w9-sel' : ''}" onclick="W9.openVendor('${v.id}')">
+        <td onclick="event.stopPropagation()"><input type="checkbox" ${S.selected.has(v.id) ? 'checked' : ''} onchange="W9.toggle('${v.id}', this.checked)"></td>
+        <td><b>${esc(v.display_name)}</b>${v.is_new ? '<span class="w9-new">NEW</span>' : ''}
+          <span class="w9-sub">${esc(v.email || 'no email in QuickBooks')}</span></td>
+        <td>${v.track_1099 ? 'Tracked' : '<span class="w9-sub" style="margin:0">—</span>'}</td>
+        <td>${v.tin_masked ? esc(v.tin_masked) : '<span class="w9-sub" style="margin:0">—</span>'}</td>
+        <td>${files.length ? files.length + (v.w9_attachments ? ` <span class="w9-sub" style="display:inline">(${v.w9_attachments} W-9)</span>` : '') : '<span class="w9-sub" style="margin:0">—</span>'}</td>
+        <td class="w9-sugg">${LABEL[v.suggested_status] || ''}<small>${esc(v.suggest_reason || '')}</small></td>
+        <td>${pill(v.status)}</td>
+        <td>${v.requested_at ? esc(when(v.requested_at)) + (v.request_count > 1 ? `<span class="w9-sub">${v.request_count} requests</span>` : '') : ''}</td>
+      </tr>`;
+    });
+    el.innerHTML = html + '</tbody></table>';
+  }
+
+  function renderBulk() {
+    const el = $('w9Bulk');
+    const n = S.selected.size;
+    if (!n) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="w9-bulk"><b>${n} selected</b>
+      <button class="w9-ghost" onclick="W9.bulk('suggested')">Accept Triple's suggestion</button>
+      <button class="w9-ghost" onclick="W9.bulk('has')">Has W-9</button>
+      <button class="w9-ghost" onclick="W9.bulk('missing')">Missing W-9</button>
+      <button class="w9-ghost" onclick="W9.bulk('not_needed')">Not needed</button>
+      <span style="flex:1"></span>
+      <button class="w9-ghost" onclick="W9.clearSel()">Clear</button></div>`;
+  }
+
+  async function writeStatuses(pairs) {
+    // pairs: [{id, status}] — grouped so each status is one update per 100 ids.
+    const now = new Date().toISOString();
+    const by = {};
+    pairs.forEach(p => { (by[p.status] = by[p.status] || []).push(p.id); });
+    for (const st of Object.keys(by)) {
+      const ids = by[st];
+      for (let i = 0; i < ids.length; i += 100) {
+        const { error } = await sb.from('w9_vendors')
+          .update({ status: st, status_by: me(), status_at: now })
+          .eq('client_id', S.clientId).in('qbo_vendor_id', ids.slice(i, i + 100));
+        if (error) throw new Error(error.message);
+      }
+    }
+    pairs.forEach(p => { const v = S.vendors.find(x => x.id === p.id); if (v) { v.status = p.status; v.status_by = me(); v.status_at = now; } });
+  }
+
+  async function bulk(kind) {
+    const ids = [...S.selected];
+    const pairs = ids.map(id => {
+      const v = S.vendors.find(x => x.id === id);
+      return { id, status: kind === 'suggested' ? (v && v.suggested_status) : kind };
+    }).filter(p => p.status);
+    try {
+      await writeStatuses(pairs);
+      S.selected.clear();
+      flash(`${pairs.length} vendor${pairs.length === 1 ? '' : 's'} updated.`);
+    } catch (e) { flash('Could not save statuses: ' + e.message, true); }
+    renderClient();
+  }
+
+  async function signOff() {
+    const c = counts();
+    const p = chicagoPeriod();
+    const row = { client_id: S.clientId, period: p.key, signed_by: me(),
+      counts: { vendors: c.all, has: c.has, missing: c.missing, not_needed: c.not_needed } };
+    const { data, error } = await sb.from('w9_signoffs').upsert(row, { onConflict: 'client_id,period' }).select();
+    if (error) { flash('Could not sign off: ' + error.message, true); return; }
+    S.signoffs[S.clientId] = (data && data[0]) || { ...row, signed_at: new Date().toISOString() };
+    flash(`${p.label} W-9 audit signed off.`);
+    renderClient();
+  }
+
+  // ------------------------------------------------------------ vendor editor
+
+  async function openVendor(id) {
+    const v = S.vendors.find(x => x.id === id);
+    if (!v) return;
+    S.ed = { id, row: v, loaded: null, file: null, read: null, filled: new Set() };
+    $('w9MTitle').textContent = v.display_name;
+    $('w9MSub').innerHTML = pill(v.status) + (v.requested_at ? ` &nbsp;Requested ${esc(when(v.requested_at))}` : '');
+    $('w9MBody').innerHTML = '<div class="empty"><span class="spinner"></span> Reading this vendor from QuickBooks…</div>';
+    status('w9MStatus', '');
+    $('w9MSaveBtn').disabled = true;
+    openModal('w9Modal');
+    try {
+      const d = await call({ action: 'vendor', client_id: S.clientId, vendor_id: id });
+      if (!S.ed || S.ed.id !== id) return;
+      S.ed.loaded = d;
+      renderEditor();
+      $('w9MSaveBtn').disabled = false;
+    } catch (e) {
+      $('w9MBody').innerHTML = `<div class="w9-flash bad">${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderEditor() {
+    const d = S.ed.loaded, v = d.vendor, a = v.bill_addr || {};
+    const st = S.ed.row.status || '';
+    const inp = (id, label, val, extra) => `<div${extra && extra.full ? ' class="full"' : ''}><label for="${id}">${label}</label><input type="text" id="${id}" value="${esc(val)}"${extra && extra.ph ? ` placeholder="${esc(extra.ph)}"` : ''}></div>`;
+    const files = (d.attachments || []);
+    let html = `
+      <div class="w9-drop" id="w9Drop" onclick="document.getElementById('w9File').click()">
+        <b>Upload the W-9</b> — PDF or photo. Triple reads it and fills in the form below.<br>
+        <span style="font-size:12px;color:var(--text3)">The file goes to this vendor's attachments in QuickBooks when you save. It is not kept in Triple.</span>
+        <input type="file" id="w9File" accept="application/pdf,image/jpeg,image/png,image/webp" style="display:none" onchange="W9.pickFile(this.files[0])">
+      </div>
+      <div id="w9Read"></div>
+      <div class="w9-sect">QuickBooks vendor details</div>
+      <div class="w9-grid">
+        ${inp('w9fCompany', 'Company name', v.company_name)}
+        ${inp('w9fPrint', 'Name to print on checks', v.print_on_check_name)}
+        ${inp('w9fEmail', 'Email', v.email, { full: true, ph: 'vendor@example.com' })}
+        ${inp('w9fLine1', 'Address', a.line1, { full: true })}
+        ${inp('w9fLine2', 'Address line 2', a.line2, { full: true })}
+        ${inp('w9fCity', 'City', a.city)}
+        <div class="w9-grid" style="grid-template-columns:1fr 1fr;gap:10px">
+          ${inp('w9fState', 'State', a.state)}
+          ${inp('w9fZip', 'ZIP', a.zip)}
+        </div>
+        <div><label for="w9fTin">Business ID No. / SSN</label>
+          <input type="text" id="w9fTin" value="" autocomplete="off" placeholder="${v.tin_masked ? 'On file: ' + esc(v.tin_masked) + ' — type to replace' : 'None on file'}">
+          <div class="w9-hint">QuickBooks only ever shows the last 4 digits. Leave blank to keep what's there.</div></div>
+        <div><label for="w9fTinType">ID type</label>
+          <select id="w9fTinType"><option value="">—</option><option value="EIN">EIN</option><option value="SSN">SSN</option></select></div>
+        <div class="full"><label class="w9-check"><input type="checkbox" id="w9f1099" ${v.track_1099 ? 'checked' : ''}> Track payments for 1099</label></div>
+      </div>
+      <div class="w9-sect">W-9 status in Triple</div>
+      <div class="w9-grid">
+        <div><label for="w9fStatus">Status</label>
+          <select id="w9fStatus">
+            <option value="" ${st ? '' : 'selected'}>Needs a decision</option>
+            <option value="has" ${st === 'has' ? 'selected' : ''}>Has W-9</option>
+            <option value="missing" ${st === 'missing' ? 'selected' : ''}>Missing W-9</option>
+            <option value="not_needed" ${st === 'not_needed' ? 'selected' : ''}>W-9 Not needed</option>
+          </select>
+          <div class="w9-hint">Triple suggests: ${esc(LABEL[S.ed.row.suggested_status] || '—')}. ${esc(S.ed.row.suggest_reason || '')}</div></div>
+        <div><label for="w9fNote">Note</label><input type="text" id="w9fNote" value="${esc((d.w9 && d.w9.status_note) || '')}" placeholder="optional"></div>
+      </div>
+      <div class="w9-sect">Attachments in QuickBooks</div>
+      <div class="w9-atts">${files.length ? files.map(f => esc(f.file_name || ('Note: ' + (f.note || '')))).join('<br>') : 'None'}${d.attachment_error ? `<br><span style="color:var(--red)">${esc(d.attachment_error)}</span>` : ''}</div>`;
+    if ((d.requests || []).length) {
+      html += '<div class="w9-sect">Requests sent</div><div class="w9-atts">' +
+        d.requests.map(r => `${esc(when(r.sent_at))} — to ${esc(r.to_email)} from ${esc(r.from_email)}`).join('<br>') + '</div>';
+    }
+    $('w9MBody').innerHTML = html;
+    const drop = $('w9Drop');
+    ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', e => { const f = e.dataTransfer && e.dataTransfer.files[0]; if (f) pickFile(f); });
+  }
+
+  function readB64(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(String(r.result).split(',')[1] || '');
+      r.onerror = () => rej(new Error('could not read the file'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  function setField(id, val) {
+    const el = $(id);
+    if (!el || val == null || val === '') return;
+    if (el.type === 'checkbox') { if (el.checked !== !!val) { el.checked = !!val; S.ed.filled.add(id); } return; }
+    if (String(el.value).trim() === String(val).trim()) return;
+    el.value = val; el.classList.add('w9-filled'); S.ed.filled.add(id);
+  }
+
+  const CLASS_LABEL = {
+    individual_sole_proprietor: 'Individual / sole proprietor', c_corporation: 'C corporation', s_corporation: 'S corporation',
+    partnership: 'Partnership', trust_estate: 'Trust / estate', llc: 'LLC', other: 'Other',
+  };
+
+  async function pickFile(file) {
+    if (!file || !S.ed) return;
+    const okType = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+    if (!okType) { $('w9Read').innerHTML = `<div class="w9-flash bad">${esc(file.name)} is a ${esc(file.type || 'unknown')} file. Use a PDF, JPG or PNG. (iPhone photos: share as JPG, or scan to PDF in the Notes app.)</div>`; return; }
+    if (file.size > 10 * 1024 * 1024) { $('w9Read').innerHTML = '<div class="w9-flash bad">That file is over 10 MB.</div>'; return; }
+    $('w9Read').innerHTML = `<div class="w9-read"><span class="spinner"></span> Reading ${esc(file.name)}…</div>`;
+    try {
+      const b64 = await readB64(file);
+      S.ed.file = { name: file.name, type: file.type, b64 };
+      const d = await call({ action: 'extract', file_base64: b64, media_type: file.type, file_name: file.name });
+      const f = d.fields || {};
+      S.ed.read = d;
+      if (f.business_name) { setField('w9fCompany', f.business_name); setField('w9fPrint', f.name); }
+      else { setField('w9fCompany', f.name); setField('w9fPrint', f.name); }
+      setField('w9fLine1', f.address_line1); setField('w9fCity', f.city); setField('w9fState', f.state); setField('w9fZip', f.zip);
+      if (f.tin) { $('w9fTin').value = f.tin; $('w9fTin').classList.add('w9-filled'); S.ed.filled.add('w9fTin'); }
+      if (f.tin_type) { $('w9fTinType').value = f.tin_type; $('w9fTinType').classList.add('w9-filled'); }
+      if (d.suggest_1099) setField('w9f1099', d.suggest_1099.track);
+      if (f.is_w9 !== false) { $('w9fStatus').value = 'has'; $('w9fStatus').classList.add('w9-filled'); }
+      const cls = CLASS_LABEL[f.tax_classification] || 'not marked';
+      const probs = (f.problems || []).filter(Boolean);
+      $('w9Read').innerHTML = `<div class="w9-read">
+        ${f.is_w9 === false ? '<b style="color:#B91C1C">This does not look like a W-9.</b> Nothing has been saved — check the file.<br>' : ''}
+        <b>Read from ${esc(file.name)}.</b> Purple fields were filled from the W-9 — check them, then save.<br>
+        Tax classification: <b>${esc(cls)}${f.llc_tax_classification ? ' (' + esc(f.llc_tax_classification) + ')' : ''}</b>
+        · 1099: <b>${d.suggest_1099 && d.suggest_1099.track ? 'track' : "don't track"}</b> — ${esc(d.suggest_1099 ? d.suggest_1099.reason : '')}
+        <br>Signed: <b>${f.signed ? 'yes' + (f.signature_date ? ', ' + esc(f.signature_date) : '') : 'NO'}</b>${f.form_revision ? ' · Form rev. ' + esc(f.form_revision) : ''}
+        ${probs.length ? '<ul>' + probs.map(p => '<li>' + esc(p) + '</li>').join('') + '</ul>' : ''}
+      </div>`;
+    } catch (e) {
+      $('w9Read').innerHTML = `<div class="w9-flash bad">Could not read the W-9: ${esc(e.message)}. You can still fill the fields in by hand; the file will still be attached when you save.</div>`;
+    }
+  }
+
+  function collectChanges() {
+    const v = S.ed.loaded.vendor, a = v.bill_addr || {};
+    const val = id => ($(id).value || '').trim();
+    const ch = {};
+    if (val('w9fCompany') !== (v.company_name || '')) ch.company_name = val('w9fCompany');
+    if (val('w9fPrint') !== (v.print_on_check_name || '') && val('w9fPrint')) ch.print_on_check_name = val('w9fPrint');
+    if (val('w9fEmail') !== (v.email || '') && val('w9fEmail')) ch.email = val('w9fEmail');
+    const addr = { line1: val('w9fLine1'), line2: val('w9fLine2'), city: val('w9fCity'), state: val('w9fState').toUpperCase(), zip: val('w9fZip') };
+    if (Object.keys(addr).some(k => addr[k] !== (a[k] || ''))) ch.bill_addr = addr;
+    if ($('w9f1099').checked !== !!v.track_1099) ch.track_1099 = $('w9f1099').checked;
+    if (val('w9fTin')) { ch.tax_id = val('w9fTin'); ch.tin_type = $('w9fTinType').value || undefined; }
+    return ch;
+  }
+
+  async function save() {
+    if (!S.ed || !S.ed.loaded) return;
+    const ch = collectChanges();
+    if (ch.tax_id && ch.tax_id.replace(/\D/g, '').length !== 9) { status('w9MStatus', 'The tax ID must be 9 digits.', true); return; }
+    const st = $('w9fStatus').value;
+    const note = ($('w9fNote').value || '').trim();
+    const body = { action: 'save', client_id: S.clientId, vendor_id: S.ed.id, changes: ch, status_note: note };
+    if (st) body.status = st;
+    if (S.ed.file) body.attach = { file_base64: S.ed.file.b64, media_type: S.ed.file.type, file_name: S.ed.file.name };
+    const statusChanged = st && st !== (S.ed.row.status || '');
+    if (!Object.keys(ch).length && !body.attach && !statusChanged && note === ((S.ed.loaded.w9 && S.ed.loaded.w9.status_note) || '')) {
+      status('w9MStatus', 'Nothing has changed.'); return;
+    }
+    const btn = $('w9MSaveBtn'); btn.disabled = true; btn.textContent = 'Saving…';
+    status('w9MStatus', '');
+    try {
+      const { data, error } = await sb.functions.invoke('qbo-w9', { body });
+      if (error) throw new Error(error.message || String(error));
+      if (!data) throw new Error('no response');
+      const r = S.ed.row;
+      if (data.vendor) {
+        r.email = data.vendor.email || null; r.track_1099 = data.vendor.track_1099; r.tin_masked = data.vendor.tin_masked;
+        r.company_name = data.vendor.company_name;
+      }
+      if (data.attached) {
+        r.attachments = (r.attachments || []).concat([data.attached]); r.w9_attachments = (r.w9_attachments || 0) + 1;
+        r.suggested_status = 'has'; r.suggest_reason = 'W-9 attached in QuickBooks: ' + data.attached.file_name;
+      }
+      if (data.ok === false && !data.vendor) throw new Error(data.error || 'save failed');
+      if (st) { r.status = st; r.status_by = me(); r.status_at = new Date().toISOString(); }
+      if (data.ok === false) {
+        status('w9MStatus', data.error, true);
+      } else {
+        closeModal('w9Modal');
+        flash(`${r.display_name} saved to QuickBooks` + (data.attached ? ' with the W-9 attached.' : '.'));
+      }
+      renderClient();
+    } catch (e) {
+      status('w9MStatus', 'Not saved: ' + e.message, true);
+    }
+    btn.disabled = false; btn.textContent = 'Save to QuickBooks';
+  }
+
+  // ------------------------------------------------------------ request email
+
+  async function openRequest() {
+    if (!S.ed) return;
+    const vid = S.ed.id;
+    S.req = { vid, preview: null };
+    $('w9RSub').textContent = S.ed.row.display_name;
+    $('w9RBody').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
+    status('w9RStatus', '');
+    $('w9RSendBtn').disabled = true;
+    openModal('w9ReqModal');
+    try {
+      const p = await call({ action: 'request_preview', client_id: S.clientId, vendor_id: vid });
+      S.req.preview = p;
+      const typed = (($('w9fEmail') || {}).value || '').trim();
+      const to = typed || p.to || '';
+      $('w9RBody').innerHTML = `
+        ${p.from_error ? `<div class="w9-flash bad">${esc(p.from_error)}</div>` : ''}
+        <div class="w9-grid">
+          <div class="full"><label>From</label><input type="text" value="${esc(p.from_name ? p.from_name + ' <' + p.from_email + '>' : '—')}" disabled>
+            <div class="w9-hint">This client's ${esc(p.from_role || 'preparer')}. Replies go to their inbox, and they get a copy of what was sent.</div></div>
+          <div class="full"><label for="w9rTo">To</label><input type="text" id="w9rTo" value="${esc(to)}" placeholder="vendor@example.com" oninput="W9.reqToChanged()"></div>
+          <div class="full" id="w9rSaveWrap"></div>
+          <div class="full"><label for="w9rSubj">Subject</label><input type="text" id="w9rSubj" value="${esc(p.subject)}"></div>
+          <div class="full"><label for="w9rBodyTxt">Message</label><textarea id="w9rBodyTxt" rows="13">${esc(p.body)}</textarea></div>
+        </div>`;
+      reqToChanged();
+      $('w9RSendBtn').disabled = !!p.from_error;
+    } catch (e) {
+      $('w9RBody').innerHTML = `<div class="w9-flash bad">${esc(e.message)}</div>`;
+    }
+  }
+
+  function reqToChanged() {
+    const p = S.req && S.req.preview;
+    const wrap = $('w9rSaveWrap');
+    if (!p || !wrap) return;
+    const to = ($('w9rTo').value || '').trim();
+    const differs = to && to.toLowerCase() !== String(p.to || '').toLowerCase();
+    wrap.innerHTML = differs
+      ? `<label class="w9-check"><input type="checkbox" id="w9rSave" checked> Also save ${esc(to)} as this vendor's email in QuickBooks${p.to ? ` (replaces ${esc(p.to)})` : ''}</label>`
+      : '';
+  }
+
+  async function sendRequest() {
+    const p = S.req && S.req.preview;
+    if (!p) return;
+    const to = ($('w9rTo').value || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { status('w9RStatus', 'Enter a valid email address.', true); return; }
+    const btn = $('w9RSendBtn'); btn.disabled = true; btn.textContent = 'Sending…';
+    try {
+      const d = await call({
+        action: 'send_request', client_id: S.clientId, vendor_id: S.req.vid, to,
+        subject: $('w9rSubj').value, body: $('w9rBodyTxt').value, vendor_name: p.vendor_name,
+        save_email_to_qbo: !!($('w9rSave') && $('w9rSave').checked),
+      });
+      const r = S.vendors.find(x => x.id === S.req.vid);
+      if (r) {
+        r.status = 'missing'; r.requested_at = d.requested_at; r.request_count = (r.request_count || 0) + 1; r.last_request_to = to;
+        if (d.email_to_qbo === 'saved') r.email = to;
+      }
+      closeModal('w9ReqModal'); closeModal('w9Modal');
+      flash(`W-9 request sent to ${to} from ${d.sent_from}.` + (d.email_to_qbo && d.email_to_qbo !== 'saved' ? ` The email address was ${d.email_to_qbo}.` : ''));
+      renderClient();
+    } catch (e) {
+      status('w9RStatus', e.message, true);
+    }
+    btn.disabled = false; btn.textContent = 'Send';
+  }
+
+  // ------------------------------------------------------------ exports
+
+  window.W9 = {
+    showOverview, openClient, loadClient, refreshAll, openVendor, pickFile, save, signOff,
+    openRequest, sendRequest, reqToChanged, bulk,
+    setFilter(k) { S.filter = k; S.selected.clear(); renderClient(); },
+    setSearch(q) { S.search = q || ''; renderList(); },
+    toggle(id, on) { if (on) S.selected.add(id); else S.selected.delete(id); renderList(); renderBulk(); },
+    selectShown(on) { shown().forEach(v => on ? S.selected.add(v.id) : S.selected.delete(v.id)); renderList(); renderBulk(); },
+    clearSel() { S.selected.clear(); renderList(); renderBulk(); },
+  };
+  window.W9Open = function () {
+    if (S.clientId && $('w9Client').style.display !== 'none') return;
+    showOverview();
+  };
+})();
 </script>
 </body>
 </html>
