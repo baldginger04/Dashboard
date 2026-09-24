@@ -929,6 +929,8 @@
     #page-labor .la-table tfoot td{font-weight:600;border-bottom:none}
     #page-labor .la-table tr.k-salary td,#page-labor .la-table tr.k-tax td{background:var(--bg3)}
     #page-labor .la-set td{vertical-align:middle}
+    #page-labor .la-table tr.la-diff td{background:var(--yellow-bg)}
+    #page-labor details{margin-bottom:.5rem}
     #page-vendoraudit .va-panel,#page-mv .va-panel,#page-payroll .va-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
     #page-vendoraudit .va-controls,#page-mv .va-controls,#page-payroll .va-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
     #page-vendoraudit .va-field,#page-mv .va-field,#page-payroll .va-field{display:flex;flex-direction:column;gap:.25rem}
@@ -1559,6 +1561,8 @@
             <div class="va-field"><label>Toast Payroll Export (CSV)</label>
               <div class="la-drop" id="laDrop">Choose or drop file(s) &#8212; last Monday through month end</div>
               <input type="file" id="laFile" accept=".csv,text/csv" multiple style="display:none"></div>
+            <div class="va-field"><label for="laSource">Toast hours from</label>
+              <select id="laSource"><option value="auto">Toast API where connected, else file</option><option value="upload">Uploaded file only</option><option value="api">Toast API only</option></select></div>
             <button class="va-btn" id="laPreviewAll">Preview all</button>
             <button class="va-ghost" id="laSettingsBtn">Settings</button>
           </div>
@@ -15572,7 +15576,7 @@ init();
 
   const S = {
     booted: false, month: '', cfgs: [], logs: {}, previews: {}, busy: {}, open: {},
-    files: [], byLoc: {}, accounts: {}, showSettings: false, status: ''
+    files: [], byLoc: {}, accounts: {}, showSettings: false, status: '', source: 'auto'
   };
 
   function defaultMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
@@ -15726,7 +15730,7 @@ init();
     const { jobs, present } = jobsFor(cfg);
     S.busy[clientId] = 'Previewing…'; S.open[clientId] = true; render();
     try {
-      S.previews[clientId] = await call({ action: 'preview', client_id: clientId, month: S.month, jobs, toast_present: present, source: 'upload' });
+      S.previews[clientId] = await call({ action: 'preview', client_id: clientId, month: S.month, jobs, toast_present: present, source: S.source });
       S.previews[clientId]._files = S.files.length;
     } catch (e) { S.previews[clientId] = { ok: false, fatal: e.message }; }
     delete S.busy[clientId]; render();
@@ -15739,12 +15743,12 @@ init();
   }
   async function post(clientId) {
     const p = S.previews[clientId]; if (!p || p.blocked || p.skip) return;
-    if (!S.files.length && !confirm('No Toast file is loaded, so this posts salary only. Continue?')) return;
+    if (p.source_used !== 'api' && !S.files.length && !confirm('No Toast file is loaded, so this posts salary only. Continue?')) return;
     if (!confirm('Post the accrual for ' + clientName(clientId) + ' — ' + money(p.total) + ' on ' + mdy(p.period.end) + ', reversed ' + mdy(p.period.reversal_date) + '?')) return;
     const cfg = S.cfgs.find(c => c.client_id === clientId); const { jobs, present } = jobsFor(cfg);
     S.busy[clientId] = 'Posting…'; render();
     try {
-      const r = await call({ action: 'post', client_id: clientId, month: S.month, jobs, toast_present: present, source: 'upload', expected_total: p.total });
+      const r = await call({ action: 'post', client_id: clientId, month: S.month, jobs, toast_present: present, source: p.source_used === 'api' ? 'api' : 'upload', expected_total: p.total });
       setStatus(clientName(clientId) + ': posted ' + money(r.total) + ' (QBO #' + r.accrual_je_id + ' / reversal #' + r.reversal_je_id + ').');
     } catch (e) { setStatus(clientName(clientId) + ': ' + e.message, true); }
     await loadLogs(); delete S.busy[clientId]; render();
@@ -15802,7 +15806,9 @@ init();
     let h = '';
     const per = p.period;
     h += '<div class="la-meta">' + esc(rangeTxt(per)) + ' · ' + per.days + '/' + per.divisor + ' days' +
-      (p.payroll_doc ? ' · salaries from <b>' + esc(p.payroll_doc) + '</b>' : '') + '</div>';
+      (p.payroll_doc ? ' · salaries from <b>' + esc(p.payroll_doc) + '</b>' : '') +
+      (p.source_used ? ' · hours from <b>' + (p.source_used === 'api' ? 'Toast API' + (p.api_meta ? ' (' + p.api_meta.entries + ' time entries)' : '') : 'uploaded file') + '</b>' : '') + '</div>';
+    if (p.source_used === 'api') h += renderCompare(cid, p);
     for (const e of p.errors || []) {
       if (e.code === 'unmapped_job') {
         const sid = 'laMap_' + cid.replace(/-/g, '') + '_' + Math.abs(hash(e.job + e.pay_type));
@@ -15823,6 +15829,23 @@ init();
         '</tbody><tfoot><tr><td colspan="2">Hourly ' + money(p.hourly) + ' · Salary ' + money(p.salary) + ' · Tax ' + money(p.tax) + '</td><td class="n">' + money(p.total) + '</td><td class="n">' + money(p.total) + '</td></tr></tfoot></table>';
     }
     return h;
+  }
+  // Toast API vs the uploaded Payroll Export, job by job — the tie-out while the API path is new.
+  function renderCompare(cid, p) {
+    const cfg = S.cfgs.find(c => c.client_id === cid);
+    const B = cfg && cfg.toast_location ? S.byLoc[cfg.toast_location] : null;
+    if (!B) return '';
+    const api = {}, file = {};
+    for (const j of p.toast || []) api[j.job] = (api[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
+    for (const j of B.list) file[j.job] = (file[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
+    const jobs = [...new Set([...Object.keys(api), ...Object.keys(file)])].filter(j => api[j] || file[j]).sort();
+    let ta = 0, tf = 0, diffs = 0;
+    const rows = jobs.map(j => { const a = api[j] || 0, f = file[j] || 0; ta += a; tf += f; if (a !== f) diffs++;
+      return '<tr' + (a !== f ? ' class="la-diff"' : '') + '><td>' + esc(j) + '</td><td class="n">' + money(a / 100) + '</td><td class="n">' + money(f / 100) + '</td><td class="n">' + (a !== f ? money((a - f) / 100) : '') + '</td></tr>'; }).join('');
+    const head = diffs ? '<div class="la-warn">Toast API and the uploaded file differ on ' + diffs + ' job' + (diffs === 1 ? '' : 's') + ' (' + money((ta - tf) / 100) + ' total). The entry below uses the API.</div>'
+                       : '<div class="la-meta la-ok-t">Toast API matches the uploaded file on every job (' + money(ta / 100) + ').</div>';
+    return head + '<details' + (diffs ? ' open' : '') + '><summary class="la-muted" style="cursor:pointer">API vs file by job</summary><table class="la-table"><thead><tr><th>Job</th><th class="n">Toast API</th><th class="n">File</th><th class="n">Difference</th></tr></thead><tbody>' + rows +
+      '</tbody><tfoot><tr><td>Total</td><td class="n">' + money(ta / 100) + '</td><td class="n">' + money(tf / 100) + '</td><td class="n">' + (ta !== tf ? money((ta - tf) / 100) : '') + '</td></tr></tfoot></table></details>';
   }
   function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 
@@ -15846,8 +15869,8 @@ init();
       else if (p && (p.blocked || p.fatal)) st = chip('bad', 'Needs attention');
       else if (p) st = chip('ready', 'Ready ' + money(p.total));
       else st = chip('mute', 'Not previewed');
-      const loc = !cfg.toast_location ? '<span class="la-warn-t">no Toast location</span>'
-        : B ? esc(cfg.toast_location) + ' · ' + money(B.total) + ' in file' : esc(cfg.toast_location) + (S.files.length ? ' · <span class="la-warn-t">not in the loaded file(s)</span>' : '');
+      const loc = (p && p.source_used === 'api' ? 'Toast API · ' : '') + (!cfg.toast_location ? (p && p.source_used === 'api' ? 'no file location set' : '<span class="la-warn-t">no Toast location</span>')
+        : B ? esc(cfg.toast_location) + ' · ' + money(B.total) + ' in file' : esc(cfg.toast_location) + (S.files.length ? ' · <span class="la-warn-t">not in the loaded file(s)</span>' : ''));
       const open = S.open[cid] !== false && (p || log);
       let body = '';
       if (open) {
@@ -15918,6 +15941,7 @@ init();
       $('laDrop').addEventListener('drop', e => { e.preventDefault(); readFiles([...e.dataTransfer.files]); });
       $('laFile').addEventListener('change', e => readFiles([...e.target.files]));
       $('laPreviewAll').addEventListener('click', previewAll);
+      $('laSource').addEventListener('change', e => { S.source = e.target.value; S.previews = {}; render(); });
       $('laSettingsBtn').addEventListener('click', () => { S.showSettings = !S.showSettings; render(); });
     }
     await loadCfgs(); await loadLogs(); render();
