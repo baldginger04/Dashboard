@@ -15837,17 +15837,25 @@ init();
     if (!B) return '';
     const api = {}, file = {};
     for (const j of p.toast || []) api[j.job] = (api[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
-    const alt = {}; for (const [k, v] of Object.entries((p.api_meta && p.api_meta.per_employee) || {})) alt[k] = Math.round(v * 100);
+    // Which of the function's candidate rounding methods reproduces the file?
+    const methods = (p.api_meta && p.api_meta.methods) || {};
+    const scored = Object.entries(methods).map(([m, t]) => {
+      let hit = 0, tot = 0; const keys = new Set([...Object.keys(t), ...Object.keys(file)]);
+      for (const j of keys) { const a = Math.round((t[j] || 0) * 100), f = file[j] || 0; if (!a && !f) continue; if (a === f) hit++; tot += a; }
+      return { m, hit, tot };
+    });
     for (const j of B.list) file[j.job] = (file[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
     const jobs = [...new Set([...Object.keys(api), ...Object.keys(file)])].filter(j => api[j] || file[j]).sort();
-    let ta = 0, tf = 0, tl = 0, diffs = 0, altDiffs = 0;
-    const rows = jobs.map(j => { const a = api[j] || 0, f = file[j] || 0, l = alt[j] || 0; ta += a; tf += f; tl += l; if (a !== f) diffs++; if (l !== f) altDiffs++;
-      return '<tr' + (a !== f ? ' class="la-diff"' : '') + '><td>' + esc(j) + '</td><td class="n">' + money(a / 100) + '</td><td class="n">' + money(l / 100) + '</td><td class="n">' + money(f / 100) + '</td><td class="n">' + (a !== f ? money((a - f) / 100) : '') + '</td></tr>'; }).join('');
+    let ta = 0, tf = 0, diffs = 0;
+    const rows = jobs.map(j => { const a = api[j] || 0, f = file[j] || 0; ta += a; tf += f; if (a !== f) diffs++;
+      return '<tr' + (a !== f ? ' class="la-diff"' : '') + '><td>' + esc(j) + '</td><td class="n">' + money(a / 100) + '</td><td class="n">' + money(f / 100) + '</td><td class="n">' + (a !== f ? money((a - f) / 100) : '') + '</td></tr>'; }).join('');
     const head = diffs ? '<div class="la-warn">Toast API and the uploaded file differ on ' + diffs + ' job' + (diffs === 1 ? '' : 's') + ' (' + money((ta - tf) / 100) + ' total). The entry below uses the API.</div>'
                        : '<div class="la-meta la-ok-t">Toast API matches the uploaded file on every job (' + money(ta / 100) + ').</div>';
-    const note = diffs && !altDiffs ? '<div class="la-warn">Rounding per employee instead of per shift DOES match the file on every job — tell Claude, the calculation should switch.</div>' : '';
-    return head + note + '<details' + (diffs ? ' open' : '') + '><summary class="la-muted" style="cursor:pointer">API vs file by job</summary><table class="la-table"><thead><tr><th>Job</th><th class="n">API (per shift)</th><th class="n">API (per employee)</th><th class="n">File</th><th class="n">Difference</th></tr></thead><tbody>' + rows +
-      '</tbody><tfoot><tr><td>Total</td><td class="n">' + money(ta / 100) + '</td><td class="n">' + money(tl / 100) + '</td><td class="n">' + money(tf / 100) + '</td><td class="n">' + (ta !== tf ? money((ta - tf) / 100) : '') + '</td></tr></tfoot></table></details>';
+    const njobs = jobs.length;
+    const note = scored.length ? '<div class="la-meta"><b>Rounding methods vs the file</b> (' + njobs + ' jobs): ' + scored.map(x =>
+      '<span class="' + (x.hit === njobs ? 'la-ok-t' : '') + '">' + esc(x.m) + (x.m === p.api_meta.method ? ' (used)' : '') + ' ' + x.hit + '/' + njobs + ' \u00b7 ' + money(x.tot / 100) + '</span>').join(' &nbsp;|&nbsp; ') + '</div>' : '';
+    return head + note + '<details' + (diffs ? ' open' : '') + '><summary class="la-muted" style="cursor:pointer">API vs file by job</summary><table class="la-table"><thead><tr><th>Job</th><th class="n">Toast API</th><th class="n">File</th><th class="n">Difference</th></tr></thead><tbody>' + rows +
+      '</tbody><tfoot><tr><td>Total</td><td class="n">' + money(ta / 100) + '</td><td class="n">' + money(tf / 100) + '</td><td class="n">' + (ta !== tf ? money((ta - tf) / 100) : '') + '</td></tr></tfoot></table></details>';
   }
   function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 
