@@ -485,9 +485,21 @@
     .sm-c-dry{background:#FEF3C7;border-left-color:#D97706;color:#78350F}
     .sm-c-skip{background:#F1F0EC;border-left-color:#9CA3AF;color:#6B7280}
     .sm-c-posted.sm-has-note{border-left-color:#D97706}
+    .sm-c-changed{background:#EDE9FE;border-left-color:#7C3AED;color:#4C1D95}
+    .sm-rev{background:#F5F3FF;border:1px solid #C4B5FD;color:#3B0764;border-radius:8px;padding:12px 14px;font-size:13px;margin-bottom:14px;line-height:1.5}
+    .sm-rev b.sm-rev-h{display:block;margin-bottom:4px;font-size:14px}
+    .sm-rev .sm-tbl{background:#fff;border-radius:6px;margin:10px 0}
+    .sm-rev .sm-tbl tr.sm-cc td{background:#EDE9FE;font-weight:600}
+    .sm-rev ol{margin:8px 0 4px 18px;padding:0}
+    .sm-rev ol li{margin-bottom:6px}
+    .sm-rev .sm-up{color:#15803D}.sm-rev .sm-dn{color:#B91C1C}
+    .sm-rev-ok{display:flex;align-items:flex-start;gap:8px;margin-top:10px;font-weight:600;cursor:pointer}
+    .sm-rev-ok input{width:auto;margin-top:3px;flex:none}
+    .sm-rev-meta{font-size:11px;color:#6D28D9;margin-top:6px}
     .sm-note{background:#FEF3C7;border:1px solid #FCD34D;color:#78350F;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5}
     .sm-note b{display:block;margin-bottom:3px}
-    .sm-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1rem}
+    .sm-sum{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:1rem}
+    @media (max-width:700px){.sm-sum{grid-template-columns:repeat(2,1fr)}}
     #smModal .modal{max-width:760px}
     .sm-err{background:#FEE2E2;border:1px solid #FCA5A5;color:#7F1D1D;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;line-height:1.5}
     .sm-err b{display:block;margin-bottom:3px}
@@ -1934,7 +1946,7 @@
         <div class="page-header">
           <div>
             <div class="page-title">Daily Sales Sync Monitor</div>
-            <div class="page-sub">One journal entry per day, per client — green posted, red needs attention</div>
+            <div class="page-sub">One journal entry per day, per client — green posted, red needs attention, purple changed in Toast since it posted</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
             <button class="btn btn-ghost" onclick="SyncMon.reload()">Refresh</button>
@@ -1954,6 +1966,7 @@
         <div class="sm-legend">
           <span class="sm-leg"><span class="sm-sw" style="background:#16A34A"></span>Posted to QBO</span>
           <span class="sm-leg"><span class="sm-sw" style="background:#DC2626"></span>Not posted — needs attention</span>
+          <span class="sm-leg"><span class="sm-sw" style="background:#7C3AED"></span>Changed in Toast — undeposit and repost</span>
           <span class="sm-leg"><span class="sm-sw" style="background:#D97706"></span>Dry run — computed, not posted</span>
           <span class="sm-leg"><span class="sm-sw" style="background:#9CA3AF"></span>No activity</span>
         </div>
@@ -13976,11 +13989,14 @@ init();
 //   red    = computed but NOT posted (mapping gap, out of balance, API error)
 //   amber  = dry run — the entry was computed and logged, nothing sent
 //   grey   = no activity that day (closed)
+//   purple = posted, but Toast has changed the day since (found by the nightly
+//            14-day lookback, or a repost QBO refused because the entry is on a
+//            bank deposit). The day's modal walks through undeposit -> repost.
 // Clicking a day shows the full entry, the reason it failed if it did, and a
 // retry. Source-agnostic by design: Briscuits (square) and VanHorn's (toast)
 // render on the same grid, and Lacquer/Radius join for free when they land.
 (function () {
-  const S = { clients: [], clientId: null, month: null, rows: [], loading: false, byDate: {} };
+  const S = { clients: [], clientId: null, month: null, rows: [], loading: false, byDate: {}, lastLook: null };
 
   // sync_sources.source is a lowercase slug in the database. These are the
   // display names — anything not listed falls back to the raw slug so a newly
@@ -14066,8 +14082,66 @@ init();
     S.rows = data || [];
     S.byDate = {};
     S.rows.forEach(r => { S.byDate[r.sales_date] = r; });
+
+    // When the lookback last finished a day for this client. Best effort: the
+    // queue table may not exist yet, and the page works without it.
+    S.lastLook = null;
+    if (c.source === 'toast') {
+      try {
+        const q = await sb.from('toast_lookback_queue')
+          .select('finished_at').eq('client_id', c.client_id).eq('status', 'done')
+          .order('finished_at', { ascending: false }).limit(1);
+        S.lastLook = (q.data && q.data[0] && q.data[0].finished_at) || null;
+      } catch (_) { /* no queue yet */ }
+    }
     render();
   }
+
+  // A posted day whose Toast figures no longer match the entry: the nightly
+  // lookback found a revision, or a repost was refused because the JE is on a
+  // bank deposit. Returns what Toast now computes, or null if the day is fine.
+  function revisionOf(row) {
+    if (!row || row.status !== 'posted' || !row.raw) return null;
+    const r = row.raw;
+    const lockedDiffers = !!(r.locked && r.locked.matches_toast === false);
+    if (r.revision) {
+      return { lines: r.revision.toast_lines || [], totals: r.revision.toast_totals || null,
+        error: r.revision.error || null, detected: r.revision.detected_at, checked: r.revision.checked_at,
+        refused: lockedDiffers };
+    }
+    if (lockedDiffers) {
+      return { lines: r.locked.attempted_lines || [], totals: r.locked.attempted_totals || null,
+        error: null, detected: r.locked.checked_at, checked: r.locked.checked_at, refused: true };
+    }
+    return null;
+  }
+
+  // Same matching rule as toast-sync: side + description, amounts only.
+  function diffLines(posted, now) {
+    const key = l => `${l.posting}|${l.description || ''}`;
+    const r2 = n => Math.round((Number(n) || 0) * 100) / 100;
+    const a = new Map(), b = new Map();
+    (posted || []).forEach(l => a.set(key(l), l));
+    (now || []).forEach(l => b.set(key(l), l));
+    const out = [];
+    new Set([...a.keys(), ...b.keys()]).forEach(k => {
+      const p = a.get(k), n = b.get(k);
+      const pa = p ? r2(p.amount) : null, na = n ? r2(n.amount) : null;
+      if ((pa === null) === (na === null) && Math.abs((pa || 0) - (na || 0)) < 0.005) return;
+      const l = n || p;
+      out.push({ description: l.description || '', bucket: l.bucket || '', posting: l.posting,
+        posted: pa, now: na, delta: r2((na || 0) - (pa || 0)) });
+    });
+    return out.sort((x, y) => x.posting === y.posting
+      ? x.description.localeCompare(y.description) : (x.posting === 'Debit' ? -1 : 1));
+  }
+
+  const lineAmt = (lines, desc) => {
+    const l = (lines || []).find(x => x.description === desc);
+    return l ? Number(l.amount) || 0 : null;
+  };
+  const when = t => t ? new Date(t).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + money(Math.abs(n));
 
   function chipClass(status) {
     if (status === 'posted') return 'sm-c-posted';
@@ -14089,13 +14163,15 @@ init();
       S.month.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
     const counts = { posted: 0, error: 0, dry_run: 0, other: 0 };
-    let total = 0;
+    let total = 0, changed = 0;
     S.rows.forEach(r => {
       if (counts[r.status] === undefined) counts.other++; else counts[r.status]++;
       if (r.status === 'posted') total += Number(r.totals && r.totals.debits) || 0;
+      if (revisionOf(r)) changed++;
     });
     document.getElementById('smSummary').innerHTML =
       `<div class="metric-card"><div class="metric-label">Posted</div><div class="metric-value mv-green">${counts.posted}</div></div>` +
+      `<div class="metric-card"><div class="metric-label">Changed — repost</div><div class="metric-value" style="color:#7C3AED">${changed}</div></div>` +
       `<div class="metric-card"><div class="metric-label">Needs attention</div><div class="metric-value mv-red">${counts.error}</div></div>` +
       `<div class="metric-card"><div class="metric-label">Dry run</div><div class="metric-value mv-orange">${counts.dry_run}</div></div>` +
       `<div class="metric-card"><div class="metric-label">Posted this month</div><div class="metric-value">${money(total)}</div></div>`;
@@ -14123,9 +14199,12 @@ init();
         // stays green, with an amber edge so it is not missed.
         const note = row.status === 'posted' && row.error_message;
         const locked = row.raw && row.raw.locked;
-        const label = note ? (locked ? 'Posted · locked' : 'Posted · note') : chipLabel(row.status);
+        const rev = revisionOf(row);
+        const label = rev ? 'Changed · repost' : note ? (locked ? 'Posted · locked' : 'Posted · note') : chipLabel(row.status);
         const main = row.status === 'skipped' ? '—' : money(amt);
-        chip = `<button class="sm-chip ${chipClass(row.status)}${note ? ' sm-has-note' : ''}" onclick="SyncMon.open('${key}')" title="${esc(row.error_message || label)}">${main}<small>${esc(label)}</small></button>`;
+        const cls = rev ? 'sm-c-changed' : chipClass(row.status) + (note ? ' sm-has-note' : '');
+        const tip = rev ? 'Toast changed this day after it posted — click to undeposit and repost' : (row.error_message || label);
+        chip = `<button class="sm-chip ${cls}" onclick="SyncMon.open('${key}')" title="${esc(tip)}">${main}<small>${esc(label)}</small></button>`;
       }
       html += `<div class="sm-cell${isToday}"><div class="sm-daynum">${day}</div>${chip}</div>`;
     }
@@ -14140,6 +14219,11 @@ init();
       note.innerHTML = `<strong>${esc(c.name)} — ${esc(sourceLabel(c.source))}</strong> is not live yet: <code>sync_sources.enabled</code> is false, so runs compute and log but never post.`;
     } else {
       note.textContent = 'Days with no chip were never run. Blank days inside a month that is otherwise green usually mean the cron did not fire.';
+      if (c && c.source === 'toast') {
+        note.textContent += S.lastLook
+          ? ` Toast changes over the prior 14 days were last checked ${when(S.lastLook)}.`
+          : ' The 14-day check for Toast changes has not run for this client yet.';
+      }
     }
   }
 
@@ -14154,8 +14238,59 @@ init();
       `${c.name} · ${sourceLabel(c.source)} · ${chipLabel(row.status)}${row.qbo_je_id ? ' · QBO JE ' + row.qbo_je_id : ''}`;
 
     let body = '';
+    const rev = revisionOf(row);
 
-    if (row.error_message && row.status === 'posted') {
+    if (rev) {
+      const posted = Array.isArray(row.lines) ? row.lines : [];
+      const changes = diffLines(posted, rev.lines);
+      const je = row.qbo_je_id || '';
+      const CC = 'Payment : Credit Card';
+      const ccWas = lineAmt(posted, CC), ccNow = lineAmt(rev.lines, CC);
+      const otherPay = changes.filter(x => x.bucket.startsWith('payment:') && x.description !== CC).map(x => x.description.replace(/^Payment : /, ''));
+      const postedTot = Number(row.totals && row.totals.debits) || 0;
+      const nowTot = Number(rev.totals && rev.totals.debits) || 0;
+
+      body += `<div class="sm-rev"><b class="sm-rev-h">Toast changed this day after it posted</b>` +
+        `JE ${esc(je)} was posted at ${money(postedTot)}. Toast now computes ${money(nowTot)}.`;
+      if (rev.refused) body += ` <b>The last repost was refused because the entry is still on a bank deposit.</b>`;
+      if (rev.error) body += `<div class="sm-err" style="margin:10px 0 0"><b>The new figures can't post as they are</b>${esc(rev.error)}</div>`;
+
+      if (changes.length) {
+        body += '<table class="sm-tbl"><thead><tr><th>Line</th><th>Side</th><th class="num">Posted</th><th class="num">Toast now</th><th class="num">Change</th></tr></thead><tbody>';
+        changes.forEach(x => {
+          const cls = x.delta > 0 ? 'sm-up' : x.delta < 0 ? 'sm-dn' : '';
+          body += `<tr${x.description === CC ? ' class="sm-cc"' : ''}><td>${esc(x.description)}</td><td>${esc(x.posting)}</td>` +
+            `<td class="num">${x.posted === null ? '—' : money(x.posted)}</td>` +
+            `<td class="num">${x.now === null ? '—' : money(x.now)}</td>` +
+            `<td class="num ${cls}">${signed(x.delta)}</td></tr>`;
+        });
+        body += '</tbody></table>';
+      }
+
+      const ccTxt = ccWas === null ? 'the credit card line' : `the credit card line (${esc(CC)}, <b>${money(ccWas)}</b>)`;
+      const ccBack = ccNow === null
+        ? 'The new entry has no credit card line, so there is nothing to add back.'
+        : (ccWas !== null && Math.abs(ccNow - ccWas) < 0.005
+          ? `Add the credit card line back to the deposit. Its amount did not change (<b>${money(ccNow)}</b>).`
+          : `Add the credit card line back to the deposit. It is now <b>${money(ccNow)}</b>` +
+            (ccWas !== null ? `, ${signed(Math.round((ccNow - ccWas) * 100) / 100)} from before, so the deposit total moves by the same amount.` : '.'));
+      body += '<ol>' +
+        `<li>In QuickBooks, open the bank deposit that includes ${ccTxt} from JE ${esc(je)}. Uncheck it and save the deposit.` +
+          (otherPay.length ? ` Do the same for the ${esc(otherPay.join(', '))} line if it is on a deposit, since that changed too.` : '') +
+          ` If the entry is not on a deposit yet, skip this step.</li>` +
+        `<li>Tick the box below and press <b>Repost journal entry</b>. Triple rewrites JE ${esc(je)} in place with Toast's current figures.</li>` +
+        `<li>${ccBack}</li>` +
+        '</ol>' +
+        `<label class="sm-rev-ok"><input type="checkbox" id="smRevOk" onchange="document.getElementById('smRetryBtn').disabled=!this.checked">` +
+          `I've removed this entry from its bank deposit in QuickBooks, or it isn't on one</label>` +
+        `<div class="sm-rev-meta">First noticed ${esc(when(rev.detected))}${rev.checked && rev.checked !== rev.detected ? ' · last checked ' + esc(when(rev.checked)) : ''}. The table below is the entry as it is posted now.</div>` +
+        '</div>';
+    }
+
+    const lockedNote = /^Locked in QuickBooks/.test(row.error_message || '');
+    if (rev && lockedNote) {
+      // already explained by the purple panel
+    } else if (row.error_message && row.status === 'posted') {
       const head = row.raw && row.raw.locked ? 'Posted — locked in QuickBooks' : 'Posted — needs a look';
       body += `<div class="sm-note"><b>${head}</b>${esc(row.error_message)}</div>`;
     } else if (row.error_message) {
@@ -14207,10 +14342,10 @@ init();
     const approveBtn = canRetry && Number.isFinite(capHit)
       ? `<button class="btn btn-ghost" id="smApproveBtn" onclick="SyncMon.approveUnpaid('${dateKey}', ${capHit})">Approve ${money(capHit)} Unpaid Orders and post</button>`
       : '';
-    const retryLabel = row.status === 'posted' ? 'Re-run this day' : 'Retry this day';
+    const retryLabel = rev ? 'Repost journal entry' : row.status === 'posted' ? 'Re-run this day' : 'Retry this day';
     document.getElementById('smModalFoot').innerHTML = canRetry
       ? `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>` + approveBtn +
-        `<button class="btn" id="smRetryBtn" onclick="SyncMon.retry('${dateKey}')">${retryLabel}</button>`
+        `<button class="btn" id="smRetryBtn"${rev ? ' disabled' : ''} onclick="SyncMon.retry('${dateKey}')">${retryLabel}</button>`
       : `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>`;
 
     openModal('smModal');
@@ -14221,6 +14356,7 @@ init();
     if (!c) return;
     const btn = document.getElementById(approvedUnpaid ? 'smApproveBtn' : 'smRetryBtn');
     const was = btn ? btn.textContent : '';
+    const wasChanged = !!revisionOf(S.byDate[dateKey]);
     if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
     try {
       const body = { client_id: c.client_id, business_date: ymd(dateKey), dry_run: false };
@@ -14231,10 +14367,16 @@ init();
       await loadMonth();
       closeModal('smModal');
       const ok = res.status === 'posted';
-      const msg = ok
+      let msg = ok
         ? (res.error ? `${dateKey}: posted, with a note — ${res.error}` : `Posted ${dateKey}`)
         : `${dateKey}: ${res.status}${res.error ? ' — ' + res.error : ''}`;
-      if (window.toast && ok && !res.error) window.toast(msg); else alert(msg);
+      if (res.action === 'locked_differs') {
+        msg = `${dateKey}: not changed. QuickBooks still has JE ${res.qbo_je_id} on a bank deposit. ` +
+          `Remove it from the deposit, then repost.`;
+      } else if (wasChanged && ok && !res.error) {
+        msg = `Reposted ${dateKey} with Toast's current figures. Add the credit card line back to its deposit in QuickBooks.`;
+      }
+      if (window.toast && ok && !res.error && !wasChanged) window.toast(msg); else alert(msg);
     } catch (e) {
       if (btn) { btn.disabled = false; btn.textContent = was; }
       alert('Retry failed: ' + (e.message || e));
