@@ -2067,11 +2067,26 @@
           #page-invoices .inv-warnbar{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border);border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:14px}
           #page-invoices .inv-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 12px}
           #page-invoices .inv-note{font-size:12px;color:var(--text3)}
+          #page-invoices .inv-push-sw{display:flex;align-items:center;gap:7px;border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font-family:'Hanken Grotesk',sans-serif;font-weight:600;font-size:13px;color:var(--text2);cursor:pointer}
+          #page-invoices .inv-push-sw:disabled{cursor:default;opacity:.85}
+          #page-invoices .inv-push-sw .dot{width:8px;height:8px;border-radius:50%;background:var(--text3)}
+          #page-invoices .inv-push-sw.on{border-color:var(--green);color:var(--green);background:var(--green-bg)}
+          #page-invoices .inv-push-sw.on .dot{background:var(--green)}
+          #page-invoices .inv-push-sw.warn{border-color:var(--yellow-border);color:var(--yellow);background:var(--yellow-bg)}
+          #page-invoices .inv-push-sw.warn .dot{background:var(--yellow)}
+          #page-invoices .btn:disabled{opacity:.45;cursor:default}
+          #page-invoices .inv-pushbox{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:16px;background:#fafbfd}
+          #page-invoices .inv-pushbox h4{margin:0 0 8px;font-family:'Hanken Grotesk',sans-serif;font-size:14px;color:var(--navy)}
+          #page-invoices .inv-checks{list-style:none;margin:8px 0;padding:0;font-size:13px}
+          #page-invoices .inv-checks li{padding:2px 0}
+          #page-invoices .inv-checks .ok{color:var(--green)}
+          #page-invoices .inv-checks .bad{color:var(--red)}
         </style>
         <div class="page-header">
           <div><div class="page-title">Expo</div><div class="page-sub">Code and approve vendor invoices before they post to QuickBooks</div></div>
           <div style="display:flex;gap:10px;align-items:center">
             <div class="inv-switch" id="invSwitch"></div>
+            <button class="inv-push-sw" id="invPushSw" style="display:none" onclick="InvTogglePush()"></button>
             <button class="btn btn-primary" id="invUploadBtn" onclick="InvStartUpload()">&#8593; Upload</button>
             <input type="file" id="invUploadFile" accept="application/pdf,image/*" multiple style="display:none" onchange="InvHandleUpload(this)">
           </div>
@@ -8650,7 +8665,7 @@ function resubmitAnalysis(id) {
 // ══════════════════════════════════════════════════════════
 // INVOICES (AP queue) — extract-code-approve, native Triple tab
 // ══════════════════════════════════════════════════════════
-const Inv = { tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null };
+const Inv = { tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null, push:{}, pushGlobal:null };
 const INV_TABS = [
   { key:'processing',   label:'Processing',   where:['processing'] },
   { key:'needs_review', label:'Needs Review', where:['needs_review'] },
@@ -8672,6 +8687,7 @@ async function InvLoad(){
     if(!Inv._clickBound){ document.addEventListener('click',()=>{ if(Inv.swOpen){ Inv.swOpen=false; InvRenderSwitcher(); } }); Inv._clickBound=true; }
     Inv.loaded=true;
   }
+  await InvLoadPushFlags();
   InvRenderSwitcher();
   await InvRefresh();
 }
@@ -8689,6 +8705,48 @@ function InvRenderSwitcher(){
   const btn=document.getElementById('invUploadBtn');
   if(btn) btn.textContent = Inv.client ? ('\u2191 Upload for '+(Inv.clients[Inv.client]||'client')) : '\u2191 Upload';
   if(Inv.swOpen) setTimeout(()=>document.getElementById('invSwSearch')?.focus(),0);
+  InvRenderPushSw();
+}
+
+// ---- Per-client QuickBooks push switch (expo_client_flags) ----
+// qbo-push only posts a real bill when BOTH the master switch
+// (pipeline_flags.push_enabled) and this client's switch are on. A client
+// with no row is off. Only the owner can flip it; everyone sees its state.
+async function InvLoadPushFlags(){
+  Inv.push={};
+  const { data, error }=await sb.from('expo_client_flags').select('client_id,push_enabled');
+  if(error) console.warn('[expo] push flags', error.message);
+  (data||[]).forEach(r=>{ Inv.push[r.client_id]=!!r.push_enabled; });
+  const { data:g }=await sb.from('pipeline_flags').select('enabled').eq('name','push_enabled').maybeSingle();
+  Inv.pushGlobal = g ? !!g.enabled : null;
+}
+function InvPushState(clientId){
+  const on=!!Inv.push[clientId];
+  return { on, live: on && Inv.pushGlobal!==false, masterOff: on && Inv.pushGlobal===false };
+}
+function InvRenderPushSw(){
+  const el=document.getElementById('invPushSw'); if(!el) return;
+  if(!Inv.client){ el.style.display='none'; return; }
+  const st=InvPushState(Inv.client);
+  el.style.display='';
+  el.className='inv-push-sw '+(st.masterOff?'warn':st.on?'on':'');
+  el.innerHTML='<span class="dot"></span>QBO push: '+(st.masterOff?'On (master off)':st.on?'On':'Off');
+  el.disabled=!isAdmin();
+  el.title = st.masterOff ? 'This client is on, but the master switch (pipeline_flags.push_enabled) is off, so nothing posts.'
+    : isAdmin() ? (st.on?'Click to stop real pushes to QuickBooks for this client':'Click to allow real pushes to QuickBooks for this client')
+    : 'Only the owner can change this';
+}
+async function InvTogglePush(){
+  if(!isAdmin()||!Inv.client) return;
+  const nm=Inv.clients[Inv.client]||'this client';
+  const on=!Inv.push[Inv.client];
+  if(on && !confirm('Turn ON QuickBooks push for '+nm+'?\n\nApproved invoices for '+nm+' can then be posted to QuickBooks as bills from the invoice page. Each bill still needs its own click.')) return;
+  const { error }=await sb.from('expo_client_flags').upsert({ client_id:Inv.client, push_enabled:on, updated_at:new Date().toISOString(), updated_by:currentUser?.email||null },{ onConflict:'client_id' });
+  if(error){ invToast('Couldn’t save: '+error.message); return; }
+  Inv.push[Inv.client]=on;
+  InvRenderPushSw();
+  invToast('QBO push '+(on?'on':'off')+' for '+nm+'.','ok');
+  if(Inv.current && Inv.current.inv.client_id===Inv.client && document.getElementById('invPushBox')) InvRenderDetail();
 }
 function InvToggleSwitch(e){ e.stopPropagation(); Inv.swOpen=!Inv.swOpen; InvRenderSwitcher(); }
 function InvSwFilter(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#invSwList .inv-sw-item').forEach(it=>{ it.style.display = it.textContent.toLowerCase().includes(q)?'':'none'; }); }
@@ -8796,7 +8854,84 @@ function InvRenderDetail(){
     +'<div style="margin:8px 0 12px">'+(foots===null?'':foots?'<span class="inv-foot ok">✓ Balances — lines + tax = '+invMoney(grand)+'</span>':'<span class="inv-foot bad">✕ Off by '+invMoney(Math.abs(grand-Number(inv.total)))+' — computed '+invMoney(grand)+' vs '+invMoney(inv.total)+'</span>')+'</div>'
     +bulk
     +'<table class="inv-tbl"><thead><tr><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
-    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" onclick="InvApprove()" '+((openReview>0||foots===false)?'disabled':'')+'>Approve for QBO</button><button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>';
+    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" onclick="InvApprove()" '+((openReview>0||foots===false)?'disabled':'')+'>Approve for QBO</button><button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
+    +InvPushBoxHtml(inv);
+}
+function InvPushBoxHtml(inv){
+  if(inv.status==='pushed') return '<div class="inv-pushbox"><h4>QuickBooks</h4><div class="inv-note">Posted as bill #'+invEsc(inv.qbo_bill_id||'—')+(inv.pushed_at?' on '+invEsc(String(inv.pushed_at).slice(0,10)):'')+'.'+(inv.error_detail?' '+invEsc(inv.error_detail):'')+'</div></div>';
+  if(inv.status!=='approved') return '';
+  const st=InvPushState(inv.client_id);
+  const why = st.live ? 'Push is on for this client. Preview first, or push — it previews and asks before posting.'
+    : st.masterOff ? 'Push is on for this client but the master switch is off, so only a preview is possible.'
+    : 'Push is off for this client, so only a preview is possible.'+(isAdmin()?' Turn it on with the QBO push switch at the top.':'');
+  return '<div class="inv-pushbox" id="invPushBox"><h4>Post to QuickBooks</h4>'
+    +'<div class="inv-bar" style="margin:0"><button class="btn btn-secondary" id="invPrevBtn" onclick="InvPushRun(true)">Preview bill</button>'
+    +'<button class="btn btn-primary" id="invPushBtn" onclick="InvPushRun(false)" '+(st.live?'':'disabled')+'>Push to QuickBooks</button>'
+    +'<span class="inv-note">'+why+'</span></div><div id="invPushOut"></div></div>';
+}
+const INV_PUSH_ERR = {
+  not_connected:'This client isn’t linked to QuickBooks.', reauth_needed:'The QuickBooks connection needs re-authorising for this client.',
+  not_approved:'Only approved invoices can be pushed.', no_lines:'This invoice has no lines.', forbidden:'Your login isn’t allowed to push.',
+  unresolved_accounts:'Some GL accounts don’t match an account in QuickBooks.', vendor_not_found:'The vendor isn’t in QuickBooks under that name.',
+  does_not_foot:'The bill wouldn’t match the invoice total.', server_error:'QuickBooks returned an error.'
+};
+async function InvCallPush(invoiceId, dryRun){
+  const r=await sb.functions.invoke('qbo-push',{ body:{ invoice_id:invoiceId, dry_run:dryRun } });
+  if(r.error){
+    let d=null; try{ d=await r.error.context?.json?.(); }catch(e){}
+    return d||{ error:'server_error', message:r.error.message||String(r.error) };
+  }
+  return r.data||{ error:'server_error', message:'No response' };
+}
+function InvPushPreviewHtml(d){
+  const { acct }=Inv.current;
+  const nameOf=id=>{ const o=(acct.options||[]).find(o=>o.id===id); return o?o.label:('QBO account '+id); };
+  if(d.error){
+    let extra='';
+    if(d.unresolved&&d.unresolved.length) extra=' Unmatched: '+d.unresolved.map(invEsc).join(', ')+'.';
+    if(d.vendor) extra=' Vendor: '+invEsc(d.vendor)+'.';
+    if(d.message) extra=' '+invEsc(d.message);
+    if(d.detail&&!INV_PUSH_ERR[d.error]) extra=' '+invEsc(d.detail);
+    return '<div class="inv-warnbar" style="margin:10px 0 0">'+(INV_PUSH_ERR[d.error]||invEsc(d.error))+extra+'</div>';
+  }
+  if(d.mode==='duplicate') return '<div class="inv-warnbar" style="margin:10px 0 0">Already in QuickBooks as bill #'+invEsc(d.existing_qbo_bill_id)+' — marked Duplicate, nothing posted.</div>';
+  const ck=(ok,txt)=>'<li class="'+(ok?'ok':'bad')+'">'+(ok?'✓ ':'✕ ')+txt+'</li>';
+  const un=d.unresolved_accounts||[];
+  const lines=(d.bill_lines||[]).map(l=>'<tr><td>'+invEsc(nameOf(l.AccountBasedExpenseLineDetail?.AccountRef?.value))+'</td><td class="inv-r inv-mono">'+invMoney(l.Amount)+'</td></tr>').join('');
+  const dup=d.dedup||{};
+  return '<ul class="inv-checks">'
+    +ck(d.vendor_resolved, d.vendor_resolved?'Vendor found in QuickBooks':'Vendor “'+invEsc(d.vendor||'')+'” not found in QuickBooks')
+    +ck(!un.length, un.length?'Accounts not found: '+un.map(invEsc).join(', '):'All accounts found')
+    +ck(d.foots!==false, d.foots===false?'Bill total '+invMoney(d.computed_total)+' ≠ invoice '+invMoney(d.invoice_total):'Bill total '+invMoney(d.computed_total)+' matches the invoice')
+    +ck(!dup.found, !dup.checked?'No invoice # to check for duplicates':dup.found?'Already in QuickBooks as bill #'+invEsc(dup.existing_qbo_bill_id):'Not already in QuickBooks')
+    +ck(d.will_attach, d.will_attach?'PDF will be attached':'No stored PDF to attach')
+    +'</ul>'
+    +(lines?'<table class="inv-tbl" style="max-width:520px"><thead><tr><th>Bill line (account, tax spread in)</th><th class="inv-r">Amount</th></tr></thead><tbody>'+lines+'</tbody></table>':'')
+    +'<div class="inv-note" style="margin-top:8px"><b>'+(d.would_post?'Ready to post.':'Won’t post until the ✕ items are fixed.')+'</b>'
+    +(d.reason==='client_push_disabled'?' Push is off for this client.':d.reason==='push_disabled'?' The master push switch is off.':'')+'</div>';
+}
+async function InvPushRun(dryRun){
+  const { inv }=Inv.current;
+  const out=document.getElementById('invPushOut'), pb=document.getElementById('invPushBtn'), vb=document.getElementById('invPrevBtn');
+  const busy=b=>{ if(pb) pb.disabled=b||!InvPushState(inv.client_id).live; if(vb) vb.disabled=b; };
+  busy(true); out.innerHTML='<div class="inv-note" style="margin-top:10px"><span class="spinner"></span> Checking against QuickBooks&hellip;</div>';
+  try{
+    const pv=await InvCallPush(inv.id, true);
+    out.innerHTML=InvPushPreviewHtml(pv);
+    if(dryRun || pv.error || pv.mode==='duplicate'){ if(pv.mode==='duplicate'){ await InvLoadCounts(); } return; }
+    if(!pv.would_post){ invToast('Not posted — fix the ✕ items first.'); return; }
+    if(!confirm('Post this bill to QuickBooks?\n\n'+(inv.vendor||'')+' · '+(inv.invoice_number||'no #')+' · '+invMoney(pv.computed_total)+'\n'+(pv.bill_lines||[]).length+' line(s)'+(pv.will_attach?', PDF attached':''))) return;
+    out.innerHTML+='<div class="inv-note" style="margin-top:10px"><span class="spinner"></span> Posting&hellip;</div>';
+    const r=await InvCallPush(inv.id, false);
+    if(r.mode==='pushed'){
+      invToast('Posted to QuickBooks as bill #'+r.qbo_bill_id+(r.attached===false?' — PDF not attached, add it in QBO':'')+'.','ok');
+      Inv.tab='pushed'; await InvRefresh(); return;
+    }
+    if(r.mode==='preview'){ out.innerHTML=InvPushPreviewHtml(r); invToast('Not posted — push is off.'); return; }
+    out.innerHTML=InvPushPreviewHtml(r);
+    if(r.mode==='duplicate') await InvLoadCounts();
+  }catch(e){ out.innerHTML='<div class="inv-warnbar" style="margin:10px 0 0">'+invEsc(e.message||String(e))+'</div>'; }
+  finally{ busy(false); }
 }
 function InvBulkApply(){ const v=document.getElementById('invBulkSel').value; if(!v)return; document.querySelectorAll('#invBody select[data-line]').forEach(s=>{ if(!s.value) s.value=v; }); }
 
@@ -8821,7 +8956,7 @@ async function InvApprove(){
   const { inv, lines, acct }=Inv.current;
   if(acct.connected){ for(const l of lines){ if(!l.qbo_account_id && l.final_account && acct.byId&&acct.byId[l.final_account]) await sb.from('invoice_lines').update({qbo_account_id:acct.byId[l.final_account].id}).eq('id',l.id); } }
   await sb.from('invoice_queue').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',inv.id);
-  invToast('Approved — queued for the QBO push.', 'ok');
+  invToast(InvPushState(inv.client_id).live?'Approved — open it from Approved to push to QBO.':'Approved.', 'ok');
   Inv.tab='approved'; await InvRefresh();
 }
 // Removing the queue row alone would orphan the PDF in the bucket, so both go.
