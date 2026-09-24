@@ -1572,6 +1572,10 @@
         </div>
         <div class="va-panel" id="laSettings" style="display:none"></div>
         <div id="laCards"></div>
+        <div class="va-panel" style="margin-top:1.25rem">
+          <div style="font-weight:600;font-size:14px;margin-bottom:.6rem">Backfill a range of months</div>
+          <div id="laBackfill"></div>
+        </div>
       </div>
 
       <div class="page" id="page-mv">
@@ -15576,7 +15580,8 @@ init();
 
   const S = {
     booted: false, month: '', cfgs: [], logs: {}, previews: {}, busy: {}, open: {},
-    files: [], byLoc: {}, accounts: {}, showSettings: false, status: '', source: 'auto'
+    files: [], byLoc: {}, accounts: {}, showSettings: false, status: '', source: 'auto',
+    bf: { client: '', from: '2025-01', to: '2026-05', rows: [], running: false, stop: false }
   };
 
   function defaultMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); }
@@ -15778,6 +15783,90 @@ init();
     await loadCfgs(); render();
   }
 
+  // ---------------------------------------------------------------- backfill
+  // Months are previewed and posted one at a time, oldest first, straight
+  // through the same labor-accrual function the cards use (Toast API only —
+  // a file can only cover the month selected above). Post stops at the first
+  // failure so nothing is skipped silently.
+  function monthsBetween(a, b) {
+    const out = []; let [y, m] = a.split('-').map(Number); const [ey, em] = b.split('-').map(Number);
+    while (y < ey || (y === ey && m <= em)) { out.push(y + '-' + pad(m)); m++; if (m > 12) { m = 1; y++; } }
+    return out;
+  }
+  async function bfPreview() {
+    const B = S.bf; if (!B.client || B.running) return;
+    const months = monthsBetween(B.from, B.to);
+    if (!months.length) { setStatus('The "to" month is before the "from" month.', true); return; }
+    B.running = true; B.stop = false; B.rows = months.map(m => ({ month: m, state: 'waiting' })); render();
+    const { data: logs } = await sb.from('labor_accruals').select('period_month,status,total').eq('client_id', B.client);
+    const logged = {}; for (const l of logs || []) logged[String(l.period_month).slice(0, 7)] = l;
+    for (const row of B.rows) {
+      if (B.stop) { row.state = 'stopped'; continue; }
+      const l = logged[row.month];
+      if (l && l.status === 'posted') { row.state = 'posted'; row.total = l.total; render(); continue; }
+      row.state = 'previewing'; render();
+      try {
+        const p = await call({ action: 'preview', client_id: B.client, month: row.month, jobs: [], toast_present: false, source: 'api' });
+        row.p = p;
+        row.state = p.skip ? 'skip' : p.blocked ? 'blocked' : 'ready';
+      } catch (e) { row.state = 'error'; row.err = e.message; }
+      render();
+    }
+    B.running = false; render();
+  }
+  async function bfPost() {
+    const B = S.bf; if (B.running) return;
+    const ready = B.rows.filter(r => r.state === 'ready');
+    if (!ready.length) return;
+    const sum = ready.reduce((s, r) => s + r.p.total, 0);
+    if (!confirm('Post ' + ready.length + ' month' + (ready.length === 1 ? '' : 's') + ' for ' + clientName(B.client) + ' (' + money(sum) + ' of accruals, each with its reversal)?')) return;
+    B.running = true; B.stop = false; render();
+    for (const row of ready) {
+      if (B.stop) break;
+      row.state = 'posting'; render();
+      try {
+        const r = await call({ action: 'post', client_id: B.client, month: row.month, jobs: [], toast_present: false, source: 'api', expected_total: row.p.total });
+        row.state = 'posted'; row.total = r.total;
+      } catch (e) { row.state = 'error'; row.err = e.message; render(); break; }
+      render();
+    }
+    B.running = false; await loadLogs(); render();
+  }
+  function renderBackfill() {
+    const el = $('laBackfill'); if (!el) return;
+    const B = S.bf;
+    const opts = S.cfgs.filter(c => c.enabled).map(c => '<option value="' + c.client_id + '"' + (c.client_id === B.client ? ' selected' : '') + '>' + esc(clientName(c.client_id)) + '</option>').join('');
+    const counts = {}; for (const r of B.rows) counts[r.state] = (counts[r.state] || 0) + 1;
+    const nReady = counts.ready || 0;
+    const stateTxt = { waiting: 'Waiting', previewing: 'Previewing…', ready: 'Ready', skip: 'No accrual', blocked: 'Needs attention', error: 'Error', posting: 'Posting…', posted: 'Posted', stopped: 'Stopped' };
+    const cls = { ready: 'ready', posted: 'ok', blocked: 'bad', error: 'bad', skip: 'mute', waiting: 'mute', stopped: 'mute', previewing: 'mute', posting: 'mute' };
+    const rows = B.rows.map((r, i) => {
+      const p = r.p || {};
+      const issues = (p.errors || []).map(e => e.message).concat(r.err ? [r.err] : []);
+      const warns = p.warnings || [];
+      return '<tr><td>' + esc(r.month) + '</td><td>' + chip(cls[r.state] || 'mute', stateTxt[r.state] || r.state) + '</td>' +
+        '<td>' + (p.period && !p.skip ? esc(rangeTxt(p.period)) : (p.reason ? esc(p.reason) : '')) + '</td>' +
+        '<td class="n">' + (p.api_meta ? p.api_meta.entries : '') + '</td>' +
+        '<td class="n">' + (r.total != null ? money(r.total) : p.total != null && !p.skip ? money(p.total) : '') + '</td>' +
+        '<td>' + issues.map(x => '<div class="la-err" style="margin:0 0 .2rem">' + esc(x) + '</div>').join('') +
+          warns.map(x => '<div class="la-muted">⚠ ' + esc(x) + '</div>').join('') +
+          (p.lines && p.lines.length ? '<details><summary class="la-muted" style="cursor:pointer">Entry</summary>' + renderPreview(B.client, p) + '</details>' : '') + '</td></tr>';
+    }).join('');
+    el.innerHTML = '<div class="va-controls">' +
+      '<div class="va-field"><label>Client</label><select id="laBfClient"><option value="">Pick a client…</option>' + opts + '</select></div>' +
+      '<div class="va-field"><label>From</label><input type="month" id="laBfFrom" value="' + esc(B.from) + '"></div>' +
+      '<div class="va-field"><label>To</label><input type="month" id="laBfTo" value="' + esc(B.to) + '"></div>' +
+      (B.running ? '<button class="va-ghost" onclick="LA.bfStop()">Stop</button>'
+        : '<button class="va-ghost" onclick="LA.bfPreview()">Preview range</button>' +
+          (nReady ? '<button class="va-btn" onclick="LA.bfPost()">Post ' + nReady + ' ready month' + (nReady === 1 ? '' : 's') + '</button>' : '')) +
+      '</div><div class="la-muted" style="margin-top:.4rem">Hours come from the Toast API, so only clients with Toast credentials can be backfilled here. Months already posted are skipped; posting goes oldest first and stops at the first failure.</div>' +
+      (B.rows.length ? '<div class="la-meta" style="margin-top:.5rem">' + Object.entries(counts).map(([k, v]) => v + ' ' + (stateTxt[k] || k).toLowerCase().replace('…', '')).join(' · ') + '</div>' +
+        '<table class="la-table"><thead><tr><th>Month</th><th>Status</th><th>Period</th><th class="n">Shifts</th><th class="n">Total</th><th>Notes</th></tr></thead><tbody>' + rows + '</tbody></table>' : '');
+    const c = $('laBfClient'); if (c) c.onchange = e => { B.client = e.target.value; B.rows = []; render(); };
+    const f = $('laBfFrom'); if (f) f.onchange = e => { B.from = e.target.value; };
+    const t = $('laBfTo'); if (t) t.onchange = e => { B.to = e.target.value; };
+  }
+
   // ---------------------------------------------------------------- render
   function chip(cls, txt) { return '<span class="la-chip ' + cls + '">' + esc(txt) + '</span>'; }
   const qboLink = id => id ? '<a href="https://app.qbo.intuit.com/app/journal?txnId=' + encodeURIComponent(id) + '" target="_blank" rel="noopener">#' + esc(id) + '</a>' : '—';
@@ -15921,11 +16010,11 @@ init();
       '<div class="la-muted" style="margin-top:.4rem">Toast location = the Location column in the Payroll Export (suggestions come from the loaded file). Job accounts are learned from each payroll entry; unmapped jobs are fixed from the client card.</div>';
   }
 
-  function render() { renderFiles(); renderCards(); renderSettings(); setStatus(S.status, /fail|couldn|error|not saved/i.test(S.status)); }
+  function render() { renderFiles(); renderCards(); renderSettings(); renderBackfill(); setStatus(S.status, /fail|couldn|error|not saved/i.test(S.status)); }
 
   // ---------------------------------------------------------------- wiring
   window.LA = {
-    preview, post, unpost, saveMapping, addClient,
+    preview, post, unpost, saveMapping, addClient, bfPreview, bfPost, bfStop() { S.bf.stop = true; },
     toggle(cid) { S.open[cid] = S.open[cid] === false; render(); },
     async loadAccounts(cid) { setStatus('Loading ' + clientName(cid) + '’s chart of accounts…'); await getAccounts(cid); setStatus(''); render(); },
     clearFiles() { S.files = []; S.byLoc = {}; S.previews = {}; $('laFile').value = ''; render(); },
