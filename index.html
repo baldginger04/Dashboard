@@ -15837,15 +15837,17 @@ init();
     if (!B) return '';
     const api = {}, file = {};
     for (const j of p.toast || []) api[j.job] = (api[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
+    const alt = {}; for (const [k, v] of Object.entries((p.api_meta && p.api_meta.per_employee) || {})) alt[k] = Math.round(v * 100);
     for (const j of B.list) file[j.job] = (file[j.job] || 0) + Math.round((j.regular_pay + j.overtime_pay) * 100);
     const jobs = [...new Set([...Object.keys(api), ...Object.keys(file)])].filter(j => api[j] || file[j]).sort();
-    let ta = 0, tf = 0, diffs = 0;
-    const rows = jobs.map(j => { const a = api[j] || 0, f = file[j] || 0; ta += a; tf += f; if (a !== f) diffs++;
-      return '<tr' + (a !== f ? ' class="la-diff"' : '') + '><td>' + esc(j) + '</td><td class="n">' + money(a / 100) + '</td><td class="n">' + money(f / 100) + '</td><td class="n">' + (a !== f ? money((a - f) / 100) : '') + '</td></tr>'; }).join('');
+    let ta = 0, tf = 0, tl = 0, diffs = 0, altDiffs = 0;
+    const rows = jobs.map(j => { const a = api[j] || 0, f = file[j] || 0, l = alt[j] || 0; ta += a; tf += f; tl += l; if (a !== f) diffs++; if (l !== f) altDiffs++;
+      return '<tr' + (a !== f ? ' class="la-diff"' : '') + '><td>' + esc(j) + '</td><td class="n">' + money(a / 100) + '</td><td class="n">' + money(l / 100) + '</td><td class="n">' + money(f / 100) + '</td><td class="n">' + (a !== f ? money((a - f) / 100) : '') + '</td></tr>'; }).join('');
     const head = diffs ? '<div class="la-warn">Toast API and the uploaded file differ on ' + diffs + ' job' + (diffs === 1 ? '' : 's') + ' (' + money((ta - tf) / 100) + ' total). The entry below uses the API.</div>'
                        : '<div class="la-meta la-ok-t">Toast API matches the uploaded file on every job (' + money(ta / 100) + ').</div>';
-    return head + '<details' + (diffs ? ' open' : '') + '><summary class="la-muted" style="cursor:pointer">API vs file by job</summary><table class="la-table"><thead><tr><th>Job</th><th class="n">Toast API</th><th class="n">File</th><th class="n">Difference</th></tr></thead><tbody>' + rows +
-      '</tbody><tfoot><tr><td>Total</td><td class="n">' + money(ta / 100) + '</td><td class="n">' + money(tf / 100) + '</td><td class="n">' + (ta !== tf ? money((ta - tf) / 100) : '') + '</td></tr></tfoot></table></details>';
+    const note = diffs && !altDiffs ? '<div class="la-warn">Rounding per employee instead of per shift DOES match the file on every job — tell Claude, the calculation should switch.</div>' : '';
+    return head + note + '<details' + (diffs ? ' open' : '') + '><summary class="la-muted" style="cursor:pointer">API vs file by job</summary><table class="la-table"><thead><tr><th>Job</th><th class="n">API (per shift)</th><th class="n">API (per employee)</th><th class="n">File</th><th class="n">Difference</th></tr></thead><tbody>' + rows +
+      '</tbody><tfoot><tr><td>Total</td><td class="n">' + money(ta / 100) + '</td><td class="n">' + money(tl / 100) + '</td><td class="n">' + money(tf / 100) + '</td><td class="n">' + (ta !== tf ? money((ta - tf) / 100) : '') + '</td></tr></tfoot></table></details>';
   }
   function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
 
@@ -15869,8 +15871,6 @@ init();
       else if (p && (p.blocked || p.fatal)) st = chip('bad', 'Needs attention');
       else if (p) st = chip('ready', 'Ready ' + money(p.total));
       else st = chip('mute', 'Not previewed');
-      const loc = (p && p.source_used === 'api' ? 'Toast API · ' : '') + (!cfg.toast_location ? (p && p.source_used === 'api' ? 'no file location set' : '<span class="la-warn-t">no Toast location</span>')
-        : B ? esc(cfg.toast_location) + ' · ' + money(B.total) + ' in file' : esc(cfg.toast_location) + (S.files.length ? ' · <span class="la-warn-t">not in the loaded file(s)</span>' : ''));
       const open = S.open[cid] !== false && (p || log);
       let body = '';
       if (open) {
@@ -15884,7 +15884,7 @@ init();
         : (log && log.status === 'posted' ? '' : '<button class="va-ghost" onclick="LA.preview(\'' + cid + '\')">Preview</button>') +
           (canPost ? '<button class="va-btn" onclick="LA.post(\'' + cid + '\')">' + (log && log.status === 'partial' ? 'Retry reversal' : 'Post') + '</button>' : '') +
           (log ? '<button class="va-ghost" onclick="LA.unpost(\'' + cid + '\')">Undo</button>' : '');
-      return '<div class="la-card"><div class="la-head" onclick="LA.toggle(\'' + cid + '\')"><div><div class="la-name">' + esc(clientName(cid)) + ' ' + st + '</div><div class="la-sub">' + loc + '</div></div>' +
+      return '<div class="la-card"><div class="la-head" onclick="LA.toggle(\'' + cid + '\')"><div><div class="la-name">' + esc(clientName(cid)) + ' ' + st + '</div></div>' +
         '<div class="la-btns" onclick="event.stopPropagation()">' + btns + '</div></div>' + (body ? '<div class="la-body">' + body + '</div>' : '') + '</div>';
     }).join('');
   }
