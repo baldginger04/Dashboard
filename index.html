@@ -8865,7 +8865,7 @@ function InvRenderDetail(){
     +'<div style="margin:8px 0 12px">'+(foots===null?'':foots?'<span class="inv-foot ok">✓ Balances — lines + tax = '+invMoney(grand)+'</span>':'<span class="inv-foot bad">✕ Off by '+invMoney(Math.abs(grand-Number(inv.total)))+' — computed '+invMoney(grand)+' vs '+invMoney(inv.total)+'</span>')+'</div>'
     +bulk
     +'<table class="inv-tbl"><thead><tr><th style="width:28px"><input type="checkbox" title="Select all lines" onclick="InvLineSel(this.checked?\'all\':\'none\')"></th><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
-    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" onclick="InvApprove()" '+((openReview>0||foots===false)?'disabled':'')+'>Approve for QBO</button><button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
+    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" id="invApproveBtn" onclick="InvApprove()" '+((openReview>0||foots===false||inv.status==='approved')?'disabled':'')+'>'+(InvPushState(inv.client_id).live?'Approve &amp; post to QBO':'Approve for QBO')+'</button><button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
     +InvPushBoxHtml(inv);
 }
 function InvPushBoxHtml(inv){
@@ -9108,8 +9108,31 @@ async function InvApprove(){
   const { inv, lines, acct }=Inv.current;
   if(acct.connected){ for(const l of lines){ if(!l.qbo_account_id && l.final_account && acct.byId&&acct.byId[l.final_account]) await sb.from('invoice_lines').update({qbo_account_id:acct.byId[l.final_account].id}).eq('id',l.id); } }
   await sb.from('invoice_queue').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',inv.id);
-  invToast(InvPushState(inv.client_id).live?'Approved — open it from Approved to push to QBO.':'Approved.', 'ok');
-  Inv.tab='approved'; await InvRefresh();
+
+  // AUTO-POST (2026-09-25): when push is on for this client, approving posts the
+  // bill straight away — but only if the check comes back clean (vendor found,
+  // every account found, totals match, not already in QuickBooks). Anything
+  // else leaves it Approved and opens it with the reason, so nothing posts
+  // half-right.
+  if(!InvPushState(inv.client_id).live){ invToast('Approved.', 'ok'); Inv.tab='approved'; await InvRefresh(); return; }
+  const btn=document.getElementById('invApproveBtn'); if(btn){ btn.disabled=true; btn.textContent='Posting…'; }
+  let pv=null, r=null;
+  try{
+    pv=await InvCallPush(inv.id, true);
+    if(!pv.error && pv.mode!=='duplicate' && pv.would_post){
+      r=await InvCallPush(inv.id, false);
+    }
+  }catch(e){ pv={ error:'server_error', message:e.message||String(e) }; }
+  if(r && r.mode==='pushed'){
+    invToast('Approved and posted to QuickBooks as bill #'+r.qbo_bill_id+(r.attached===false?' — the PDF did not attach, add it in QBO':'')+'.', 'ok');
+    await InvLoadCounts(); await InvRenderList(); return;
+  }
+  // Not posted: stay on the invoice and show why, with the vendor match /
+  // account fixes right there.
+  await InvLoadCounts(); await InvOpenInvoice(inv.id);
+  const out=document.getElementById('invPushOut');
+  if(out) out.innerHTML=InvPushPreviewHtml(r && r.mode!=='pushed' ? r : (pv||{}));
+  invToast(pv && pv.dedup && pv.dedup.found ? 'Approved — but this bill is already in QuickBooks, so it was not posted again.' : 'Approved, but not posted yet — see why below.');
 }
 // Removing the queue row alone would orphan the PDF in the bucket, so both go.
 async function invRemoveStoredFile(filePath){
