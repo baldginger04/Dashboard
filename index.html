@@ -15078,7 +15078,8 @@ init();
 // Two things this does that a plain table would not:
 //   * surfaces buckets that have APPEARED in je_sync_log but have no mapping,
 //     so a gap shows up as soon as the item is first rung rather than when a
-//     day fails
+//     day fails — including items that exist only in a posted day's changed
+//     Toast figures (raw.revision), and an Add item row per section (9/25/26)
 //   * re-applies a changed mapping backwards, rewriting each day's entry in
 //     place in QBO (toast-sync already updates by SyncToken and dedupes, so
 //     re-running a date is idempotent)
@@ -15100,6 +15101,7 @@ init();
     clients: [], clientId: null, source: null,
     rows: [],            // {bucket, qbo_account_name, __new?}
     seen: [],            // buckets present in je_sync_log
+    seenDate: new Map(), // bucket -> last sales_date seen
     accounts: [],
     dirty: new Map(),    // bucket -> account name
     removed: new Set(),
@@ -15163,7 +15165,7 @@ init();
         .eq('client_id', S.clientId).eq('source', S.source)
         .order('bucket'),
       sb.from('je_sync_log')
-        .select('lines')
+        .select('sales_date, lines, raw, error_message')
         .eq('client_id', S.clientId).eq('source', S.source)
         .order('sales_date', { ascending: false })
         .limit(60),
@@ -15171,14 +15173,37 @@ init();
 
     S.rows = mapRes.data || [];
 
-    // every bucket this client has actually produced, from recent logged days
-    const seen = new Set();
+    // Every bucket this client has actually produced in recent logged days.
+    // Three places hold them (2026-09-25 fix):
+    //   * lines — what posted, or what a failed first run computed
+    //   * raw.revision.toast_lines — Toast's CURRENT figures for a day that is
+    //     already posted and has since changed. A posted day keeps its posted
+    //     lines, so an item that only appears in the new figures (VanHorn's
+    //     9/8 discount:Gift Card) was invisible here before.
+    //   * the "unmapped" text in error_message / raw.revision.error — a
+    //     fallback in case a failed day stored no lines at all
+    const seen = new Map();   // bucket -> most recent sales_date it appeared on
+    const note = (b, d) => {
+      b = String(b || '').trim();
+      if (!b || !b.includes(':')) return;
+      if (!seen.has(b) || String(d) > String(seen.get(b))) seen.set(b, d);
+    };
+    const fromText = (t, d) => {
+      const m = String(t || '').match(/unmapped (?:buckets \(add to je_gl_map, source '[a-z]+'\)|items): (.+?)(?:\. Map them|$)/i);
+      if (m) m[1].split(', ').forEach(b => note(b, d));
+    };
     for (const r of logRes.data || []) {
-      for (const l of (Array.isArray(r.lines) ? r.lines : [])) {
-        if (l && l.bucket) seen.add(l.bucket);
+      const d = r.sales_date;
+      for (const l of (Array.isArray(r.lines) ? r.lines : [])) if (l && l.bucket) note(l.bucket, d);
+      const rev = r.raw && r.raw.revision;
+      if (rev) {
+        for (const l of (Array.isArray(rev.toast_lines) ? rev.toast_lines : [])) if (l && l.bucket) note(l.bucket, d);
+        fromText(rev.error, d);
       }
+      fromText(r.error_message, d);
     }
-    S.seen = [...seen];
+    S.seen = [...seen.keys()];
+    S.seenDate = seen;
 
     // full chart of accounts for the picker
     try {
@@ -15270,8 +15295,9 @@ init();
         '<div class="mp-hint">These came through the POS in the last 60 logged days with nowhere to post. ' +
         'A day containing one of these stops rather than posting.</div>';
       for (const b of unmapped.sort()) {
+        const last = S.seenDate.get(b);
         html += `<div class="mp-row">
-          <div><span class="mp-name">${esc(itemOf(b) || b)}</span><span class="mp-bucket">${esc(b)}</span></div>
+          <div><span class="mp-name">${esc(itemOf(b) || b)}</span><span class="mp-bucket">${esc(b)}${last ? ' · last seen ' + esc(last) : ''}</span></div>
           <select class="mp-acct missing" onchange="SalesMap.setAccount('${esc(b)}', this.value)">${accountOptions('')}</select>
           <span></span>
         </div>`;
@@ -15279,8 +15305,13 @@ init();
       html += '</div>';
     }
 
+    // Saved rows plus anything picked but not yet saved (from the unmapped panel
+    // or Add item), so a new mapping stays on screen until Save.
     const rows = S.rows
       .filter(r => sectionOf(r.bucket) === S.section && !S.removed.has(r.bucket))
+      .concat([...S.dirty.keys()]
+        .filter(b => sectionOf(b) === S.section && !S.rows.some(r => r.bucket === b))
+        .map(b => ({ bucket: b, qbo_account_name: '', __new: true })))
       .sort((a, b) => a.bucket.localeCompare(b.bucket));
 
     html += `<div class="mp-card"><h3>${esc(labelOf(S.section))}</h3>` +
@@ -15295,10 +15326,17 @@ init();
         html += `<div class="mp-row">
           <div><span class="mp-name">${esc(itemOf(r.bucket) || r.bucket)}</span><span class="mp-bucket">${esc(r.bucket)}</span></div>
           <select class="mp-acct${isDirty ? ' dirty' : ''}${val ? '' : ' missing'}" onchange="SalesMap.setAccount('${esc(r.bucket)}', this.value)">${accountOptions(val)}</select>
-          <button class="mp-del" title="Remove this mapping" onclick="SalesMap.remove('${esc(r.bucket)}')">&times;</button>
+          <button class="mp-del" title="${r.__new ? 'Drop this unsaved mapping' : 'Remove this mapping'}" onclick="SalesMap.remove('${esc(r.bucket)}')">&times;</button>
         </div>`;
       }
     }
+    // Map an item before it has ever come through (or one the panel above
+    // cannot see). The name must match the POS exactly, same as the rows above.
+    html += `<div class="mp-row" style="border-top:1px dashed var(--border2);margin-top:6px;padding-top:10px">
+        <div><input id="mpAddName" class="mp-acct" placeholder="Add item — exact POS name, e.g. Gift Card"><span class="mp-bucket">becomes ${esc(S.section)}:&lt;name&gt;</span></div>
+        <select id="mpAddAcct" class="mp-acct">${accountOptions('')}</select>
+        <button class="btn btn-ghost" style="padding:5px 10px;font-size:12px" onclick="SalesMap.addItem()">Add</button>
+      </div>`;
     html += '</div>';
 
     document.getElementById('mpBody').innerHTML = html;
@@ -15408,13 +15446,29 @@ init();
     },
     setSection(k) { S.section = k; render(); },
     setAccount(bucket, name) {
-      const orig = (S.rows.find(r => r.bucket === bucket) || {}).qbo_account_name || '';
-      if (name === orig) S.dirty.delete(bucket); else S.dirty.set(bucket, name);
+      const saved = S.rows.find(r => r.bucket === bucket);
+      const orig = (saved || {}).qbo_account_name || '';
+      // an unsaved new bucket stays in dirty even when cleared, so it stays on screen
+      if (saved && name === orig) S.dirty.delete(bucket); else S.dirty.set(bucket, name);
       render();
     },
     remove(bucket) {
+      if (!S.rows.some(r => r.bucket === bucket)) { S.dirty.delete(bucket); render(); return; }
       if (!confirm(`Remove the mapping for ${bucket}?\n\nDays containing it will stop instead of posting.`)) return;
       S.removed.add(bucket); S.dirty.delete(bucket); render();
+    },
+    addItem() {
+      const name = String(document.getElementById('mpAddName').value || '').trim();
+      const acct = document.getElementById('mpAddAcct').value;
+      if (!name) { alert('Type the item name exactly as the POS shows it.'); return; }
+      if (!acct) { alert('Pick an account for it.'); return; }
+      const bucket = `${S.section}:${name}`;
+      if (S.rows.some(r => r.bucket === bucket && !S.removed.has(bucket))) {
+        alert(`${bucket} is already mapped — change it in the list instead.`); return;
+      }
+      S.removed.delete(bucket);
+      S.dirty.set(bucket, acct);
+      render();
     },
     discard() { S.dirty.clear(); S.removed.clear(); render(); },
     save, runReapply,
