@@ -8960,6 +8960,31 @@ function InvLineSel(mode){
     c.checked = mode==='all' ? true : mode==='none' ? false : !!(row && row.classList.contains('inv-needs'));
   });
 }
+// Learned coding reaches invoices ALREADY in the queue, not just future uploads:
+// same client + vendor + item, line still uncoded, invoice not yet posted. An invoice
+// left with nothing to code goes back for an automatic check (and posts if push is on).
+async function InvSpreadCoding(inv, maps){
+  const byMk={}; maps.forEach(m=>{ if(m.match_key) byMk[m.match_key]=m; });
+  const mks=Object.keys(byMk); if(!mks.length) return { lines:0, invoices:0 };
+  const { data:open }=await sb.from('invoice_queue').select('id,status').eq('client_id',inv.client_id).eq('vendor',inv.vendor)
+    .in('status',['needs_review','pending','approved']).neq('id',inv.id).limit(500);
+  const openIds=(open||[]).map(r=>r.id); if(!openIds.length) return { lines:0, invoices:0 };
+  const { data:todo }=await sb.from('invoice_lines').select('id,invoice_id,match_key').in('invoice_id',openIds).in('match_key',mks).eq('needs_review',true).limit(2000);
+  if(!todo||!todo.length) return { lines:0, invoices:0 };
+  for(const mk of mks){
+    const ids=todo.filter(l=>l.match_key===mk).map(l=>l.id); if(!ids.length) continue;
+    const m=byMk[mk];
+    await writeOrThrow(sb.from('invoice_lines').update({final_account:m.gl_account,qbo_account_id:m.qbo_account_id,needs_review:false}).in('id',ids),'Apply coding to other invoices');
+  }
+  const touched=[...new Set(todo.map(l=>l.invoice_id))];
+  const { data:still }=await sb.from('invoice_lines').select('invoice_id').in('invoice_id',touched).eq('needs_review',true).limit(5000);
+  const stillSet=new Set((still||[]).map(r=>r.invoice_id));
+  const statusOf={}; (open||[]).forEach(r=>statusOf[r.id]=r.status);
+  const done=touched.filter(id=>!stillSet.has(id) && statusOf[id]==='needs_review');
+  if(done.length) await sb.from('invoice_queue').update({status:'pending',auto_checked_at:null,review_reason:null}).in('id',done);
+  return { lines:todo.length, invoices:touched.length, ready:done.length };
+}
+function invSpreadCodeNote(r){ return r&&r.lines ? ' Also coded '+r.lines+' matching line'+(r.lines===1?'':'s')+' on '+r.invoices+' other invoice'+(r.invoices===1?'':'s')+(r.ready?' ('+r.ready+' now fully coded — they’ll post on their own if push is on)':'')+'.' : ''; }
 async function InvCodeSelected(){
   const { inv, acct }=Inv.current;
   const code=document.getElementById('invBulkSel').value;
@@ -8973,10 +8998,11 @@ async function InvCodeSelected(){
     }
     const maps=picked.filter(c=>c.dataset.mk).map(c=>({client_id:inv.client_id,vendor:inv.vendor,match_key:c.dataset.mk,gl_account:code,qbo_account_id:qid,updated_at:new Date().toISOString()}));
     if(maps.length) await sb.from('item_map').upsert(maps,{onConflict:'client_id,vendor,match_key'});
+    let spread=null; try{ spread=await InvSpreadCoding(inv, maps); }catch(e){ console.warn(e); }
     const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
     const status=(rem&&rem.length)?'needs_review':(inv.status==='approved'?'approved':'pending');
     await sb.from('invoice_queue').update({status,auto_checked_at:new Date().toISOString()}).eq('id',inv.id);
-    invToast(picked.length+' line'+(picked.length>1?'s':'')+' coded to '+InvAcctLabel(acct,code)+(maps.length?' — '+maps.length+' learned':'')+'.','ok');
+    invToast(picked.length+' line'+(picked.length>1?'s':'')+' coded to '+InvAcctLabel(acct,code)+(maps.length?' — '+maps.length+' learned':'')+'.'+invSpreadCodeNote(spread),'ok');
     await InvLoadCounts(); await InvOpenInvoice(inv.id);
   }catch(e){ invToast(e.message||String(e)); }
 }
@@ -9122,10 +9148,11 @@ async function InvSaveCoding(){
   if(!lineUpdates.length){ invToast('Pick an account first.'); return; }
   for(const u of lineUpdates) await sb.from('invoice_lines').update({final_account:u.final_account,qbo_account_id:u.qbo_account_id,needs_review:false}).eq('id',u.id);
   if(mapRows.length) await sb.from('item_map').upsert(mapRows,{onConflict:'client_id,vendor,match_key'});
+  let spread=null; try{ spread=await InvSpreadCoding(inv, mapRows); }catch(e){ console.warn(e); }
   const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
   const status=(rem&&rem.length)?'needs_review':'pending';
   await sb.from('invoice_queue').update({status,auto_checked_at:new Date().toISOString()}).eq('id',inv.id);
-  invToast(mapRows.length?('Saved — '+mapRows.length+' item'+(mapRows.length>1?'s':'')+' learned.'):'Saved.', 'ok');
+  invToast((mapRows.length?('Saved — '+mapRows.length+' item'+(mapRows.length>1?'s':'')+' learned.'):'Saved.')+invSpreadCodeNote(spread), 'ok');
   await InvLoadCounts();
   await InvOpenInvoice(inv.id);
 }
