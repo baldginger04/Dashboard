@@ -14743,7 +14743,7 @@ init();
   function chipClass(status) {
     if (status === 'posted') return 'sm-c-posted';
     if (status === 'error') return 'sm-c-error';
-    if (status === 'dry_run') return 'sm-c-dry';
+    if (status === 'dry_run' || status === 'waiting') return 'sm-c-dry';
     return 'sm-c-skip';
   }
   function chipLabel(status) {
@@ -14751,6 +14751,7 @@ init();
     if (status === 'error') return 'Not posted';
     if (status === 'dry_run') return 'Dry run';
     if (status === 'skipped') return 'No activity';
+    if (status === 'waiting') return 'Waiting for fees';
     return status || '';
   }
 
@@ -14932,6 +14933,8 @@ init();
     } else if (row.error_message && row.status === 'posted') {
       const head = row.raw && row.raw.locked ? 'Posted — locked in QuickBooks' : 'Posted — needs a look';
       body += `<div class="sm-note"><b>${head}</b>${esc(row.error_message)}</div>`;
+    } else if (row.error_message && row.status === 'waiting') {
+      body += `<div class="sm-note"><b>Waiting for card fees</b>${esc(row.error_message)}</div>`;
     } else if (row.error_message) {
       body += `<div class="sm-err"><b>Not posted</b>${esc(row.error_message)}</div>`;
     }
@@ -14942,6 +14945,12 @@ init();
     }
     if (row.status === 'posted' && row.raw && row.raw.unpaid_orders_approved) {
       body += `<div class="sm-note"><b>Unpaid Orders approved</b>${money(row.raw.unpaid_orders_approved.amount)} was over the automatic cap and was posted after approval.</div>`;
+    }
+    if (row.raw && row.raw.auto_reposted) {
+      body += `<div class="sm-note"><b>Updated automatically</b>On ${esc(when(row.raw.auto_reposted.at))} Toast's card fees or late-paid checks had changed this day; only the payment, fee, tip and Unpaid Orders lines moved, so it was reposted without waiting for you.</div>`;
+    }
+    if (row.raw && row.raw.posted_without_fees) {
+      body += `<div class="sm-note"><b>Posted without some card fees</b>${esc(String(row.raw.posted_without_fees.payments))} card payment(s) had no fee from Toast — ${esc(row.raw.posted_without_fees.note || '')}.</div>`;
     }
 
     const lines = Array.isArray(row.lines) ? row.lines : [];
