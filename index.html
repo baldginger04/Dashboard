@@ -8673,10 +8673,10 @@ const INV_TABS = [
   { key:'pending',      label:'Ready',        where:['pending'] },
   { key:'approved',     label:'Approved',     where:['approved'] },
   { key:'duplicate',    label:'Duplicates',   where:['duplicate'] },
-  { key:'pushed',       label:'Pushed',       where:['pushed'] },
+  { key:'pushed',       label:'Processed',    where:['pushed'] },
   { key:'all',          label:'All',          where:null },
 ];
-const INV_BADGE = { processing:['inv-b-ready','Processing'], needs_review:['inv-b-review','Needs review'], pending:['inv-b-ready','Ready'], approved:['inv-b-approved','Approved'], duplicate:['inv-b-dup','Duplicate'], pushed:['inv-b-pushed','Pushed'], error:['inv-b-dup','Error'] };
+const INV_BADGE = { processing:['inv-b-ready','Processing'], needs_review:['inv-b-review','Needs review'], pending:['inv-b-ready','Ready'], approved:['inv-b-approved','Approved'], duplicate:['inv-b-dup','Duplicate'], pushed:['inv-b-pushed','Processed'], error:['inv-b-dup','Error'] };
 const invMoney = n => (n==null?'—':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}));
 const invEsc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -8764,7 +8764,7 @@ async function InvLoadCounts(){
 }
 async function InvRenderList(){
   const tab=INV_TABS.find(t=>t.key===Inv.tab);
-  let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status,source,qbo_bill_id,created_at').order('created_at',{ascending:false}).limit(300);
+  let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status,source,qbo_bill_id,created_at,review_reason').order('created_at',{ascending:false}).limit(300);
   if(tab.where) q=q.in('status',tab.where);
   if(Inv.client) q=q.eq('client_id',Inv.client);
   const { data:rows, error }=await q;
@@ -8788,7 +8788,8 @@ function InvRowHtml(r){
     +'<td class="inv-r inv-mono">'+invMoney(r.total)+'</td>'
     +(Inv.client?'':'<td class="inv-dim">'+invEsc(Inv.clients[r.client_id]||'—')+'</td>')
     +'<td><span class="inv-pill inv-dim" data-coded="'+r.id+'">—</span></td>'
-    +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span>'+(r.status==='duplicate'&&r.qbo_bill_id?' <span class="inv-dim" style="font-size:11px">in QBO #'+invEsc(r.qbo_bill_id)+'</span>':'')+'</td>'
+    +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span>'+(r.status==='duplicate'&&r.qbo_bill_id?' <span class="inv-dim" style="font-size:11px">in QBO #'+invEsc(r.qbo_bill_id)+'</span>':'')
+    +(r.review_reason&&r.status!=='approved'?'<div class="inv-dim" style="font-size:11px;max-width:320px;white-space:normal">'+invEsc(r.review_reason)+'</div>':'')+'</td>'
     // Reachable without opening the invoice, because a row stuck on Processing
     // or Error has nothing worth opening.
     +'<td class="inv-r"><button class="inv-rowdel" title="Delete this invoice" onclick="event.stopPropagation();InvDeleteRow(\''+r.id+'\')">&times;</button></td></tr>';
@@ -8858,6 +8859,7 @@ function InvRenderDetail(){
     +'<button class="btn btn-primary btn-sm" onclick="InvCodeSelected()">Code selected lines</button></div>';
   document.getElementById('invBody').innerHTML=
     '<button class="inv-back" onclick="InvRenderList()">← Back to queue</button>'+notConn
+    +(inv.review_reason&&inv.status!=='approved'?'<div class="inv-warnbar">'+(inv.status==='needs_review'?'<b>Why this needs you:</b> ':'')+invEsc(inv.review_reason)+'</div>':'')
     +'<div style="font-family:\'Hanken Grotesk\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);margin:.2em 0">'+invEsc(inv.vendor||'—')+' <span class="inv-badge '+b[0]+'" style="vertical-align:middle">'+b[1]+'</span>'
     +(inv.status!=='pushed'?' <button class="inv-linkbtn" onclick="InvVendorPicker()">Match vendor in QuickBooks</button>':'')+'</div>'
     +'<div id="invVendorBox"></div>'
@@ -8968,7 +8970,7 @@ async function InvCodeSelected(){
     if(maps.length) await sb.from('item_map').upsert(maps,{onConflict:'client_id,vendor,match_key'});
     const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
     const status=(rem&&rem.length)?'needs_review':(inv.status==='approved'?'approved':'pending');
-    if(status!==inv.status) await sb.from('invoice_queue').update({status}).eq('id',inv.id);
+    await sb.from('invoice_queue').update({status,auto_checked_at:new Date().toISOString()}).eq('id',inv.id);
     invToast(picked.length+' line'+(picked.length>1?'s':'')+' coded to '+InvAcctLabel(acct,code)+(maps.length?' — '+maps.length+' learned':'')+'.','ok');
     await InvLoadCounts(); await InvOpenInvoice(inv.id);
   }catch(e){ invToast(e.message||String(e)); }
@@ -9010,6 +9012,21 @@ function InvVendFilter(q){
   sel.innerHTML=hits.map(v=>'<option value="'+invEsc(v.id)+'">'+invEsc(v.name)+'</option>').join('')||'<option disabled>No vendor matches — try fewer letters</option>';
   if(hits.length) sel.selectedIndex=0;
 }
+// A vendor match applies to every invoice from that vendor (the map is per client + vendor
+// name). Open invoices that went to Needs Review only because of the vendor are sent back
+// for another automatic check; the auto-poster posts them if nothing else needs you.
+async function InvVendorSpread(inv){
+  const key=String(inv.vendor||'').trim().toLowerCase(); if(!key) return 0;
+  const pat=key.replace(/[\\%_]/g,m=>'\\'+m);
+  const { data }=await sb.from('invoice_queue').select('id,vendor,status,review_reason')
+    .eq('client_id',inv.client_id).in('status',['needs_review','pending']).ilike('vendor','%'+pat+'%').neq('id',inv.id);
+  const ids=(data||[]).filter(r=>String(r.vendor||'').trim().toLowerCase()===key)
+    .filter(r=>r.status==='pending'||/vendor/i.test(r.review_reason||'')).map(r=>r.id);
+  if(!ids.length) return 0;
+  await writeOrThrow(sb.from('invoice_queue').update({status:'pending',auto_checked_at:null,review_reason:null}).in('id',ids),'Apply vendor to other invoices');
+  return ids.length;
+}
+function invSpreadNote(n,inv){ return n? ' Also applied to '+n+' other invoice'+(n===1?'':'s')+' from “'+(inv.vendor||'')+'” — they’ll re-check and post on their own if nothing else needs you.' : ''; }
 async function InvVendorSave(){
   const { inv }=Inv.current;
   const sel=document.getElementById('invVendSel'); const id=sel&&sel.value;
@@ -9018,7 +9035,8 @@ async function InvVendorSave(){
   try{
     await writeOrThrow(sb.from('expo_vendor_map').upsert({client_id:inv.client_id,vendor_key:String(inv.vendor||'').trim().toLowerCase(),vendor_name:inv.vendor,qbo_vendor_id:v.id,qbo_vendor_name:v.name,updated_at:new Date().toISOString(),updated_by:(currentUser&&currentUser.email)||null},{onConflict:'client_id,vendor_key'}),'Match vendor');
     document.getElementById('invVendorBox').innerHTML='';
-    invToast('“'+(inv.vendor||'')+'” now posts to '+v.name+' in QuickBooks.','ok');
+    let n=0; try{ n=await InvVendorSpread(inv); }catch(e){ console.warn(e); }
+    invToast('“'+(inv.vendor||'')+'” now posts to '+v.name+' in QuickBooks.'+invSpreadNote(n,inv),'ok');
     if(document.getElementById('invPushBox')) InvPushRun(true);
   }catch(e){ invToast(e.message||String(e)); }
 }
@@ -9033,7 +9051,8 @@ async function InvVendorCreate(){
   if(!d||d.error){ invToast((d&&(d.detail||INV_PUSH_ERR[d.error]||d.error))||'Could not create the vendor.'); return; }
   (Inv.vendorCache[inv.client_id]=Inv.vendorCache[inv.client_id]||[]).push(d.vendor);
   document.getElementById('invVendorBox').innerHTML='';
-  invToast('Created '+d.vendor.name+' in QuickBooks and matched it.','ok');
+  let n=0; try{ n=await InvVendorSpread(inv); }catch(e){ console.warn(e); }
+  invToast('Created '+d.vendor.name+' in QuickBooks and matched it.'+invSpreadNote(n,inv),'ok');
   if(document.getElementById('invPushBox')) InvPushRun(true);
 }
 async function InvVendorClear(){
@@ -9099,7 +9118,7 @@ async function InvSaveCoding(){
   if(mapRows.length) await sb.from('item_map').upsert(mapRows,{onConflict:'client_id,vendor,match_key'});
   const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
   const status=(rem&&rem.length)?'needs_review':'pending';
-  await sb.from('invoice_queue').update({status}).eq('id',inv.id);
+  await sb.from('invoice_queue').update({status,auto_checked_at:new Date().toISOString()}).eq('id',inv.id);
   invToast(mapRows.length?('Saved — '+mapRows.length+' item'+(mapRows.length>1?'s':'')+' learned.'):'Saved.', 'ok');
   await InvLoadCounts();
   await InvOpenInvoice(inv.id);
@@ -9107,7 +9126,7 @@ async function InvSaveCoding(){
 async function InvApprove(){
   const { inv, lines, acct }=Inv.current;
   if(acct.connected){ for(const l of lines){ if(!l.qbo_account_id && l.final_account && acct.byId&&acct.byId[l.final_account]) await sb.from('invoice_lines').update({qbo_account_id:acct.byId[l.final_account].id}).eq('id',l.id); } }
-  await sb.from('invoice_queue').update({status:'approved',approved_at:new Date().toISOString()}).eq('id',inv.id);
+  await sb.from('invoice_queue').update({status:'approved',approved_at:new Date().toISOString(),auto_checked_at:new Date().toISOString(),review_reason:null}).eq('id',inv.id);
 
   // AUTO-POST (2026-09-25): when push is on for this client, approving posts the
   // bill straight away — but only if the check comes back clean (vendor found,
