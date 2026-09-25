@@ -8871,7 +8871,7 @@ function InvRenderDetail(){
     +InvPushBoxHtml(inv);
 }
 function InvPushBoxHtml(inv){
-  if(inv.status==='pushed') return '<div class="inv-pushbox"><h4>QuickBooks</h4><div class="inv-note">Posted as bill #'+invEsc(inv.qbo_bill_id||'—')+(inv.pushed_at?' on '+invEsc(String(inv.pushed_at).slice(0,10)):'')+'.'+(inv.error_detail?' '+invEsc(inv.error_detail):'')+'</div></div>';
+  if(inv.status==='pushed') return '<div class="inv-pushbox"><h4>QuickBooks</h4><div class="inv-note">Posted as '+invTxnWord(inv.qbo_txn_type)+' #'+invEsc(inv.qbo_bill_id||'—')+(inv.pushed_at?' on '+invEsc(String(inv.pushed_at).slice(0,10)):'')+'.'+(inv.error_detail?' '+invEsc(inv.error_detail):'')+'</div></div>';
   if(inv.status!=='approved') return '';
   const st=InvPushState(inv.client_id);
   const why = st.live ? 'Push is on for this client. Preview first, or push — it previews and asks before posting.'
@@ -8907,7 +8907,7 @@ function InvPushPreviewHtml(d){
     if(d.detail&&!INV_PUSH_ERR[d.error]) extra=' '+invEsc(d.detail);
     return '<div class="inv-warnbar" style="margin:10px 0 0">'+(INV_PUSH_ERR[d.error]||invEsc(d.error))+extra+'</div>';
   }
-  if(d.mode==='duplicate') return '<div class="inv-warnbar" style="margin:10px 0 0">Already in QuickBooks as bill #'+invEsc(d.existing_qbo_bill_id)+' — marked Duplicate, nothing posted.</div>';
+  if(d.mode==='duplicate') return '<div class="inv-warnbar" style="margin:10px 0 0">Already in QuickBooks as '+invTxnWord(d.existing_type)+' #'+invEsc(d.existing_qbo_bill_id)+' — marked Duplicate, nothing posted.</div>';
   const ck=(ok,txt)=>'<li class="'+(ok?'ok':'bad')+'">'+(ok?'✓ ':'✕ ')+txt+'</li>';
   const un=d.unresolved_accounts||[];
   const lines=(d.bill_lines||[]).map(l=>'<tr><td>'+invEsc(nameOf(l.AccountBasedExpenseLineDetail?.AccountRef?.value))+'</td><td class="inv-r inv-mono">'+invMoney(l.Amount)+'</td></tr>').join('');
@@ -8917,14 +8917,18 @@ function InvPushPreviewHtml(d){
         ? 'Vendor in QuickBooks: <b>'+invEsc(d.vendor_qbo_name||'')+'</b>'+(d.vendor_source==='matched'?' (your match)':d.vendor_source==='similar'?' (<b>picked by a similar name — check it</b>)':'')+' <button class="inv-linkbtn" onclick="InvVendorPicker()">change</button>'
         : 'Vendor “'+invEsc(d.vendor||'')+'” not found in QuickBooks <button class="inv-linkbtn" onclick="InvVendorPicker()">Match vendor</button>')
     +ck(!un.length, un.length?'Accounts not found: '+un.map(invEsc).join(', '):'All accounts found')
+    +(d.txn_type==='vendor_credit'?'<li class="ok">↩ Negative invoice — posts as a <b>vendor credit</b> for '+invMoney(Math.abs(Number(d.computed_total)||0))+'</li>':'')
+    +(d.zero_total?'<li class="ok">○ $0 invoice — posts as a $0 bill'+(d.no_total_read?' (<b>no amounts were read — check it really is $0</b>)':'')+'</li>':'')
     +ck(d.foots!==false, d.foots===false?'Bill total '+invMoney(d.computed_total)+' ≠ invoice '+invMoney(d.invoice_total):'Bill total '+invMoney(d.computed_total)+' matches the invoice')
-    +ck(!dup.found, !dup.checked?'No invoice # to check for duplicates':dup.found?'Already in QuickBooks as bill #'+invEsc(dup.existing_qbo_bill_id):'Not already in QuickBooks')
+    +ck(!dup.found, !dup.checked?'No invoice # to check for duplicates':dup.found?'Already in QuickBooks as '+invTxnWord(dup.existing_type)+' #'+invEsc(dup.existing_qbo_bill_id):'Not already in QuickBooks')
     +ck(d.will_attach, d.will_attach?'PDF will be attached':'No stored PDF to attach')
     +'</ul>'
-    +(lines?'<table class="inv-tbl" style="max-width:520px"><thead><tr><th>Bill line (account, tax spread in)</th><th class="inv-r">Amount</th></tr></thead><tbody>'+lines+'</tbody></table>':'')
+    +(lines?'<table class="inv-tbl" style="max-width:520px"><thead><tr><th>'+(d.txn_type==='vendor_credit'?'Credit':'Bill')+' line (account, tax spread in)</th><th class="inv-r">Amount</th></tr></thead><tbody>'+lines+'</tbody></table>':'')
     +'<div class="inv-note" style="margin-top:8px"><b>'+(d.would_post?'Ready to post.':'Won’t post until the ✕ items are fixed.')+'</b>'
     +(d.reason==='client_push_disabled'?' Push is off for this client.':d.reason==='push_disabled'?' The master push switch is off.':'')+'</div>';
 }
+// A negative invoice posts as a QBO Vendor Credit; everything else (including $0) as a bill.
+function invTxnWord(t){ return t==='vendor_credit'?'vendor credit':'bill'; }
 async function InvPushRun(dryRun){
   const { inv }=Inv.current;
   const out=document.getElementById('invPushOut'), pb=document.getElementById('invPushBtn'), vb=document.getElementById('invPrevBtn');
@@ -8935,11 +8939,11 @@ async function InvPushRun(dryRun){
     out.innerHTML=InvPushPreviewHtml(pv);
     if(dryRun || pv.error || pv.mode==='duplicate'){ if(pv.mode==='duplicate'){ await InvLoadCounts(); } return; }
     if(!pv.would_post){ invToast('Not posted — fix the ✕ items first.'); return; }
-    if(!confirm('Post this bill to QuickBooks?\n\n'+(inv.vendor||'')+' · '+(inv.invoice_number||'no #')+' · '+invMoney(pv.computed_total)+'\n'+(pv.bill_lines||[]).length+' line(s)'+(pv.will_attach?', PDF attached':''))) return;
+    if(!confirm('Post this '+invTxnWord(pv.txn_type)+' to QuickBooks?\n\n'+(inv.vendor||'')+' · '+(inv.invoice_number||'no #')+' · '+invMoney(pv.computed_total)+'\n'+(pv.bill_lines||[]).length+' line(s)'+(pv.will_attach?', PDF attached':''))) return;
     out.innerHTML+='<div class="inv-note" style="margin-top:10px"><span class="spinner"></span> Posting&hellip;</div>';
     const r=await InvCallPush(inv.id, false);
     if(r.mode==='pushed'){
-      invToast('Posted to QuickBooks as bill #'+r.qbo_bill_id+(r.attached===false?' — PDF not attached, add it in QBO':'')+'.','ok');
+      invToast('Posted to QuickBooks as '+invTxnWord(r.txn_type)+' #'+r.qbo_bill_id+(r.attached===false?' — PDF not attached, add it in QBO':'')+'.','ok');
       Inv.tab='pushed'; await InvRefresh(); return;
     }
     if(r.mode==='preview'){ out.innerHTML=InvPushPreviewHtml(r); invToast('Not posted — push is off.'); return; }
@@ -9092,7 +9096,8 @@ async function InvPushSelected(){
   }
   const tot=ready.reduce((s,x)=>s+(Number(x.pv.computed_total)||0),0);
   if(!ready.length){ alert('None of the selected invoices can be pushed yet:\n\n'+blocked.join('\n')); InvPickUpdate(); return; }
-  if(!confirm('Post '+ready.length+' bill'+(ready.length>1?'s':'')+' to QuickBooks, totaling '+invMoney(tot)+'?'+(blocked.length?'\n\n'+blocked.length+' will be skipped:\n'+blocked.join('\n'):''))){ InvPickUpdate(); return; }
+  const nCred=ready.filter(x=>x.pv.txn_type==='vendor_credit').length;
+  if(!confirm('Post '+ready.length+' invoice'+(ready.length>1?'s':'')+' to QuickBooks'+(nCred?' ('+nCred+' as vendor credit'+(nCred>1?'s':'')+')':'')+', net '+invMoney(tot)+'?'+(blocked.length?'\n\n'+blocked.length+' will be skipped:\n'+blocked.join('\n'):''))){ InvPickUpdate(); return; }
   let ok=0; const failed=[];
   for(let i=0;i<ready.length;i++){
     if(note) note.textContent='Posting '+(i+1)+' of '+ready.length+'…';
@@ -9143,7 +9148,7 @@ async function InvApprove(){
     }
   }catch(e){ pv={ error:'server_error', message:e.message||String(e) }; }
   if(r && r.mode==='pushed'){
-    invToast('Approved and posted to QuickBooks as bill #'+r.qbo_bill_id+(r.attached===false?' — the PDF did not attach, add it in QBO':'')+'.', 'ok');
+    invToast('Approved and posted to QuickBooks as '+invTxnWord(r.txn_type)+' #'+r.qbo_bill_id+(r.attached===false?' — the PDF did not attach, add it in QBO':'')+'.', 'ok');
     await InvLoadCounts(); await InvRenderList(); return;
   }
   // Not posted: stay on the invoice and show why, with the vendor match /
