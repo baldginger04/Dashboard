@@ -2078,6 +2078,7 @@
           #page-invoices .inv-pushbox{border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:16px;background:#fafbfd}
           #page-invoices .inv-pushbox h4{margin:0 0 8px;font-family:'Hanken Grotesk',sans-serif;font-size:14px;color:var(--navy)}
           #page-invoices .inv-checks{list-style:none;margin:8px 0;padding:0;font-size:13px}
+          #page-invoices .inv-linkbtn{background:none;border:none;padding:0 2px;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;font-family:inherit}
           #page-invoices .inv-checks li{padding:2px 0}
           #page-invoices .inv-checks .ok{color:var(--green)}
           #page-invoices .inv-checks .bad{color:var(--red)}
@@ -8771,12 +8772,16 @@ async function InvRenderList(){
   const body=document.getElementById('invBody');
   if(error){ body.innerHTML='<div class="empty">Couldn’t load: '+invEsc(error.message)+'</div>'; return; }
   if(!rows.length){ body.innerHTML=InvEmptyFor(Inv.tab); return; }
-  body.innerHTML='<table class="inv-tbl"><thead><tr><th>Vendor</th><th>Invoice #</th><th>Date</th><th class="inv-r">Total</th>'+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th><th></th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
+  const pick = Inv.tab==='approved';
+  Inv.picked = new Set();
+  body.innerHTML=(pick?'<div class="inv-bar"><button class="btn btn-primary" id="invPushSelBtn" onclick="InvPushSelected()" disabled>Push selected to QuickBooks</button><span class="inv-note" id="invPickNote">Tick invoices to push several at once. Each is checked first; only ones that are ready post.</span></div>':'')
+    +'<table class="inv-tbl"><thead><tr>'+(pick?'<th style="width:28px"><input type="checkbox" title="Select all" onclick="InvPickAll(this.checked)"></th>':'')+'<th>Vendor</th><th>Invoice #</th><th>Date</th><th class="inv-r">Total</th>'+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th><th></th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
   InvFillCoded(rows.map(r=>r.id));
 }
 function InvRowHtml(r){
   const b=INV_BADGE[r.status]||['inv-b-ready',r.status];
   return '<tr class="click" onclick="InvOpenInvoice(\''+r.id+'\')">'
+    +(Inv.tab==='approved'?'<td onclick="event.stopPropagation()"><input type="checkbox" class="inv-pick" data-id="'+r.id+'" data-total="'+(Number(r.total)||0)+'" onchange="InvPickOne(this)"></td>':'')
     +'<td style="font-weight:600">'+invEsc(r.vendor||'—')+'</td>'
     +'<td class="inv-mono inv-dim">'+invEsc(r.invoice_number||'—')+'</td>'
     +'<td class="inv-dim">'+invEsc(r.invoice_date||'—')+'</td>'
@@ -8843,17 +8848,23 @@ function InvRenderDetail(){
   const lineRow=l=>{
     const cls=l.needs_review?'inv-needs':(l.is_charge?'inv-charge':'');
     const cell=l.needs_review?'<select class="inv-acctsel" data-line="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'">'+optsFor(l.final_account)+'</select>':'<span class="inv-coded">'+invEsc(InvAcctLabel(acct,l.final_account))+'</span>';
-    return '<tr class="'+cls+'"><td class="inv-dim inv-mono">'+l.line_number+'</td><td>'+invEsc(l.raw_description||'—')+(l.is_charge?' <span class="inv-tag">CHARGE</span>':'')+(l.vendor_item_code?'<br><small class="inv-dim inv-mono">'+invEsc(l.vendor_item_code)+'</small>':'')+'</td><td class="inv-r inv-mono inv-dim">'+(l.quantity??'')+'</td><td class="inv-r inv-mono">'+invMoney(l.amount)+'</td><td>'+cell+'</td></tr>';
+    return '<tr class="'+cls+'"><td><input type="checkbox" class="inv-linechk" data-id="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'"></td><td class="inv-dim inv-mono">'+l.line_number+'</td><td>'+invEsc(l.raw_description||'—')+(l.is_charge?' <span class="inv-tag">CHARGE</span>':'')+(l.vendor_item_code?'<br><small class="inv-dim inv-mono">'+invEsc(l.vendor_item_code)+'</small>':'')+'</td><td class="inv-r inv-mono inv-dim">'+(l.quantity??'')+'</td><td class="inv-r inv-mono">'+invMoney(l.amount)+'</td><td>'+cell+'</td></tr>';
   };
   const notConn=!acct.connected?'<div class="inv-warnbar">QuickBooks isn’t linked for this client yet — accounts show from your chart names; codes still save. Link it in Statement Reconciler to resolve to live QBO accounts.</div>':'';
-  const bulk=openReview>0?'<div class="inv-bar"><span class="inv-note">Bulk:</span><select class="inv-acctsel" id="invBulkSel">'+optsFor('')+'</select><button class="btn btn-secondary btn-sm" onclick="InvBulkApply()">Apply to all uncoded</button></div>':'';
+  const bulk='<div class="inv-bar"><span class="inv-note">Code several at once:</span>'
+    +'<button class="btn btn-secondary btn-sm" onclick="InvLineSel(\'uncoded\')">Select uncoded</button>'
+    +'<button class="btn btn-secondary btn-sm" onclick="InvLineSel(\'none\')">Clear</button>'
+    +'<select class="inv-acctsel" id="invBulkSel">'+optsFor('')+'</select>'
+    +'<button class="btn btn-primary btn-sm" onclick="InvCodeSelected()">Code selected lines</button></div>';
   document.getElementById('invBody').innerHTML=
     '<button class="inv-back" onclick="InvRenderList()">← Back to queue</button>'+notConn
-    +'<div style="font-family:\'Hanken Grotesk\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);margin:.2em 0">'+invEsc(inv.vendor||'—')+' <span class="inv-badge '+b[0]+'" style="vertical-align:middle">'+b[1]+'</span></div>'
+    +'<div style="font-family:\'Hanken Grotesk\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);margin:.2em 0">'+invEsc(inv.vendor||'—')+' <span class="inv-badge '+b[0]+'" style="vertical-align:middle">'+b[1]+'</span>'
+    +(inv.status!=='pushed'?' <button class="inv-linkbtn" onclick="InvVendorPicker()">Match vendor in QuickBooks</button>':'')+'</div>'
+    +'<div id="invVendorBox"></div>'
     +'<div class="inv-meta"><div><small>Invoice #</small><span class="inv-mono">'+invEsc(inv.invoice_number||'—')+'</span></div><div><small>Date</small><span>'+invEsc(inv.invoice_date||'—')+'</span></div><div><small>Client</small><span>'+invEsc(Inv.clients[inv.client_id]||'—')+'</span></div><div><small>Source</small><span>'+invEsc(inv.source||'—')+'</span></div><div><small>Subtotal</small><span class="inv-mono">'+invMoney(inv.subtotal)+'</span></div><div><small>Tax</small><span class="inv-mono">'+invMoney(inv.tax)+'</span></div><div><small>Total</small><span class="inv-mono">'+invMoney(inv.total)+'</span></div></div>'
     +'<div style="margin:8px 0 12px">'+(foots===null?'':foots?'<span class="inv-foot ok">✓ Balances — lines + tax = '+invMoney(grand)+'</span>':'<span class="inv-foot bad">✕ Off by '+invMoney(Math.abs(grand-Number(inv.total)))+' — computed '+invMoney(grand)+' vs '+invMoney(inv.total)+'</span>')+'</div>'
     +bulk
-    +'<table class="inv-tbl"><thead><tr><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
+    +'<table class="inv-tbl"><thead><tr><th style="width:28px"><input type="checkbox" title="Select all lines" onclick="InvLineSel(this.checked?\'all\':\'none\')"></th><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
     +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" onclick="InvApprove()" '+((openReview>0||foots===false)?'disabled':'')+'>Approve for QBO</button><button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
     +InvPushBoxHtml(inv);
 }
@@ -8900,7 +8911,9 @@ function InvPushPreviewHtml(d){
   const lines=(d.bill_lines||[]).map(l=>'<tr><td>'+invEsc(nameOf(l.AccountBasedExpenseLineDetail?.AccountRef?.value))+'</td><td class="inv-r inv-mono">'+invMoney(l.Amount)+'</td></tr>').join('');
   const dup=d.dedup||{};
   return '<ul class="inv-checks">'
-    +ck(d.vendor_resolved, d.vendor_resolved?'Vendor found in QuickBooks':'Vendor “'+invEsc(d.vendor||'')+'” not found in QuickBooks')
+    +ck(d.vendor_resolved, d.vendor_resolved
+        ? 'Vendor in QuickBooks: <b>'+invEsc(d.vendor_qbo_name||'')+'</b>'+(d.vendor_source==='matched'?' (your match)':d.vendor_source==='similar'?' (<b>picked by a similar name — check it</b>)':'')+' <button class="inv-linkbtn" onclick="InvVendorPicker()">change</button>'
+        : 'Vendor “'+invEsc(d.vendor||'')+'” not found in QuickBooks <button class="inv-linkbtn" onclick="InvVendorPicker()">Match vendor</button>')
     +ck(!un.length, un.length?'Accounts not found: '+un.map(invEsc).join(', '):'All accounts found')
     +ck(d.foots!==false, d.foots===false?'Bill total '+invMoney(d.computed_total)+' ≠ invoice '+invMoney(d.invoice_total):'Bill total '+invMoney(d.computed_total)+' matches the invoice')
     +ck(!dup.found, !dup.checked?'No invoice # to check for duplicates':dup.found?'Already in QuickBooks as bill #'+invEsc(dup.existing_qbo_bill_id):'Not already in QuickBooks')
@@ -8933,6 +8946,145 @@ async function InvPushRun(dryRun){
   }catch(e){ out.innerHTML='<div class="inv-warnbar" style="margin:10px 0 0">'+invEsc(e.message||String(e))+'</div>'; }
   finally{ busy(false); }
 }
+// ---- Code several lines at once ----
+function InvLineSel(mode){
+  document.querySelectorAll('#invBody .inv-linechk').forEach(c=>{
+    const row=c.closest('tr');
+    c.checked = mode==='all' ? true : mode==='none' ? false : !!(row && row.classList.contains('inv-needs'));
+  });
+}
+async function InvCodeSelected(){
+  const { inv, acct }=Inv.current;
+  const code=document.getElementById('invBulkSel').value;
+  const picked=[...document.querySelectorAll('#invBody .inv-linechk:checked')];
+  if(!code){ invToast('Pick an account first.'); return; }
+  if(!picked.length){ invToast('Tick the lines to code first.'); return; }
+  const qid=acct.byId&&acct.byId[code]?acct.byId[code].id:null;
+  try{
+    for(const c of picked){
+      await writeOrThrow(sb.from('invoice_lines').update({final_account:code,qbo_account_id:qid,needs_review:false}).eq('id',c.dataset.id),'Code lines');
+    }
+    const maps=picked.filter(c=>c.dataset.mk).map(c=>({client_id:inv.client_id,vendor:inv.vendor,match_key:c.dataset.mk,gl_account:code,qbo_account_id:qid,updated_at:new Date().toISOString()}));
+    if(maps.length) await sb.from('item_map').upsert(maps,{onConflict:'client_id,vendor,match_key'});
+    const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
+    const status=(rem&&rem.length)?'needs_review':(inv.status==='approved'?'approved':'pending');
+    if(status!==inv.status) await sb.from('invoice_queue').update({status}).eq('id',inv.id);
+    invToast(picked.length+' line'+(picked.length>1?'s':'')+' coded to '+InvAcctLabel(acct,code)+(maps.length?' — '+maps.length+' learned':'')+'.','ok');
+    await InvLoadCounts(); await InvOpenInvoice(inv.id);
+  }catch(e){ invToast(e.message||String(e)); }
+}
+
+// ---- Match an invoice vendor to an existing QuickBooks vendor ----
+// Saved per client in expo_vendor_map, so every later invoice under the same
+// name ("Bawi Inc.") posts to the chosen QBO vendor ("Bawi").
+Inv.vendorCache = Inv.vendorCache || {};
+async function InvVendorPicker(){
+  const { inv }=Inv.current;
+  const box=document.getElementById('invVendorBox'); if(!box) return;
+  box.innerHTML='<div class="inv-pushbox"><span class="spinner"></span> Loading QuickBooks vendors&hellip;</div>';
+  let list=Inv.vendorCache[inv.client_id];
+  if(!list){
+    const r=await InvCallVendors(inv.client_id);
+    if(r.error){ box.innerHTML='<div class="inv-warnbar">'+(INV_PUSH_ERR[r.error]||invEsc(r.error))+(r.message?' '+invEsc(r.message):'')+'</div>'; return; }
+    list=Inv.vendorCache[inv.client_id]=r.vendors||[];
+  }
+  const { data:cur }=await sb.from('expo_vendor_map').select('qbo_vendor_id,qbo_vendor_name').eq('client_id',inv.client_id).eq('vendor_key',String(inv.vendor||'').trim().toLowerCase()).maybeSingle();
+  box.innerHTML='<div class="inv-pushbox"><h4>Match “'+invEsc(inv.vendor||'')+'” to a QuickBooks vendor</h4>'
+    +(cur?'<div class="inv-note" style="margin-bottom:6px">Currently matched to <b>'+invEsc(cur.qbo_vendor_name||cur.qbo_vendor_id)+'</b>.</div>':'')
+    +'<input id="invVendFind" class="inv-acctsel" style="max-width:420px;width:100%" placeholder="Find vendor…" oninput="InvVendFilter(this.value)" value="'+invEsc(String(inv.vendor||'').split(/[ ,]/)[0])+'">'
+    +'<div><select id="invVendSel" class="inv-acctsel" size="8" style="max-width:420px;width:100%;margin-top:6px"></select></div>'
+    +'<div class="inv-bar" style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="InvVendorSave()">Use this vendor</button>'
+    +(cur?'<button class="btn btn-secondary btn-sm" onclick="InvVendorClear()">Remove match</button>':'')
+    +'<button class="btn btn-secondary btn-sm" onclick="document.getElementById(\'invVendorBox\').innerHTML=\'\'">Cancel</button>'
+    +'<span class="inv-note">Applies to every invoice from “'+invEsc(inv.vendor||'')+'” for this client.</span></div>'
+    +'<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px"><b style="font-size:13px">Not in QuickBooks yet?</b>'
+    +'<div class="inv-bar" style="margin-top:6px"><input id="invNewVend" class="inv-acctsel" style="max-width:320px;width:100%" value="'+invEsc(inv.vendor||'')+'">'
+    +'<button class="btn btn-secondary btn-sm" onclick="InvVendorCreate()">Create vendor in QuickBooks</button></div></div></div>';
+  InvVendFilter(document.getElementById('invVendFind').value);
+}
+function InvVendFilter(q){
+  const { inv }=Inv.current; const list=Inv.vendorCache[inv.client_id]||[];
+  q=String(q||'').toLowerCase();
+  const hits=list.filter(v=>!q||String(v.name).toLowerCase().includes(q)).slice(0,300);
+  const sel=document.getElementById('invVendSel'); if(!sel) return;
+  sel.innerHTML=hits.map(v=>'<option value="'+invEsc(v.id)+'">'+invEsc(v.name)+'</option>').join('')||'<option disabled>No vendor matches — try fewer letters</option>';
+  if(hits.length) sel.selectedIndex=0;
+}
+async function InvVendorSave(){
+  const { inv }=Inv.current;
+  const sel=document.getElementById('invVendSel'); const id=sel&&sel.value;
+  const v=(Inv.vendorCache[inv.client_id]||[]).find(x=>x.id===id);
+  if(!v){ invToast('Pick a vendor from the list.'); return; }
+  try{
+    await writeOrThrow(sb.from('expo_vendor_map').upsert({client_id:inv.client_id,vendor_key:String(inv.vendor||'').trim().toLowerCase(),vendor_name:inv.vendor,qbo_vendor_id:v.id,qbo_vendor_name:v.name,updated_at:new Date().toISOString(),updated_by:(currentUser&&currentUser.email)||null},{onConflict:'client_id,vendor_key'}),'Match vendor');
+    document.getElementById('invVendorBox').innerHTML='';
+    invToast('“'+(inv.vendor||'')+'” now posts to '+v.name+' in QuickBooks.','ok');
+    if(document.getElementById('invPushBox')) InvPushRun(true);
+  }catch(e){ invToast(e.message||String(e)); }
+}
+async function InvVendorCreate(){
+  const { inv }=Inv.current;
+  const name=String(document.getElementById('invNewVend').value||'').trim();
+  if(!name){ invToast('Type the vendor name.'); return; }
+  const nm=Inv.clients[inv.client_id]||'this client';
+  if(!confirm('Create vendor “'+name+'” in '+nm+'’s QuickBooks?\n\nInvoices from “'+(inv.vendor||'')+'” will then post to it.')) return;
+  const r=await sb.functions.invoke('qbo-push',{ body:{ action:'create_vendor', client_id:inv.client_id, name, invoice_vendor:inv.vendor } });
+  let d=r.data; if(r.error){ try{ d=await r.error.context?.json?.(); }catch(e){} d=d||{ error:'server_error', message:r.error.message }; }
+  if(!d||d.error){ invToast((d&&(d.detail||INV_PUSH_ERR[d.error]||d.error))||'Could not create the vendor.'); return; }
+  (Inv.vendorCache[inv.client_id]=Inv.vendorCache[inv.client_id]||[]).push(d.vendor);
+  document.getElementById('invVendorBox').innerHTML='';
+  invToast('Created '+d.vendor.name+' in QuickBooks and matched it.','ok');
+  if(document.getElementById('invPushBox')) InvPushRun(true);
+}
+async function InvVendorClear(){
+  const { inv }=Inv.current;
+  await sb.from('expo_vendor_map').delete().eq('client_id',inv.client_id).eq('vendor_key',String(inv.vendor||'').trim().toLowerCase());
+  document.getElementById('invVendorBox').innerHTML='';
+  invToast('Vendor match removed.','ok');
+}
+async function InvCallVendors(clientId){
+  const r=await sb.functions.invoke('qbo-push',{ body:{ action:'vendors', client_id:clientId } });
+  if(r.error){ let d=null; try{ d=await r.error.context?.json?.(); }catch(e){} return d||{ error:'server_error', message:r.error.message||String(r.error) }; }
+  return r.data||{ error:'server_error', message:'No response' };
+}
+
+// ---- Push several approved invoices at once ----
+function InvPickOne(){ InvPickUpdate(); }
+function InvPickAll(on){ document.querySelectorAll('#invBody .inv-pick').forEach(c=>{ c.checked=on; }); InvPickUpdate(); }
+function InvPickUpdate(){
+  const picked=[...document.querySelectorAll('#invBody .inv-pick:checked')];
+  const tot=picked.reduce((s,c)=>s+(Number(c.dataset.total)||0),0);
+  const btn=document.getElementById('invPushSelBtn'); if(btn) btn.disabled=!picked.length;
+  const note=document.getElementById('invPickNote');
+  if(note) note.textContent=picked.length?(picked.length+' selected · '+invMoney(tot)):'Tick invoices to push several at once. Each is checked first; only ones that are ready post.';
+}
+async function InvPushSelected(){
+  const ids=[...document.querySelectorAll('#invBody .inv-pick:checked')].map(c=>c.dataset.id);
+  if(!ids.length) return;
+  const btn=document.getElementById('invPushSelBtn'); const note=document.getElementById('invPickNote');
+  if(btn) btn.disabled=true;
+  const ready=[], blocked=[];
+  for(let i=0;i<ids.length;i++){
+    if(note) note.textContent='Checking '+(i+1)+' of '+ids.length+'…';
+    const pv=await InvCallPush(ids[i], true);
+    const label=(pv.vendor||'')+(pv.invoice_total!=null?' '+invMoney(pv.invoice_total):'');
+    if(!pv.error && pv.mode!=='duplicate' && pv.would_post && pv.reason==='dry_run' && pv.global_push_enabled!==false && pv.client_push_enabled!==false) ready.push({id:ids[i],pv});
+    else blocked.push((label||ids[i])+': '+(pv.error?(INV_PUSH_ERR[pv.error]||pv.error):pv.mode==='duplicate'?'already in QuickBooks':!pv.vendor_resolved?'vendor not matched in QuickBooks':(pv.unresolved_accounts||[]).length?'accounts not found':pv.foots===false?'does not match invoice total':pv.client_push_enabled===false?'push is off for this client':'not ready'));
+  }
+  const tot=ready.reduce((s,x)=>s+(Number(x.pv.computed_total)||0),0);
+  if(!ready.length){ alert('None of the selected invoices can be pushed yet:\n\n'+blocked.join('\n')); InvPickUpdate(); return; }
+  if(!confirm('Post '+ready.length+' bill'+(ready.length>1?'s':'')+' to QuickBooks, totaling '+invMoney(tot)+'?'+(blocked.length?'\n\n'+blocked.length+' will be skipped:\n'+blocked.join('\n'):''))){ InvPickUpdate(); return; }
+  let ok=0; const failed=[];
+  for(let i=0;i<ready.length;i++){
+    if(note) note.textContent='Posting '+(i+1)+' of '+ready.length+'…';
+    const r=await InvCallPush(ready[i].id, false);
+    if(r.mode==='pushed'){ ok++; if(r.attached===false) failed.push((ready[i].pv.vendor||'')+': posted, but the PDF did not attach'); }
+    else failed.push((ready[i].pv.vendor||'')+': '+(r.error?(INV_PUSH_ERR[r.error]||r.error):r.mode||'not posted'));
+  }
+  alert(ok+' of '+ready.length+' posted to QuickBooks.'+(failed.length?'\n\n'+failed.join('\n'):'')+(blocked.length?'\n\nSkipped:\n'+blocked.join('\n'):''));
+  await InvRefresh();
+}
+
 function InvBulkApply(){ const v=document.getElementById('invBulkSel').value; if(!v)return; document.querySelectorAll('#invBody select[data-line]').forEach(s=>{ if(!s.value) s.value=v; }); }
 
 async function InvSaveCoding(){
