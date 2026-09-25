@@ -8867,7 +8867,7 @@ function InvRenderDetail(){
     +'<div style="margin:8px 0 12px">'+(foots===null?'':foots?'<span class="inv-foot ok">✓ Balances — lines + tax = '+invMoney(grand)+'</span>':'<span class="inv-foot bad">✕ Off by '+invMoney(Math.abs(grand-Number(inv.total)))+' — computed '+invMoney(grand)+' vs '+invMoney(inv.total)+'</span>')+'</div>'
     +bulk
     +'<table class="inv-tbl"><thead><tr><th style="width:28px"><input type="checkbox" title="Select all lines" onclick="InvLineSel(this.checked?\'all\':\'none\')"></th><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
-    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" id="invApproveBtn" onclick="InvApprove()" '+((openReview>0||foots===false||inv.status==='approved')?'disabled':'')+'>'+(InvPushState(inv.client_id).live?'Approve &amp; post to QBO':'Approve for QBO')+'</button><button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
+    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" id="invApproveBtn" onclick="InvApprove()" '+((openReview>0||foots===false||inv.status==='approved')?'disabled':'')+'>'+(InvPushState(inv.client_id).live?'Approve &amp; post to QBO':'Approve for QBO')+'</button>'+(inv.status==='duplicate'?'<button class="btn btn-secondary" onclick="InvNotDuplicate()">Not a duplicate</button>':inv.status!=='pushed'?'<button class="btn btn-secondary" onclick="InvMarkDuplicate()">Duplicate</button>':'')+'<button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
     +InvPushBoxHtml(inv);
 }
 function InvPushBoxHtml(inv){
@@ -8883,6 +8883,7 @@ function InvPushBoxHtml(inv){
     +'<span class="inv-note">'+why+'</span></div><div id="invPushOut"></div></div>';
 }
 const INV_PUSH_ERR = {
+  possible_duplicate:'This invoice # is already in QuickBooks (under another vendor) — click Duplicate, or Not a duplicate to post it anyway.',
   not_connected:'This client isn’t linked to QuickBooks.', reauth_needed:'The QuickBooks connection needs re-authorising for this client.',
   not_approved:'Only approved invoices can be pushed.', no_lines:'This invoice has no lines.', forbidden:'Your login isn’t allowed to push.',
   unresolved_accounts:'Some GL accounts don’t match an account in QuickBooks.', vendor_not_found:'The vendor isn’t in QuickBooks under that name.',
@@ -8920,7 +8921,7 @@ function InvPushPreviewHtml(d){
     +(d.txn_type==='vendor_credit'?'<li class="ok">↩ Negative invoice — posts as a <b>vendor credit</b> for '+invMoney(Math.abs(Number(d.computed_total)||0))+'</li>':'')
     +(d.zero_total?'<li class="ok">○ $0 invoice — posts as a $0 bill'+(d.no_total_read?' (<b>no amounts were read — check it really is $0</b>)':'')+'</li>':'')
     +ck(d.foots!==false, d.foots===false?'Bill total '+invMoney(d.computed_total)+' ≠ invoice '+invMoney(d.invoice_total):'Bill total '+invMoney(d.computed_total)+' matches the invoice')
-    +ck(!dup.found, !dup.checked?'No invoice # to check for duplicates':dup.found?'Already in QuickBooks as '+invTxnWord(dup.existing_type)+' #'+invEsc(dup.existing_qbo_bill_id):'Not already in QuickBooks')
+    +ck(!dup.found, !dup.checked?'No invoice # to check for duplicates':dup.overridden?'Marked not a duplicate — duplicate check skipped':dup.found?'Already in QuickBooks as '+invTxnWord(dup.existing_type)+' #'+invEsc(dup.existing_qbo_bill_id)+(dup.existing_total!=null?' for '+invMoney(dup.existing_total):'')+' <button class="inv-linkbtn" onclick="InvMarkDuplicate(\''+invEsc(dup.existing_qbo_bill_id)+'\')">Mark as duplicate</button>':'Not already in QuickBooks')
     +ck(d.will_attach, d.will_attach?'PDF will be attached':'No stored PDF to attach')
     +'</ul>'
     +(lines?'<table class="inv-tbl" style="max-width:520px"><thead><tr><th>'+(d.txn_type==='vendor_credit'?'Credit':'Bill')+' line (account, tax spread in)</th><th class="inv-r">Amount</th></tr></thead><tbody>'+lines+'</tbody></table>':'')
@@ -9156,7 +9157,7 @@ async function InvApprove(){
   await InvLoadCounts(); await InvOpenInvoice(inv.id);
   const out=document.getElementById('invPushOut');
   if(out) out.innerHTML=InvPushPreviewHtml(r && r.mode!=='pushed' ? r : (pv||{}));
-  invToast(pv && pv.dedup && pv.dedup.found ? 'Approved — but this bill is already in QuickBooks, so it was not posted again.' : 'Approved, but not posted yet — see why below.');
+  invToast(pv && pv.mode==='duplicate' ? 'Already in QuickBooks (same vendor, # and amount) — moved to Duplicates, not posted.' : pv && pv.dedup && pv.dedup.found ? 'Approved — but this bill is already in QuickBooks, so it was not posted again.' : 'Approved, but not posted yet — see why below.');
 }
 // Removing the queue row alone would orphan the PDF in the bucket, so both go.
 async function invRemoveStoredFile(filePath){
@@ -9181,6 +9182,27 @@ async function InvDeleteRow(id){
   await InvRefresh();
 }
 
+// Duplicate: moves the invoice to the Duplicates tab. Nothing is posted and the PDF is
+// kept, so it can be undone with "Not a duplicate".
+async function InvMarkDuplicate(qboId){
+  const { inv }=Inv.current;
+  if(!confirm('Mark as a duplicate?\n'+(inv.vendor||'')+' · '+(inv.invoice_number||'no #')+' · '+invMoney(inv.total)+'\n\nIt moves to Duplicates and will not post to QuickBooks.')) return;
+  const who=(currentUser&&currentUser.email)||'someone';
+  try{
+    await writeOrThrow(sb.from('invoice_queue').update({status:'duplicate',not_duplicate:false,qbo_bill_id:qboId||inv.qbo_bill_id||null,auto_checked_at:new Date().toISOString(),
+      review_reason:'Marked duplicate by '+who+(qboId?' — already in QuickBooks #'+qboId:'')+'.'}).eq('id',inv.id),'Mark duplicate');
+    invToast('Moved to Duplicates.','ok'); Inv.tab='duplicate'; await InvRefresh();
+  }catch(e){ invToast(e.message||String(e)); }
+}
+async function InvNotDuplicate(){
+  const { inv }=Inv.current;
+  const who=(currentUser&&currentUser.email)||'someone';
+  try{
+    await writeOrThrow(sb.from('invoice_queue').update({status:'needs_review',not_duplicate:true,qbo_bill_id:null,auto_checked_at:new Date().toISOString(),
+      review_reason:'Marked not a duplicate by '+who+' — review and approve to post.'}).eq('id',inv.id),'Not a duplicate');
+    invToast('Moved back to Needs Review.','ok'); await InvLoadCounts(); await InvOpenInvoice(inv.id);
+  }catch(e){ invToast(e.message||String(e)); }
+}
 async function InvDelete(){
   const { inv }=Inv.current;
   const head='Delete this invoice?\n'+inv.vendor+' · '+(inv.invoice_number||'no #')+' · '+invMoney(inv.total);
