@@ -14549,7 +14549,8 @@ init();
         const note = row.status === 'posted' && row.error_message;
         const locked = row.raw && row.raw.locked;
         const rev = revisionOf(row);
-        const label = rev ? 'Changed · repost' : note ? (locked ? 'Posted · locked' : 'Posted · note') : chipLabel(row.status);
+        const reviewed = row.status === 'posted' && row.raw && row.raw.reviewed;
+        const label = rev ? 'Changed · repost' : note ? (locked ? 'Posted · locked' : 'Posted · note') : reviewed ? 'Posted · reviewed' : chipLabel(row.status);
         const main = row.status === 'skipped' ? '—' : money(amt);
         const cls = rev ? 'sm-c-changed' : chipClass(row.status) + (note ? ' sm-has-note' : '');
         const tip = rev ? 'Toast changed this day after it posted — click to undeposit and repost' : (row.error_message || label);
@@ -14573,6 +14574,47 @@ init();
           ? ` Toast changes over the prior 14 days were last checked ${when(S.lastLook)}.`
           : ' The 14-day check for Toast changes has not run for this client yet.';
       }
+    }
+  }
+
+  // Fingerprint of what Toast computes for a day: side + bucket + amount, sorted.
+  // toast-sync builds the same string; a day marked reviewed stays green until
+  // Toast's figures move away from the ones that were reviewed.
+  function toastFingerprint(lines) {
+    return (lines || []).map(l => `${l.posting}|${l.bucket || ''}|${(Math.round((Number(l.amount) || 0) * 100) / 100).toFixed(2)}`)
+      .sort().join('\n');
+  }
+
+  // "Reviewed — keep as posted": the entry in QuickBooks is right as it stands
+  // (checked against the bank), so stop flagging Toast's later figures for it.
+  // Nothing is changed in QuickBooks.
+  async function markReviewed(dateKey) {
+    const row = S.byDate[dateKey];
+    const rev = revisionOf(row);
+    if (!row || !rev) return;
+    if (!confirm('Keep this entry as posted?\n\nNothing changes in QuickBooks. The day turns green and stays that way unless Toast changes it again.')) return;
+    const raw = Object.assign({}, row.raw || {});
+    delete raw.revision;
+    if (raw.locked) raw.locked = Object.assign({}, raw.locked, { matches_toast: true });
+    raw.reviewed = {
+      at: new Date().toISOString(),
+      by: (typeof currentUser !== 'undefined' && currentUser && currentUser.email) || null,
+      fingerprint: toastFingerprint(rev.lines),
+      toast_totals: rev.totals || null,
+      posted_totals: row.totals || null,
+    };
+    const btn = document.getElementById('smReviewBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      const upd = { raw, updated_at: new Date().toISOString() };
+      if (/^Locked in QuickBooks/.test(row.error_message || '')) upd.error_message = null;
+      await writeOrThrow(sb.from('je_sync_log').update(upd).eq('id', row.id), 'Mark reviewed');
+      closeModal('smModal');
+      await loadMonth();
+      if (window.toast) window.toast(`${dateKey} marked reviewed — kept as posted`);
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Reviewed — keep as posted'; }
+      alert(e.message || e);
     }
   }
 
@@ -14645,6 +14687,11 @@ init();
     } else if (row.error_message) {
       body += `<div class="sm-err"><b>Not posted</b>${esc(row.error_message)}</div>`;
     }
+    if (row.status === 'posted' && row.raw && row.raw.reviewed && !rev) {
+      const rv = row.raw.reviewed;
+      const tt = rv.toast_totals && rv.toast_totals.debits != null ? ` Toast showed ${money(rv.toast_totals.debits)}; the entry stays at ${money((rv.posted_totals && rv.posted_totals.debits) || (row.totals && row.totals.debits) || 0)}.` : '';
+      body += `<div class="sm-note"><b>Reviewed — kept as posted</b>Marked ${esc(when(rv.at))}${rv.by ? ' by ' + esc(rv.by) : ''}.${tt} It will be flagged again only if Toast changes this day further.</div>`;
+    }
     if (row.status === 'posted' && row.raw && row.raw.unpaid_orders_approved) {
       body += `<div class="sm-note"><b>Unpaid Orders approved</b>${money(row.raw.unpaid_orders_approved.amount)} was over the automatic cap and was posted after approval.</div>`;
     }
@@ -14694,6 +14741,7 @@ init();
     const retryLabel = rev ? 'Repost journal entry' : row.status === 'posted' ? 'Re-run this day' : 'Retry this day';
     document.getElementById('smModalFoot').innerHTML = canRetry
       ? `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>` + approveBtn +
+        (rev ? `<button class="btn btn-ghost" id="smReviewBtn" onclick="SyncMon.markReviewed('${dateKey}')">Reviewed — keep as posted</button>` : '') +
         `<button class="btn" id="smRetryBtn"${rev ? ' disabled' : ''} onclick="SyncMon.retry('${dateKey}')">${retryLabel}</button>`
       : `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>`;
 
@@ -14752,7 +14800,8 @@ init();
     reload() { loadClients().then(loadMonth); },
     open,
     retry,
-    approveUnpaid
+    approveUnpaid,
+    markReviewed
   };
 
   const _spSync = window.showPage;
