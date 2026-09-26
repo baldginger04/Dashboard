@@ -2014,6 +2014,12 @@
       <!-- INVOICES (AP queue) -->
       <div class="page" id="page-invoices">
         <style>
+          /* Expo keeps its controls on one fixed row under the title. The shared
+             .page-header wraps its right-hand side only when it runs out of room,
+             so a long client name in the Upload button made the whole bar jump
+             between the top right and the next line as clients were switched. */
+          #page-invoices .page-header{flex-direction:column;align-items:stretch;gap:14px}
+          #page-invoices .inv-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
           #page-invoices .inv-switch{position:relative}
           #page-invoices .inv-sw-btn{display:flex;align-items:center;gap:8px;background:var(--navy);color:#fff;border:none;border-radius:8px;padding:8px 13px;font-family:'Hanken Grotesk',sans-serif;font-weight:600;font-size:13px;cursor:pointer}
           #page-invoices .inv-sw-btn:hover{opacity:.92}
@@ -2086,7 +2092,7 @@
         </style>
         <div class="page-header">
           <div><div class="page-title">Expo</div><div class="page-sub">Code and approve vendor invoices before they post to QuickBooks</div></div>
-          <div style="display:flex;gap:10px;align-items:center">
+          <div class="inv-bar">
             <div class="inv-switch" id="invSwitch"></div>
             <button class="inv-push-sw" id="invPushSw" style="display:none" onclick="InvTogglePush()"></button>
             <button class="btn btn-primary" id="invUploadBtn" onclick="InvStartUpload()">&#8593; Upload</button>
