@@ -2019,8 +2019,9 @@
           #page-invoices .inv-sw-btn:hover{opacity:.92}
           #page-invoices .inv-sw-btn .pin{color:var(--accent2)}
           #page-invoices .inv-sw-btn .car{opacity:.6;font-size:11px}
-          #page-invoices .inv-sw-pop{position:absolute;top:44px;right:0;width:280px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 34px rgba(20,30,55,.22);z-index:40;overflow:hidden;display:none}
+          #page-invoices .inv-sw-pop{position:absolute;top:44px;left:0;right:auto;width:280px;max-width:calc(100vw - 32px);background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 34px rgba(20,30,55,.22);z-index:40;overflow:hidden;display:none}
           #page-invoices .inv-sw-pop.open{display:block}
+          #page-invoices .inv-sw-pop.flip{left:auto;right:0}
           #page-invoices .inv-sw-search{padding:10px}
           #page-invoices .inv-sw-search input{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif}
           #page-invoices .inv-sw-list{max-height:320px;overflow:auto;padding-bottom:6px}
@@ -8699,13 +8700,13 @@ function InvRenderSwitcher(){
   const label = Inv.client ? (Inv.clients[Inv.client]||'Client') : 'All clients';
   const items = [['','All clients']].concat(Object.entries(Inv.clients).sort((a,b)=>a[1].localeCompare(b[1])));
   el.innerHTML = '<button class="inv-sw-btn" onclick="InvToggleSwitch(event)"><span class="pin">&#9673;</span> '+invEsc(label)+' <span class="car">&#9662;</span></button>'
-    + '<div class="inv-sw-pop '+(Inv.swOpen?'open':'')+'"><div class="inv-sw-search"><input id="invSwSearch" placeholder="Find client…" autocomplete="off" oninput="InvSwFilter(this.value)"></div>'
+    + '<div class="inv-sw-pop '+(Inv.swOpen?'open':'')+'" onclick="event.stopPropagation()"><div class="inv-sw-search"><input id="invSwSearch" placeholder="Find client…" autocomplete="off" oninput="InvSwFilter(this.value)"></div>'
     + '<div class="inv-sw-list" id="invSwList">'
     + items.map(([id,n])=>'<div class="inv-sw-item '+(id===Inv.client?'on':'')+'" onclick="InvPickClient(\''+id+'\')"><span class="dot"></span><span class="nm">'+invEsc(n)+'</span></div>').join('')
     + '</div></div>';
   const btn=document.getElementById('invUploadBtn');
   if(btn) btn.textContent = Inv.client ? ('\u2191 Upload for '+(Inv.clients[Inv.client]||'client')) : '\u2191 Upload';
-  if(Inv.swOpen) setTimeout(()=>document.getElementById('invSwSearch')?.focus(),0);
+  if(Inv.swOpen){ InvPlaceSwitcher(); setTimeout(()=>document.getElementById('invSwSearch')?.focus(),0); }
   InvRenderPushSw();
 }
 
@@ -8748,6 +8749,15 @@ async function InvTogglePush(){
   InvRenderPushSw();
   invToast('QBO push '+(on?'on':'off')+' for '+nm+'.','ok');
   if(Inv.current && Inv.current.inv.client_id===Inv.client && document.getElementById('invPushBox')) InvRenderDetail();
+}
+// Opens the client list toward whichever side has room: rightward from the
+// button by default, flipped to line up with the button's right edge only
+// when opening rightward would run off the screen.
+function InvPlaceSwitcher(){
+  const pop=document.querySelector('#invSwitch .inv-sw-pop'); if(!pop) return;
+  pop.classList.remove('flip');
+  const r=pop.getBoundingClientRect();
+  if(r.right > window.innerWidth - 8) pop.classList.add('flip');
 }
 function InvToggleSwitch(e){ e.stopPropagation(); Inv.swOpen=!Inv.swOpen; InvRenderSwitcher(); }
 function InvSwFilter(q){ q=(q||'').toLowerCase(); document.querySelectorAll('#invSwList .inv-sw-item').forEach(it=>{ it.style.display = it.textContent.toLowerCase().includes(q)?'':'none'; }); }
@@ -9241,7 +9251,7 @@ async function InvDelete(){
 }
 
 function InvStartUpload(){
-  if(!Inv.client){ invToast('Pick a client first — use the switcher, top right.'); Inv.swOpen=true; InvRenderSwitcher(); return; }
+  if(!Inv.client){ invToast('Pick a client first — use the client switcher at the top.'); Inv.swOpen=true; InvRenderSwitcher(); return; }
   document.getElementById('invUploadFile').click();
 }
 // Batch upload. Each file goes to the `invoices` bucket first, gets a queue row
