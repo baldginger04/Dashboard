@@ -1012,6 +1012,13 @@
     #newClientModal .nc-status.err{color:var(--red)}
     #newClientModal .nc-status.ok{color:var(--text2)}
     #newClientModal .nc-warn{font-size:12px;color:var(--amber,#b26a00);margin-top:6px}
+    /* CLIENT ARCHIVE */
+    .arch-btn{background:none;border:1px solid var(--border);color:var(--text3);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer}
+    .arch-btn:hover{border-color:var(--red);color:var(--red)}
+    .arch-btn.restore:hover{border-color:var(--green);color:var(--green)}
+    .arch-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#F4F2EC;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin:-.5rem 0 1.25rem;font-size:13px;color:var(--text2)}
+    .arch-pill{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;padding:3px 9px;border-radius:999px;background:#ECEAE3;color:var(--text3)}
+    #archToggleBtn[aria-pressed="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
     #page-vendoraudit .va-cfg{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.75rem}
     #page-vendoraudit .va-cfg label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:.2rem}
     #page-vendoraudit .va-cfg input{width:100%}
@@ -1262,6 +1269,10 @@
                a new month's close cycle. Hard-confirm before running. -->
           <!-- Owner-only: create a client row (revealed in showApp alongside the
                Admin tab). Hidden by default so a non-owner never sees it. -->
+          <!-- Shows archived clients in the table instead of active ones. Hidden
+               until at least one client is archived. -->
+          <button class="btn btn-secondary" id="archToggleBtn" style="display:none;margin-right:8px"
+                  aria-pressed="false" onclick="toggleArchivedView()">Show archived</button>
           <button class="btn btn-secondary" id="addClientBtn" style="display:none;margin-right:8px"
                   onclick="window.NewClientOpen()">+ Add Client</button>
           <button class="btn btn-primary" id="startCloseAllBtn" onclick="startCloseForAllClients()">
@@ -1320,8 +1331,12 @@
             <div style="font-family:'Hanken Grotesk',serif;font-size:26px;color:var(--navy)" id="detailName"></div>
             <div style="font-size:13px;color:var(--text3);margin-top:4px" id="detailMeta"></div>
           </div>
-          <div id="detailBadge"></div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div id="detailBadge"></div>
+            <div id="detailArchive"></div>
+          </div>
         </div>
+        <div id="detailArchivedBanner" class="arch-banner" style="display:none"></div>
         <div class="tabs">
           <div class="tab active" onclick="showTab('tasks')">Current Tasks</div>
           <div class="tab" onclick="showTab('messages')">Internal Client Specific Communication</div>
@@ -2891,6 +2906,7 @@ async function rollCloseDatesForward(clientId /* uuid or null */) {
   // Clients: close_due_date keeps its day-of-month, moves to this month.
   let cq = sb.from('clients').select('id, close_due_date');
   if (clientId) cq = cq.eq('id', clientId);
+  else cq = cq.is('archived_at', null);   // the all-clients roll skips archived clients
   const { data: cRows } = await cq;
   const cGroups = {};
   (cRows || []).forEach(r => {
@@ -2923,9 +2939,11 @@ async function rollCloseDatesForward(clientId /* uuid or null */) {
   }
 
   // Close tasks: next_due gets the same treatment; period stays in sync (YYYYMM).
-  let tq = sb.from('tasks').select('id, next_due').in('category', CLOSE_CATS);
+  let tq = sb.from('tasks').select('id, next_due, client_id').in('category', CLOSE_CATS);
   if (clientId) tq = tq.eq('client_id', clientId);
-  const { data: tRows } = await tq;
+  const { data: tRowsAll } = await tq;
+  // All-clients roll: leave archived clients' close tasks exactly as they are.
+  const tRows = clientId ? tRowsAll : (tRowsAll || []).filter(r => !archivedClientIds.has(r.client_id));
   const tGroups = {};
   (tRows || []).forEach(r => {
     if (!r.next_due || r.next_due >= monthStart) return; // past-due dates only
@@ -3003,6 +3021,18 @@ if (__dlq.get('go')) history.replaceState(null, '', location.pathname);
 // Read-only mode is in effect while this is non-null; reverted on logout/refresh.
 let viewingAsName = null;
 let allClients = [];
+// Archived clients (clients.archived_at set). Kept OUT of allClients on purpose:
+// every list, picker, badge and sweep that reads allClients then skips them
+// with no further change. Lookups that must still find an archived client
+// (opening its detail, naming it in history) use findClientAny().
+let archivedClients = [];
+let archivedClientIds = new Set();
+let showingArchived = false;
+function findClientAny(id) {
+  return (allClients || []).find(c => c && c.id === id)
+      || (archivedClients || []).find(c => c && c.id === id) || null;
+}
+function isArchivedClient(id) { return archivedClientIds.has(id); }
 let currentClientId = null;
 let clientTasks = [];
 let clientSubtasks = [];
@@ -3301,6 +3331,7 @@ function bubbleCounts(rows, meName) {
 // answered. `owned` of null means no scoping applies (the owner, viewing as
 // himself), so everything is visible.
 function threadVisibleToMe(t, owned, meName) {
+  if (t.client_id != null && archivedClientIds.has(t.client_id)) return false;   // archived client
   if (!owned) return true;
   if (t.client_id != null && owned.has(t.client_id)) return true;
   return !!(t.authors && t.authors.has(meName));
@@ -3346,15 +3377,39 @@ function clientQBubble(clientId) {
 async function refreshClientBubblesIfVisible() {
   await loadClientCommentCounts();
   const page = document.getElementById('page-clients');
-  if (page && page.classList.contains('active')) renderClientsTable(allClients);
+  if (page && page.classList.contains('active')) renderClientsTable(clientsInView());
 }
 
 async function loadClients() {
   const { data } = await sb.from('clients').select('*').order('name');
-  allClients = data || [];
-  document.getElementById('clientsCount').textContent = allClients.length + ' clients';
+  const rows = data || [];
+  // A row with no archived_at key at all (column missing) counts as active.
+  allClients = rows.filter(c => !c.archived_at);
+  archivedClients = rows.filter(c => !!c.archived_at);
+  archivedClientIds = new Set(archivedClients.map(c => c.id));
+  const nArch = archivedClients.filter(c => !c.is_firm).length;
+  if (!nArch) showingArchived = false;
+  const tb = document.getElementById('archToggleBtn');
+  if (tb) {
+    tb.style.display = nArch ? '' : 'none';
+    tb.setAttribute('aria-pressed', showingArchived ? 'true' : 'false');
+    tb.textContent = showingArchived ? '← Active clients' : `Show archived (${nArch})`;
+  }
+  const nActive = allClients.filter(c => !c.is_firm).length;
+  document.getElementById('clientsCount').textContent = showingArchived
+    ? nArch + ' archived client' + (nArch === 1 ? '' : 's')
+    : nActive + ' clients';
+  const sc = document.getElementById('startCloseAllBtn');
+  if (sc) sc.style.display = showingArchived ? 'none' : '';
   await loadClientCommentCounts();
-  renderClientsTable(allClients);
+  renderClientsTable(clientsInView());
+}
+// The list the Clients table is currently showing: active, or archived.
+function clientsInView() { return showingArchived ? archivedClients : allClients; }
+async function toggleArchivedView() {
+  showingArchived = !showingArchived;
+  await loadClients();
+  filterClients();
 }
 
 // Bulk reset close_status to "Not Started" for every client. Used at the
@@ -3382,7 +3437,7 @@ async function startCloseForAllClients() {
     // 1) Everyone -> In Progress, which is the state in which close tasks appear.
     //    .not('id','is',null) matches every row (id is the PK, never null).
     const { error: cErr } = await sb.from('clients')
-      .update({ close_status: 'In Progress' }).eq('is_firm', false);
+      .update({ close_status: 'In Progress' }).eq('is_firm', false).is('archived_at', null);
     if (cErr) throw cErr;
     // 2) Reset every close-category task to Not Started for a fresh checklist.
     const { error: tErr } = await sb.from('tasks')
@@ -3420,13 +3475,23 @@ function renderClientsTable(clients) {
     return av < bv ? -clientSortDir : av > bv ? clientSortDir : 0;
   });
   const tbody = document.getElementById('clientsTbody');
-  if (!sorted.length) { tbody.innerHTML='<tr><td colspan="5"><div class="empty">No clients found</div></td></tr>'; return; }
+  if (!sorted.length) { tbody.innerHTML='<tr><td colspan="5"><div class="empty">'+(showingArchived?'No archived clients':'No clients found')+'</div></td></tr>'; return; }
   tbody.innerHTML = sorted.map(c=>{
     // Tint the row to reflect close progress at a glance. "Not Started" rows stay
     // plain so they don't visually compete with active work.
     const rowClass = c.close_status === 'In Progress' ? 'row-in-progress'
                    : c.close_status === 'Done'        ? 'row-done'
                    : '';
+    if (c.archived_at) {
+      return `
+    <tr onclick="openClient('${c.id}')" style="opacity:.75">
+      <td style="font-weight:600;color:var(--navy)">${c.name}</td>
+      <td>${avHtml(c.preparer)} <span style="font-size:13px;color:var(--text2);margin-left:6px">${c.preparer||'—'}</span></td>
+      <td>${c.reviewer?avHtml(c.reviewer)+'<span style="font-size:13px;color:var(--text2);margin-left:6px">'+c.reviewer+'</span>':'<span style="color:var(--text3)">—</span>'}</td>
+      <td style="font-size:12px;color:var(--text3)">—</td>
+      <td><span class="arch-pill">Archived ${fmtArchivedOn(c.archived_at)}</span></td>
+    </tr>`;
+    }
     return `
     <tr class="${rowClass}" onclick="openClient('${c.id}')">
       <td style="font-weight:600;color:var(--navy)">${c.name}${clientQBubble(c.id)}</td>
@@ -3439,13 +3504,13 @@ function renderClientsTable(clients) {
 }
 function sortClients(key) {
   if (clientSortKey === key) clientSortDir *= -1; else { clientSortKey = key; clientSortDir = 1; }
-  renderClientsTable(allClients.filter(c => {
+  renderClientsTable(clientsInView().filter(c => {
     const q = document.getElementById('clientSearch').value.toLowerCase();
     const fp = document.getElementById('filterPreparer').value;
     const fs = document.getElementById('filterStatus').value;
     if (q && !c.name.toLowerCase().includes(q)) return false;
     if (fp !== 'all' && c.preparer !== fp) return false;
-    if (fs !== 'all' && c.close_status !== fs) return false;
+    if (fs !== 'all' && !c.archived_at && c.close_status !== fs) return false;
     return true;
   }));
 }
@@ -3453,10 +3518,10 @@ function filterClients() {
   const q  = document.getElementById('clientSearch').value.toLowerCase();
   const fp = document.getElementById('filterPreparer').value;
   const fs = document.getElementById('filterStatus').value;
-  renderClientsTable(allClients.filter(c => {
+  renderClientsTable(clientsInView().filter(c => {
     if (q && !c.name.toLowerCase().includes(q)) return false;
     if (fp !== 'all' && c.preparer !== fp) return false;
-    if (fs !== 'all' && c.close_status !== fs) return false;
+    if (fs !== 'all' && !c.archived_at && c.close_status !== fs) return false;
     return true;
   }));
 }
@@ -3876,12 +3941,14 @@ async function loadMyDay() {
         .eq('assigned_to', name)
         .neq('status', 'Done')),
       sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
-      sb.from('clients').select('id,close_status'),
+      sb.from('clients').select('id,close_status,archived_at'),
     ]);
     // fetchAllRows throws on error rather than returning { data, error };
     // the surrounding try/catch already renders the failure state.
-    let tasks = tasksRes;
-    const subtasks = subsRes;
+    // Archived clients' work is dropped here, before any gating or counting.
+    const archivedIds = new Set((closeRes.data || []).filter(c => c.archived_at).map(c => c.id));
+    let tasks = (tasksRes || []).filter(t => !archivedIds.has(t.client_id));
+    const subtasks = (subsRes || []).filter(s => !archivedIds.has(s.client_id != null ? s.client_id : (s.tasks && s.tasks.client_id)));
     const allSubs = await gatingSubtasks(tasks, subtasks);
     const allSubsById = new Map(allSubs.map(s => [s.id, s]));
     const reviewGates = reviewGateRes.data || [];
@@ -3977,12 +4044,14 @@ async function loadMyWeek() {
         .neq('status', 'Done')),
       // "Ready for Review" gate — see loadMyDay for the explanation.
       sb.from('tasks').select('id,client_id,title,status').eq('title', READY_FOR_REVIEW_TITLE),
-      sb.from('clients').select('id,close_status'),
+      sb.from('clients').select('id,close_status,archived_at'),
     ]);
     // fetchAllRows throws on error rather than returning { data, error };
     // the surrounding try/catch already renders the failure state.
-    let tasks = tasksRes;
-    const subtasks = subsRes;
+    // Archived clients' work is dropped here, before any gating or counting.
+    const archivedIds = new Set((closeRes.data || []).filter(c => c.archived_at).map(c => c.id));
+    let tasks = (tasksRes || []).filter(t => !archivedIds.has(t.client_id));
+    const subtasks = (subsRes || []).filter(s => !archivedIds.has(s.client_id != null ? s.client_id : (s.tasks && s.tasks.client_id)));
     const allSubs = await gatingSubtasks(tasks, subtasks);
     const allSubsById = new Map(allSubs.map(s => [s.id, s]));
     const reviewGates = reviewGateRes.data || [];
@@ -4944,7 +5013,7 @@ function openFirmSpace() {
 
 async function openClient(id) {
   currentClientId = id;
-  const c = allClients.find(x => x.id === id);
+  const c = findClientAny(id);
   if (!c) {
     console.error('openClient: client not found', id);
     alert('Could not find that client. Please refresh and try again.');
@@ -4966,6 +5035,12 @@ async function openClient(id) {
     document.getElementById('detailBadge').innerHTML = statusBadge(c.close_status, true);
     document.getElementById('detailBadge').onclick = () => cycleCloseStatus(c.id);
   }
+  if (c.archived_at) {
+    // No close lifecycle on an archived client.
+    document.getElementById('detailBadge').innerHTML = '';
+    document.getElementById('detailBadge').onclick = null;
+  }
+  renderArchiveControls(c);
   populateClientSwitcher(id);
   // Reset content panels so we don't show stale data from previous client while loading
   document.getElementById('taskContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -4991,7 +5066,9 @@ async function openClient(id) {
 function populateClientSwitcher(currentId) {
   const sel = document.getElementById('clientSwitcher');
   if (!sel) return;
-  sel.innerHTML = allClients.map(c =>
+  const cur = archivedClientIds.has(currentId) ? findClientAny(currentId) : null;
+  sel.innerHTML = (cur ? `<option value="${cur.id}" selected>${cur.name} (archived)</option>` : '') +
+    allClients.map(c =>
     `<option value="${c.id}"${c.id === currentId ? ' selected' : ''}>${c.name}</option>`
   ).join('');
 }
@@ -8629,8 +8706,9 @@ const invEsc = s => (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<
 
 async function InvLoad(){
   if(!Inv.loaded){
-    const { data:cl } = await sb.from('clients').select('id,name').order('name');
-    (cl||[]).forEach(c=>Inv.clients[c.id]=c.name);
+    const { data:cl } = await sb.from('clients').select('id,name,archived_at').order('name');
+    Inv.archived = new Set();
+    (cl||[]).forEach(c=>{ Inv.clients[c.id]=c.name; if(c.archived_at) Inv.archived.add(c.id); });
     if(Inv.client && !Inv.clients[Inv.client]) Inv.client='';
     if(!Inv._clickBound){ document.addEventListener('click',()=>{ if(Inv.swOpen){ Inv.swOpen=false; InvRenderSwitcher(); } }); Inv._clickBound=true; }
     Inv.loaded=true;
@@ -8644,7 +8722,7 @@ async function InvRefresh(){ await InvLoadCounts(); await InvRenderList(); if((I
 function InvRenderSwitcher(){
   const el=document.getElementById('invSwitch'); if(!el) return;
   const label = Inv.client ? (Inv.clients[Inv.client]||'Client') : 'All clients';
-  const items = [['','All clients']].concat(Object.entries(Inv.clients).sort((a,b)=>a[1].localeCompare(b[1])));
+  const items = [['','All clients']].concat(Object.entries(Inv.clients).filter(([id])=>!(Inv.archived&&Inv.archived.has(id))||id===Inv.client).sort((a,b)=>a[1].localeCompare(b[1])));
   el.innerHTML = '<button class="inv-sw-btn" onclick="InvToggleSwitch(event)"><span class="pin">&#9673;</span> '+invEsc(label)+' <span class="car">&#9662;</span></button>'
     + '<div class="inv-sw-pop '+(Inv.swOpen?'open':'')+'" onclick="event.stopPropagation()"><div class="inv-sw-search"><input id="invSwSearch" placeholder="Find client…" autocomplete="off" oninput="InvSwFilter(this.value)"></div>'
     + '<div class="inv-sw-list" id="invSwList">'
@@ -9356,7 +9434,7 @@ async function runGlobalSearch(term) {
         style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:white;border:1px solid var(--border);border-radius:9px;margin-bottom:8px;cursor:pointer;transition:all .12s">
         <div style="flex:1;min-width:0">
           <div style="font-weight:500;color:var(--text);font-size:14px">${t.title}</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:2px">${t.clients?.name || 'Unknown client'} · ${t.category || 'Uncategorized'}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${t.clients?.name || 'Unknown client'}${archivedClientIds.has(t.client_id) ? ' (archived)' : ''} · ${t.category || 'Uncategorized'}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
           <div style="font-size:12px;color:${overdue ? 'var(--red)' : 'var(--text3)'};${overdue ? 'font-weight:500' : ''}">${dueTxt}</div>
@@ -9885,7 +9963,7 @@ init();
   async function clientChoices(){
     let list = (window.allClients && allClients.length) ? allClients : null;
     if(!list){
-      const { data } = await sb.from('clients').select('id,name,is_firm').order('name');
+      const { data } = await sb.from('clients').select('id,name,is_firm').is('archived_at', null).order('name');
       list = data || [];
     }
     const connected = new Set(companies.map(c=>String(c.company_name||'')));
@@ -10102,7 +10180,7 @@ init();
     var arr = (typeof allClients!=='undefined' && allClients) ? allClients.slice() : [];
     return arr.filter(function(c){return c && c.id;}).sort(function(a,b){return (a.name||"").localeCompare(b.name||"");});
   }
-  function clientName(id){ var c=(typeof allClients!=='undefined'&&allClients||[]).find(function(x){return x.id===id;}); return c?c.name:id; }
+  function clientName(id){ var c=(typeof findClientAny==='function')?findClientAny(id):null; return c?(c.name+(c.archived_at?' (archived)':'')):id; }
   function call(body){ return sb.functions.invoke('admin-users',{body:body}); }
   function ok(res){ return res && !res.error && res.data && res.data.ok; }
   function errMsg(res){ return (res && res.data && res.data.message) || (res && res.error && res.error.message) || 'request failed'; }
@@ -10143,7 +10221,7 @@ init();
     var search=document.getElementById('adCliSearch');
     renderPicker(search?search.value:'');
     var host=document.getElementById('adUsers'); if(host) host.innerHTML='<div class="empty" style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:1.5rem;color:var(--text3)">Loading…</div>';
-    if(!clientsList().length){ try{ var r=await sb.from('clients').select('id,name').order('name'); if(r.data){ allClients = r.data; } }catch(e){} renderPicker(search?search.value:''); }
+    if(!clientsList().length){ try{ var r=await sb.from('clients').select('id,name').is('archived_at', null).order('name'); if(r.data){ allClients = r.data; } }catch(e){} renderPicker(search?search.value:''); }
     try{
       var res=await call({action:'list'});
       if(!ok(res)) throw new Error(errMsg(res));
@@ -11489,7 +11567,7 @@ init();
   }
 
   function clientName(id) {
-    const c = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === id);
+    const c = (typeof findClientAny === 'function') ? findClientAny(id) : null;
     return (c && c.name) || '(client)';
   }
 
@@ -15837,7 +15915,7 @@ init();
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const money = n => (n < 0 ? '-$' : '$') + Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const norm = s => String(s || '').toLowerCase().replace(/^the\s+/, '').replace(/[^a-z0-9]/g, '');
-  const clientName = id => { const c = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === id); return c ? c.name : id; };
+  const clientName = id => { const c = (typeof findClientAny === 'function') ? findClientAny(id) : null; return c ? c.name : id; };
   const pad = n => String(n).padStart(2, '0');
 
   const S = {
@@ -16304,6 +16382,204 @@ init();
       $('laSettingsBtn').addEventListener('click', () => { S.showSettings = !S.showSettings; render(); });
     }
     await loadCfgs(); await loadLogs(); render();
+  };
+})();
+</script>
+<script>
+/* CLIENT-ARCHIVE
+   Owner-only Archive / Unarchive for a client.
+
+   Archiving sets clients.archived_at. loadClients() keeps archived rows out of
+   allClients, which is what removes the client from the Clients list, the
+   client switcher, every picker built from allClients, Vendor Audit "Run all",
+   the close sweep count, and the bubble/badge counts. My Day / My Week drop
+   archived clients' tasks and steps directly. Nothing is deleted: tasks,
+   notes, statements and history all stay, and Unarchive puts it all back.
+
+   Portal access: the client's ACTIVE client_users links get the same
+   archived_at stamp, which is what the portal's RLS (user_has_client) checks.
+   Unarchive restores only the links stamped at that moment, so a login that
+   was removed by hand earlier stays removed.
+
+   Automation configs (daily sales sync, monthly taxes, labor accrual, the
+   QuickBooks connection) are NOT changed. They are listed before and after
+   archiving so they can be switched off on their own pages. */
+(function () {
+  const escA = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+  window.fmtArchivedOn = function (ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString('en-US', { timeZone: 'America/Chicago', month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  window.renderArchiveControls = function (c) {
+    const slot = document.getElementById('detailArchive');
+    const banner = document.getElementById('detailArchivedBanner');
+    if (slot) slot.innerHTML = '';
+    if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+    if (!c || c.is_firm) return;
+    const owner = typeof isAdmin === 'function' && isAdmin();
+    if (c.archived_at) {
+      if (banner) {
+        banner.innerHTML =
+          '<span class="arch-pill">Archived</span>' +
+          '<span style="flex:1;min-width:220px">Archived on ' + escA(fmtArchivedOn(c.archived_at)) +
+          '. Hidden from the client list, My Day / My Week, the close sweep and badges. All history is kept.</span>' +
+          (owner ? '<button class="arch-btn restore" onclick="unarchiveClient(\'' + c.id + '\')">Unarchive</button>' : '');
+        banner.style.display = '';
+      }
+      return;
+    }
+    if (owner && slot) {
+      slot.innerHTML = '<button class="arch-btn" onclick="archiveClient(\'' + c.id + '\')" title="Hide this client everywhere without deleting anything">Archive client</button>';
+    }
+  };
+
+  // Read-only look at what is tied to the client. Each check is independent:
+  // one that fails (missing table, RLS) is reported as unknown, never as zero.
+  async function preflight(id) {
+    const safe = async (fn) => { try { return await fn(); } catch (e) { return { err: (e && e.message) || 'failed' }; } };
+    const [tasks, links, sync, tax, labor, qbo] = await Promise.all([
+      safe(async () => {
+        const r = await sb.from('tasks').select('id', { count: 'exact', head: true }).eq('client_id', id).neq('status', 'Done');
+        if (r.error) throw r.error; return { n: r.count || 0 };
+      }),
+      safe(async () => {
+        const r = await sb.from('client_users').select('user_id').eq('client_id', id).is('archived_at', null);
+        if (r.error) throw r.error; return { n: (r.data || []).length };
+      }),
+      safe(async () => {
+        const r = await sb.from('sync_sources').select('source,enabled').eq('client_id', id);
+        if (r.error) throw r.error; return { on: (r.data || []).filter(x => x.enabled).map(x => x.source) };
+      }),
+      safe(async () => {
+        const r = await sb.from('tax_client_config').select('enabled').eq('client_id', id);
+        if (r.error) throw r.error; return { on: (r.data || []).some(x => x.enabled) };
+      }),
+      safe(async () => {
+        const r = await sb.from('labor_accrual_config').select('enabled').eq('client_id', id);
+        if (r.error) throw r.error; return { on: (r.data || []).some(x => x.enabled) };
+      }),
+      safe(async () => {
+        const r = await sb.from('qbo_connections').select('client_id').eq('client_id', id);
+        if (r.error) throw r.error; return { on: (r.data || []).length > 0 };
+      }),
+    ]);
+    return { tasks, links, sync, tax, labor, qbo };
+  }
+
+  function automationLines(p) {
+    const lines = [];
+    if (p.sync.err) lines.push('Daily sales sync: could not check');
+    else if (p.sync.on.length) lines.push('Daily sales sync is ON (' + p.sync.on.join(', ') + ')');
+    if (p.tax.err) lines.push('Monthly Taxes: could not check');
+    else if (p.tax.on) lines.push('Monthly Taxes is ON');
+    if (p.labor.err) lines.push('Labor accrual: could not check');
+    else if (p.labor.on) lines.push('Labor accrual is ON');
+    if (p.qbo.err) lines.push('QuickBooks connection: could not check');
+    else if (p.qbo.on) lines.push('QuickBooks is connected');
+    return lines;
+  }
+
+  window.archiveClient = async function (id) {
+    if (!(typeof isAdmin === 'function' && isAdmin())) return;
+    const c = findClientAny(id);
+    if (!c || c.is_firm || c.archived_at) return;
+    const slot = document.getElementById('detailArchive');
+    if (slot) slot.innerHTML = '<span style="font-size:12px;color:var(--text3)">Checking…</span>';
+
+    const p = await preflight(id);
+    const auto = automationLines(p);
+    const msg =
+      'Archive ' + c.name + '?\n\n' +
+      'It disappears from the client list, My Day / My Week, the close sweep, pickers and badges. Nothing is deleted, and Unarchive puts it all back.\n\n' +
+      '• Open tasks kept but hidden: ' + (p.tasks.err ? 'could not count' : p.tasks.n) + '\n' +
+      '• Portal logins that lose access: ' + (p.links.err ? 'could not count' : p.links.n) + '\n' +
+      (auto.length ? '\nNOT changed by archiving (switch off on their own pages if needed):\n• ' + auto.join('\n• ') + '\n' : '');
+    if (!confirm(msg)) { renderArchiveControls(c); return; }
+
+    const stamp = new Date().toISOString();
+    try {
+      await writeOrThrow(sb.from('clients').update({ archived_at: stamp }).eq('id', id), 'Archive client');
+    } catch (e) {
+      alert("Couldn't archive " + c.name + ' — ' + (e.message || 'please try again.'));
+      renderArchiveControls(c);
+      return;
+    }
+
+    // Portal logins. Reported honestly: a permissions rule can make this
+    // update "succeed" with zero rows, so compare against the preflight count.
+    let portalNote = '';
+    const expected = p.links.err ? null : p.links.n;
+    if (expected !== 0) {
+      try {
+        const r = await withTimeout(
+          sb.from('client_users').update({ archived_at: stamp }).eq('client_id', id).is('archived_at', null).select('user_id'),
+          12_000);
+        if (r.error) throw r.error;
+        const cut = (r.data || []).length;
+        if (expected != null && cut < expected) {
+          portalNote = '\n\nWARNING: only ' + cut + ' of ' + expected + ' portal logins were cut off — a permissions rule blocked the rest. Those users can still open this client in the portal. Remove them on the Admin page.';
+        } else if (cut) {
+          portalNote = '\n\n' + cut + ' portal login' + (cut === 1 ? '' : 's') + ' lost access.';
+        }
+      } catch (e) {
+        portalNote = '\n\nWARNING: portal logins were NOT cut off (' + ((e && e.message) || 'error') + '). Remove them on the Admin page.';
+      }
+    }
+
+    await loadClients();
+    if (typeof filterClients === 'function') filterClients();
+    if (typeof loadPortalBadge === 'function') loadPortalBadge();
+    if (typeof loadMyDay === 'function') loadMyDay();
+    if (typeof loadMyWeek === 'function') loadMyWeek();
+    showPage('clients');
+    alert(c.name + ' is archived.' + portalNote +
+      (auto.length ? '\n\nStill switched on elsewhere:\n• ' + auto.join('\n• ') : ''));
+  };
+
+  window.unarchiveClient = async function (id) {
+    if (!(typeof isAdmin === 'function' && isAdmin())) return;
+    const c = findClientAny(id);
+    if (!c || !c.archived_at) return;
+    if (!confirm('Unarchive ' + c.name + '?\n\nIt returns to the client list, My Day / My Week, pickers and badges, and portal logins that were cut off when it was archived get their access back.')) return;
+
+    const stamp = c.archived_at;
+    try {
+      await writeOrThrow(sb.from('clients').update({ archived_at: null }).eq('id', id), 'Unarchive client');
+    } catch (e) {
+      alert("Couldn't unarchive " + c.name + ' — ' + (e.message || 'please try again.'));
+      return;
+    }
+
+    // Restore only the links archived together with the client. A one-second
+    // window either side absorbs timestamp rounding; a link removed by hand on
+    // another day stays removed.
+    let portalNote = '';
+    try {
+      const t = new Date(stamp).getTime();
+      const lo = new Date(t - 1000).toISOString(), hi = new Date(t + 1000).toISOString();
+      const r = await withTimeout(
+        sb.from('client_users').update({ archived_at: null }).eq('client_id', id)
+          .gte('archived_at', lo).lte('archived_at', hi).select('user_id'),
+        12_000);
+      if (r.error) throw r.error;
+      const n = (r.data || []).length;
+      if (n) portalNote = '\n\n' + n + ' portal login' + (n === 1 ? '' : 's') + ' got access back.';
+    } catch (e) {
+      portalNote = '\n\nWARNING: portal logins were NOT restored (' + ((e && e.message) || 'error') + '). Re-grant them on the Admin page.';
+    }
+
+    await loadClients();
+    if (typeof filterClients === 'function') filterClients();
+    if (typeof loadPortalBadge === 'function') loadPortalBadge();
+    if (typeof loadMyDay === 'function') loadMyDay();
+    if (typeof loadMyWeek === 'function') loadMyWeek();
+    await openClient(id);
+    alert(c.name + ' is active again.' + portalNote +
+      '\n\nIts close status was left as it was. Set it from the status badge if it should join the current close.');
   };
 })();
 </script>
