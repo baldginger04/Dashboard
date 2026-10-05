@@ -5944,8 +5944,22 @@ async function saveTask() {
     await sb.from('subtasks').delete().eq('task_id', taskId);
   } else {
     taskData.status = 'Not Started';
-    const { data } = await sb.from('tasks').insert(taskData).select().single();
-    savedId = data?.id;
+    // 10/5: this insert used to ignore the database's error entirely, so a
+    // rejected new task closed the modal and simply never appeared — with no
+    // message — and its steps were then inserted with no parent id. Now the
+    // real reason is shown and the modal stays open with the form intact.
+    try {
+      const rows = await writeOrThrow(sb.from('tasks').insert(taskData), 'Create task');
+      savedId = rows[0] && rows[0].id;
+    } catch (err) {
+      console.error('saveTask insert failed:', err, taskData);
+      alert("Couldn't create this task — " + (err.message || 'please try again.') + "\n\nNothing was saved. The form is still open.");
+      return;
+    }
+    if (!savedId) {
+      alert("Couldn't create this task — the server did not return the new task's id.\n\nCheck the client's task list before trying again.");
+      return;
+    }
     if (taskData.assigned_to) {
       const _cn = (allClients.find(c => c.id === clientId) || {}).name || '';
       pushTaskAssigned(taskData.assigned_to, taskData.title, _cn, clientId, savedId);
@@ -5954,10 +5968,20 @@ async function saveTask() {
 
   const validSubs = subRows.filter(r => r && r.title.trim());
   let prevId = null;
+  const subFailures = [];
   for (let i = 0; i < validSubs.length; i++) {
     const sub = { task_id: savedId, client_id: clientId, title: validSubs[i].title.trim(), assigned_to: validSubs[i].assignedTo || null, status: 'Not Started', sort_order: i, blocked_by: seq && i > 0 ? prevId : null };
-    const { data } = await sb.from('subtasks').insert(sub).select().single();
-    prevId = data?.id;
+    const { data, error } = await sb.from('subtasks').insert(sub).select().single();
+    if (error || !data) {
+      console.error('saveTask step insert failed:', error, sub);
+      subFailures.push(`"${sub.title}": ${(error && error.message) || 'no row returned'}`);
+      prevId = null;
+      continue;
+    }
+    prevId = data.id;
+  }
+  if (subFailures.length) {
+    alert(`The task was saved, but ${subFailures.length} of ${validSubs.length} step(s) were not:\n\n` + subFailures.join('\n'));
   }
 
   closeModal('taskModal');
