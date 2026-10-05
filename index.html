@@ -5984,6 +5984,29 @@ async function saveTask() {
     alert(`The task was saved, but ${subFailures.length} of ${validSubs.length} step(s) were not:\n\n` + subFailures.join('\n'));
   }
 
+  // 10/5: adding an open close-category task to a client whose close is Done
+  // reopens the close. Close tasks only display while the close is In Progress,
+  // so without this the new task saves but is invisible everywhere. This is a
+  // plain status flip — deliberately NOT the cycleCloseStatus path, which
+  // resets every close task to Not Started and would un-tick finished recs.
+  // The close auto-completes again (maybeCompleteClose) once this task is Done.
+  if (isCloseCat(category)) {
+    const _c = allClients.find(x => x.id === clientId);
+    const _status = taskId ? ((clientTasks.find(t => t.id === taskId) || {}).status || 'Not Started') : 'Not Started';
+    if (_c && _c.close_status === 'Done' && _status !== 'Done') {
+      try {
+        await writeOrThrow(sb.from('clients').update({ close_status: 'In Progress' }).eq('id', clientId), 'Reopen close');
+        _c.close_status = 'In Progress';
+        const _badge = document.getElementById('detailBadge');
+        if (_badge && currentClientId === clientId) _badge.innerHTML = statusBadge('In Progress', true);
+        filterClients();
+      } catch (err) {
+        alert("The task was saved, but the close couldn't be reopened — " + (err.message || 'please try again.') +
+              "\n\nClose tasks only show while the close is In Progress, so this task won't appear until it is.");
+      }
+    }
+  }
+
   closeModal('taskModal');
   await loadTasks(clientId);
   // Also refresh the cross-cutting views so a due date change shows up immediately
