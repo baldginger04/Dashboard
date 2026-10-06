@@ -2355,6 +2355,7 @@
                 </span>
                 <span id="freqDayWrap" class="freq-inline-grp" style="display:none"><span class="freq-lbl">on day</span>
                   <input type="number" class="form-input freq-num" id="freqDay" min="1" max="31" value="1" oninput="renderFreqPreview()" />
+                  <label class="freq-lbl" style="display:flex;align-items:center;gap:4px;cursor:pointer;white-space:nowrap"><input type="checkbox" id="freqLastDay" onchange="onFreqLastDayChange()" /> Last day of month</label>
                 </span>
                 <span id="freqMonthWrap" class="freq-inline-grp" style="display:none"><span class="freq-lbl">in</span>
                   <select class="form-select" id="freqMonth" onchange="renderFreqPreview()">
@@ -4972,9 +4973,23 @@ function computeNextDue(freq, fDay, fDow, fMonth, fromDate, interval) {
     while (count < 2) { d.setUTCDate(d.getUTCDate() + 1); if (![0,6].includes(d.getUTCDay())) count++; }
   }
   else if (freq === 'weekly') { d.setUTCDate(d.getUTCDate() + 7 * n); }
-  else if (freq === 'monthly') { d.setUTCMonth(d.getUTCMonth() + n); if (fDay) d.setUTCDate(fDay); }
-  else if (freq === 'quarterly') { d.setUTCMonth(d.getUTCMonth() + 3 * n); if (fDay) d.setUTCDate(fDay); }
-  else if (freq === 'annually') { d.setUTCFullYear(d.getUTCFullYear() + n); if (fMonth) d.setUTCMonth(fMonth - 1); if (fDay) d.setUTCDate(fDay); }
+  else if (freq === 'monthly' || freq === 'quarterly' || freq === 'annually') {
+    // 10/6/26 FIX — month-length overflow. The old code called setUTCMonth on
+    // the CURRENT day, so Aug 31 + 1 month asked JS for "Sep 31", which rolls
+    // over to Oct 1, and setUTCDate(31) then landed on Oct 31 — September was
+    // silently skipped (Central Health invoice). Same failure for day 29/30
+    // through February. Now: park on the 1st, move the month, then clamp the
+    // wanted day to that month's length. frequency_day 31 therefore means
+    // "last day of the month" (Sep 30, Feb 28/29), which is what the
+    // "Last day of month" checkbox stores.
+    const wantDay = fDay || d.getUTCDate();
+    d.setUTCDate(1);
+    if (freq === 'monthly')        d.setUTCMonth(d.getUTCMonth() + n);
+    else if (freq === 'quarterly') d.setUTCMonth(d.getUTCMonth() + 3 * n);
+    else { d.setUTCFullYear(d.getUTCFullYear() + n); if (fMonth) d.setUTCMonth(fMonth - 1); }
+    const lastDay = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0, 12)).getUTCDate();
+    d.setUTCDate(Math.min(wantDay, lastDay));
+  }
   return toYmd();
 }
 
@@ -5764,6 +5779,8 @@ function openTaskModal(clientId, category, taskId) {
   document.getElementById('freqInterval').value = 1;
   document.getElementById('freqDow').value = 1;
   document.getElementById('freqDay').value = 1;
+  document.getElementById('freqLastDay').checked = false;
+  document.getElementById('freqDay').disabled = false;
   document.getElementById('freqMonth').value = 1;
 
   if (taskId) {
@@ -5783,6 +5800,10 @@ function openTaskModal(clientId, category, taskId) {
         document.getElementById('freqType').value = task.frequency;
         document.getElementById('freqInterval').value = task.frequency_interval || 1;
         if (task.frequency_day)   document.getElementById('freqDay').value   = task.frequency_day;
+        // Day 31 and "last day of month" are the same rule (clamped in computeNextDue).
+        const _isLast = parseInt(task.frequency_day, 10) === 31;
+        document.getElementById('freqLastDay').checked = _isLast;
+        document.getElementById('freqDay').disabled = _isLast;
         if (task.frequency_dow)   document.getElementById('freqDow').value   = task.frequency_dow;
         if (task.frequency_month) document.getElementById('freqMonth').value = task.frequency_month;
       }
@@ -5815,6 +5836,17 @@ function onFreqTypeChange() {
   document.getElementById('freqDowWrap').style.display   = freq === 'weekly' ? 'flex' : 'none';
   document.getElementById('freqDayWrap').style.display   = ['monthly','quarterly','annually'].includes(freq) ? 'flex' : 'none';
   document.getElementById('freqMonthWrap').style.display = freq === 'annually' ? 'flex' : 'none';
+  renderFreqPreview();
+}
+
+// "Last day of month" checkbox: stores frequency_day = 31, which computeNextDue
+// clamps to each month's real length (Sep 30, Feb 28/29). Locks the day box
+// while ticked so the two controls can't disagree.
+function onFreqLastDayChange() {
+  const last = document.getElementById('freqLastDay').checked;
+  const dayEl = document.getElementById('freqDay');
+  if (last) dayEl.value = 31;
+  dayEl.disabled = last;
   renderFreqPreview();
 }
 
