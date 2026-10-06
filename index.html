@@ -16667,5 +16667,76 @@ init();
   };
 })();
 </script>
+<script>
+/* ── Auto-update (added 10/6/26) ─────────────────────────────────────────
+ * Open Triple tabs keep running the code they loaded, so a new deploy never
+ * reached anyone until they refreshed by hand. This checks the live page every
+ * 5 minutes (and whenever the tab comes back into view). When it has changed:
+ *   - tab in the background  -> reload right away (nobody is looking);
+ *   - tab in front           -> show a "Refresh" bar, and reload on its own once
+ *     the tab goes to the background or sits idle for 2 minutes, but NEVER while
+ *     a popup is open or something has been typed and not yet sent/saved.
+ * Nothing to maintain: it compares the page itself, no version number to bump.
+ */
+(function () {
+  if (window.__tripleAutoUpdate) return; window.__tripleAutoUpdate = true;
+  var CHECK_MS = 5 * 60 * 1000, IDLE_MS = 2 * 60 * 1000;
+  var baseline = null, updateReady = false, lastActivity = Date.now();
+
+  async function pageHash() {
+    var r = await fetch('/?__vc=1', { cache: 'no-store', credentials: 'same-origin' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(await r.text()));
+    return Array.from(new Uint8Array(buf)).map(function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+  // Unsent text anywhere, or a popup open -> not safe to reload under someone.
+  function busy() {
+    if (document.querySelector('.modal-overlay.open')) return true;
+    var els = document.querySelectorAll('textarea, input:not([type]), input[type=text], input[type=number], input[type=email], input[type=date], [contenteditable=""], [contenteditable=true]');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i];
+      if (el.isContentEditable) { if ((el.textContent || '').trim()) return true; continue; }
+      if (el.offsetParent === null) continue;               // hidden field, ignore
+      if ((el.value || '') !== (el.defaultValue || '') && String(el.value).trim()) return true;
+    }
+    return false;
+  }
+  function reloadNow() { location.reload(); }
+  function tryReload() {
+    if (!updateReady) return;
+    if (document.hidden && !busy()) return reloadNow();
+    if (!document.hidden && !busy() && Date.now() - lastActivity >= IDLE_MS) return reloadNow();
+  }
+  function showBar() {
+    if (document.getElementById('tripleUpdateBar')) return;
+    var bar = document.createElement('div');
+    bar.id = 'tripleUpdateBar';
+    bar.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:99999;background:#1B2A4B;color:#fff;font:600 13px/1.3 system-ui,sans-serif;padding:10px 14px;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.25);display:flex;gap:12px;align-items:center';
+    bar.innerHTML = '<span>Triple was updated.</span>';
+    var b = document.createElement('button');
+    b.textContent = 'Refresh';
+    b.style.cssText = 'background:#D85B31;color:#fff;border:0;border-radius:6px;padding:6px 12px;font:600 13px system-ui,sans-serif;cursor:pointer';
+    b.onclick = reloadNow;
+    bar.appendChild(b);
+    document.body.appendChild(bar);
+  }
+  async function check() {
+    try {
+      var h = await pageHash();
+      if (baseline === null) { baseline = h; return; }
+      if (h !== baseline) { updateReady = true; showBar(); tryReload(); }
+    } catch (e) { /* offline or a blip: try again next round */ }
+  }
+  ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'].forEach(function (ev) {
+    window.addEventListener(ev, function () { lastActivity = Date.now(); }, { passive: true, capture: true });
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) tryReload(); else check();
+  });
+  check();
+  setInterval(check, CHECK_MS);
+  setInterval(tryReload, 30 * 1000);
+})();
+</script>
 </body>
 </html>
