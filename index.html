@@ -2027,6 +2027,11 @@
           #page-invoices tr.inv-charge td{background:#f7f9fc}
           #page-invoices .inv-tag{font-size:10px;font-weight:700;color:var(--accent2);letter-spacing:.5px}
           #page-invoices .inv-coded{font-weight:600}
+          #page-invoices .inv-amtbtn{background:none;border:1px dashed transparent;border-radius:6px;padding:3px 6px;margin:-3px -6px;font:inherit;color:inherit;cursor:pointer;font-variant-numeric:tabular-nums}
+          #page-invoices .inv-amtbtn:hover{border-color:var(--border);background:#fbfaf8}
+          #page-invoices .inv-amtbtn:hover::after{content:' ✎';color:var(--text2);font-size:11px}
+          #page-invoices .inv-amtedit{display:inline-flex;gap:6px;align-items:center;justify-content:flex-end}
+          #page-invoices .inv-amtin{width:92px;padding:4px 6px;border:1px solid var(--accent);border-radius:6px;font:inherit;text-align:right;font-variant-numeric:tabular-nums}
           #page-invoices .inv-warnbar{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border);border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:14px}
           #page-invoices .inv-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:2px 0 12px}
           #page-invoices .inv-note{font-size:12px;color:var(--text3)}
@@ -8967,7 +8972,7 @@ function InvRenderDetail(){
   const lineRow=l=>{
     const cls=l.needs_review?'inv-needs':(l.is_charge?'inv-charge':'');
     const cell=l.needs_review?'<select class="inv-acctsel" data-line="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'">'+optsFor(l.final_account)+'</select>':'<span class="inv-coded">'+invEsc(InvAcctLabel(acct,l.final_account))+'</span>';
-    return '<tr class="'+cls+'"><td><input type="checkbox" class="inv-linechk" data-id="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'"></td><td class="inv-dim inv-mono">'+l.line_number+'</td><td>'+invEsc(l.raw_description||'—')+(l.is_charge?' <span class="inv-tag">CHARGE</span>':'')+(l.vendor_item_code?'<br><small class="inv-dim inv-mono">'+invEsc(l.vendor_item_code)+'</small>':'')+'</td><td class="inv-r inv-mono inv-dim">'+(l.quantity??'')+'</td><td class="inv-r inv-mono">'+invMoney(l.amount)+'</td><td>'+cell+'</td></tr>';
+    return '<tr class="'+cls+'"><td><input type="checkbox" class="inv-linechk" data-id="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'"></td><td class="inv-dim inv-mono">'+l.line_number+'</td><td>'+invEsc(l.raw_description||'—')+(l.is_charge?' <span class="inv-tag">CHARGE</span>':'')+(l.vendor_item_code?'<br><small class="inv-dim inv-mono">'+invEsc(l.vendor_item_code)+'</small>':'')+'</td><td class="inv-r inv-mono inv-dim">'+(l.quantity??'')+'</td><td class="inv-r inv-mono" id="invAmt-'+l.id+'">'+(inv.status==='pushed'?invMoney(l.amount):'<button class="inv-amtbtn" title="Click to correct this amount" onclick="InvEditAmount(\''+l.id+'\')">'+invMoney(l.amount)+'</button>')+'</td><td>'+cell+'</td></tr>';
   };
   const notConn=!acct.connected?'<div class="inv-warnbar">QuickBooks isn’t linked for this client yet — accounts show from your chart names; codes still save. Link it in Statement Reconciler to resolve to live QBO accounts.</div>':'';
   const bulk='<div class="inv-bar"><span class="inv-note">Code several at once:</span>'
@@ -8987,6 +8992,54 @@ function InvRenderDetail(){
     +'<table class="inv-tbl"><thead><tr><th style="width:28px"><input type="checkbox" title="Select all lines" onclick="InvLineSel(this.checked?\'all\':\'none\')"></th><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
     +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" id="invApproveBtn" onclick="InvApprove()" '+((openReview>0||foots===false||inv.status==='approved')?'disabled':'')+'>'+(InvPushState(inv.client_id).live?'Approve &amp; post to QBO':'Approve for QBO')+'</button>'+(inv.status==='duplicate'?'<button class="btn btn-secondary" onclick="InvNotDuplicate()">Not a duplicate</button>':inv.status!=='pushed'?'<button class="btn btn-secondary" onclick="InvMarkDuplicate()">Duplicate</button>':'')+'<button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
     +InvPushBoxHtml(inv);
+}
+// CORRECT A LINE AMOUNT (2026-10-06): the extractor sometimes misreads a hard-to-
+// read invoice ($61.65 for $61.55). Click any amount to fix it. Saves straight to
+// invoice_lines.amount, which is what qbo-push posts from, so the footing check
+// and the QuickBooks bill both follow. Not offered once an invoice is pushed —
+// the bill already exists in QuickBooks. An Approved invoice drops back to
+// Ready, so a changed bill is approved again rather than posted on the old OK.
+// Redraws the invoice without losing account picks that haven't been saved yet.
+function InvRerenderKeepPicks(){
+  const picks={}; document.querySelectorAll('#invBody select[data-line]').forEach(x=>{ if(x.value) picks[x.dataset.line]=x.value; });
+  const bulk=document.getElementById('invBulkSel'); const bv=bulk?bulk.value:'';
+  InvRenderDetail();
+  document.querySelectorAll('#invBody select[data-line]').forEach(x=>{ if(picks[x.dataset.line]) x.value=picks[x.dataset.line]; });
+  const b2=document.getElementById('invBulkSel'); if(b2&&bv) b2.value=bv;
+}
+function InvEditAmount(lineId){
+  const l=(Inv.current.lines||[]).find(x=>String(x.id)===String(lineId)); if(!l) return;
+  const td=document.getElementById('invAmt-'+lineId); if(!td) return;
+  const v=(l.amount==null?'':Number(l.amount).toFixed(2));
+  td.innerHTML='<span class="inv-amtedit"><input class="inv-amtin" type="number" step="0.01" inputmode="decimal" value="'+v+'" id="invAmtIn-'+lineId+'" '
+    +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();InvSaveAmount(\''+lineId+'\')}else if(event.key===\'Escape\'){InvRerenderKeepPicks()}">'
+    +'<button class="btn btn-primary btn-sm" onclick="InvSaveAmount(\''+lineId+'\')">Save</button>'
+    +'<button class="btn btn-secondary btn-sm" onclick="InvRerenderKeepPicks()">Cancel</button></span>';
+  const inp=document.getElementById('invAmtIn-'+lineId); if(inp){ inp.focus(); inp.select(); }
+}
+async function InvSaveAmount(lineId){
+  const { inv, lines }=Inv.current;
+  const l=lines.find(x=>String(x.id)===String(lineId)); if(!l) return;
+  const inp=document.getElementById('invAmtIn-'+lineId); if(!inp) return;
+  const raw=String(inp.value).replace(/[$,\s]/g,'');
+  if(raw===''||isNaN(Number(raw))){ invToast('Enter an amount, like 61.55.'); inp.focus(); return; }
+  const amt=Math.round(Number(raw)*100)/100;
+  const old=l.amount==null?null:Math.round(Number(l.amount)*100)/100;
+  if(old===amt){ InvRerenderKeepPicks(); return; }
+  inp.disabled=true;
+  try{
+    await writeOrThrow(sb.from('invoice_lines').update({amount:amt}).eq('id',lineId),'Correct amount');
+    l.amount=amt;
+    if(inv.status==='approved'){
+      await writeOrThrow(sb.from('invoice_queue').update({status:'pending',approved_at:null,auto_checked_at:new Date().toISOString()}).eq('id',inv.id),'Re-open for approval');
+      inv.status='pending'; inv.approved_at=null;
+    }
+    invToast('Line '+l.line_number+' changed from '+invMoney(old)+' to '+invMoney(amt)+'.','ok');
+  }catch(e){
+    invToast(e.message||'Could not save the amount.');
+  }
+  InvRerenderKeepPicks();
+  try{ await InvLoadCounts(); }catch(_){}
 }
 function InvPushBoxHtml(inv){
   if(inv.status==='pushed') return '<div class="inv-pushbox"><h4>QuickBooks</h4><div class="inv-note">Posted as '+invTxnWord(inv.qbo_txn_type)+' #'+invEsc(inv.qbo_bill_id||'—')+(inv.pushed_at?' on '+invEsc(String(inv.pushed_at).slice(0,10)):'')+'.'+(inv.error_detail?' '+invEsc(inv.error_detail):'')+'</div></div>';
