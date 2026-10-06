@@ -6485,11 +6485,16 @@ async function sendMentionEmail(mentionedName, author, context, body, imageUrl, 
     </div>`;
   try {
     console.log('Sending mention email to:', toEmail);
+    // smooth-endpoint is team-only (10/6/26): it needs the signed-in user's
+    // session token, not the public anon key.
+    const { data: sess } = await sb.auth.getSession();
+    const userToken = sess && sess.session && sess.session.access_token;
+    if (!userToken) { console.warn('Mention email skipped: not signed in'); return; }
     const resp = await fetch('https://evfemokwtofbarjeezhu.supabase.co/functions/v1/smooth-endpoint', {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + SB_KEY,
+        'Authorization': 'Bearer ' + userToken,
         'apikey': SB_KEY
       },
       body: JSON.stringify({ to: toEmail, subject: `${author} mentioned you in ${context}`, html: emailBody })
