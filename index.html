@@ -2048,6 +2048,36 @@
           #page-invoices .inv-checks{list-style:none;margin:8px 0;padding:0;font-size:13px}
           #page-invoices .inv-linkbtn{background:none;border:none;padding:0 2px;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;text-decoration:underline;font-family:inherit}
           #page-invoices .inv-checks li{padding:2px 0}
+          /* 2026-10-07: invoice viewer, search, list check, item library */
+          #page-invoices .inv-tab-sep{flex:1}
+          #page-invoices .inv-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(380px,44%);gap:20px;align-items:start}
+          #page-invoices .inv-split.nodoc{grid-template-columns:minmax(0,1fr)}
+          #page-invoices #invDetail{min-width:0}
+          #page-invoices .inv-split .inv-acctsel{min-width:170px}
+          #page-invoices .inv-doc{position:sticky;top:12px;display:flex;flex-direction:column;height:calc(100vh - 150px);min-height:460px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+          #page-invoices .inv-doc-head{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--border);font-size:13px;background:#fbfbfc}
+          #page-invoices .inv-doc-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text3);font-size:12px}
+          #page-invoices .inv-doc iframe{flex:1;width:100%;border:0;background:#525659}
+          #page-invoices .inv-doc-imgwrap{flex:1;overflow:auto;background:#f3f3f5;text-align:center}
+          #page-invoices .inv-doc-imgwrap img{max-width:100%;display:block;margin:0 auto}
+          #page-invoices .inv-doc-msg{padding:28px 18px;color:var(--text3);font-size:13px;text-align:center}
+          @media (max-width:1199px){
+            #page-invoices .inv-split{grid-template-columns:minmax(0,1fr)}
+            #page-invoices .inv-doc{position:static;height:70vh;order:-1}
+          }
+          #page-invoices .inv-search{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 12px}
+          #page-invoices .inv-search input,#page-invoices .inv-search select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;background:#fff}
+          #page-invoices .inv-qin{min-width:260px;flex:0 1 320px}
+          #page-invoices .inv-search-gap{flex:1}
+          #page-invoices .inv-checkbox{border:1px solid var(--border);border-radius:12px;background:#fff;padding:14px 16px}
+          #page-invoices .inv-checkbox h4{margin:0 0 6px;font-family:'Hanken Grotesk',sans-serif;font-size:15px;color:var(--navy)}
+          #page-invoices .inv-checkbox textarea{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
+          #page-invoices tr.inv-open td{background:#fbf7f2}
+          #page-invoices tr.inv-histrow td{background:#fcfcfd;padding:12px 16px 16px}
+          #page-invoices .inv-histtbl td,#page-invoices .inv-histtbl th{padding:8px 10px}
+          #page-invoices .inv-glbtn{text-align:left}
+          #page-invoices .inv-hdrtxt{width:150px;text-align:left}
+          #page-invoices .inv-was{display:block;font-size:11px;color:var(--text3);font-weight:400}
           #page-invoices .inv-checks .ok{color:var(--green)}
           #page-invoices .inv-checks .bad{color:var(--red)}
         </style>
@@ -8779,7 +8809,7 @@ function resubmitAnalysis(id) {
 // ══════════════════════════════════════════════════════════
 // INVOICES (AP queue) — extract-code-approve, native Triple tab
 // ══════════════════════════════════════════════════════════
-const Inv = { tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null, push:{}, pushGlobal:null };
+const Inv = { screen:'list', returnTo:null, q:{text:'',from:'',to:''}, check:null, lib:null, tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null, push:{}, pushGlobal:null };
 const INV_TABS = [
   { key:'processing',   label:'Processing',   where:['processing'] },
   { key:'needs_review', label:'Needs Review', where:['needs_review'] },
@@ -8806,7 +8836,7 @@ async function InvLoad(){
   InvRenderSwitcher();
   await InvRefresh();
 }
-async function InvRefresh(){ await InvLoadCounts(); await InvRenderList(); if((Inv.counts||{}).processing) InvStartPolling(); }
+async function InvRefresh(){ await InvLoadCounts(); if(Inv.screen==='library') await InvShowLibrary(); else await InvRenderList(); if((Inv.counts||{}).processing) InvStartPolling(); }
 
 function InvRenderSwitcher(){
   const el=document.getElementById('invSwitch'); if(!el) return;
@@ -8886,18 +8916,24 @@ async function InvLoadCounts(){
   Inv.counts=counts;
 }
 async function InvRenderList(){
+  Inv.screen='list'; Inv.returnTo=null;
   const tab=INV_TABS.find(t=>t.key===Inv.tab);
-  let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status,source,qbo_bill_id,created_at,review_reason').order('created_at',{ascending:false}).limit(300);
+  const searching=invSearchOn(), LIMIT=searching?500:300;
+  let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status,source,qbo_bill_id,created_at,review_reason').order('created_at',{ascending:false}).limit(LIMIT);
   if(tab.where) q=q.in('status',tab.where);
   if(Inv.client) q=q.eq('client_id',Inv.client);
+  q=invApplySearch(q);
   const { data:rows, error }=await q;
-  document.getElementById('invTabs').innerHTML = INV_TABS.map(t=>'<button class="inv-tab '+(t.key===Inv.tab?'on':'')+'" onclick="InvSetTab(\''+t.key+'\')">'+t.label+(t.where?'<span class="n">'+(Inv.counts[t.key]??'')+'</span>':'')+'</button>').join('');
+  if(Inv.screen!=='list') return;   // user moved on while this loaded
+  InvRenderTabs();
   const body=document.getElementById('invBody');
-  if(error){ body.innerHTML='<div class="empty">Couldn’t load: '+invEsc(error.message)+'</div>'; return; }
-  if(!rows.length){ body.innerHTML=InvEmptyFor(Inv.tab); return; }
+  const bar=InvSearchBarHtml();
+  if(error){ body.innerHTML=bar+'<div class="empty">Couldn’t load: '+invEsc(error.message)+'</div>'; return; }
+  if(!rows.length){ body.innerHTML=bar+(searching?'<div class="empty">No invoices match'+(tab.where?' in '+tab.label+' — try the All tab':'')+'.'+((Inv.q.from||Inv.q.to)?' Invoices with no date read are left out when a date range is set.':'')+'</div>':InvEmptyFor(Inv.tab)); return; }
   const pick = Inv.tab==='approved';
   Inv.picked = new Set();
-  body.innerHTML=(pick?'<div class="inv-bar"><button class="btn btn-primary" id="invPushSelBtn" onclick="InvPushSelected()" disabled>Push selected to QuickBooks</button><span class="inv-note" id="invPickNote">Tick invoices to push several at once. Each is checked first; only ones that are ready post.</span></div>':'')
+  const found = searching ? '<div class="inv-note" style="margin:-4px 0 10px">'+(rows.length>=LIMIT?'Showing the newest '+LIMIT+' matches — narrow the search to see the rest.':rows.length+' match'+(rows.length===1?'':'es'))+' in '+tab.label+(tab.where?' (use All to search every status)':'')+'.</div>' : '';
+  body.innerHTML=bar+found+(pick?'<div class="inv-bar"><button class="btn btn-primary" id="invPushSelBtn" onclick="InvPushSelected()" disabled>Push selected to QuickBooks</button><span class="inv-note" id="invPickNote">Tick invoices to push several at once. Each is checked first; only ones that are ready post.</span></div>':'')
     +'<table class="inv-tbl"><thead><tr>'+(pick?'<th style="width:28px"><input type="checkbox" title="Select all" onclick="InvPickAll(this.checked)"></th>':'')+'<th>Vendor</th><th>Invoice #</th><th>Date</th><th class="inv-r">Total</th>'+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th><th></th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
   InvFillCoded(rows.map(r=>r.id));
 }
@@ -8953,12 +8989,20 @@ async function InvGetAccounts(clientId){
 function InvAcctLabel(acct, code){ if(!code) return '—'; if(acct.byId&&acct.byId[code]) return acct.byId[code].label; return acct.nameByCode[code]?(code+' · '+acct.nameByCode[code]):code; }
 
 async function InvOpenInvoice(id){
-  document.getElementById('invBody').innerHTML='<div class="empty"><span class="spinner"></span> Opening&hellip;</div>';
+  // Re-opening the invoice already on screen (after Save coding, Approve…)
+  // keeps the file viewer as it is instead of reloading it.
+  const same = Inv.screen==='detail' && Inv.current && Inv.current.inv && Inv.current.inv.id===id && document.getElementById('invDetail');
+  Inv.screen='detail';
+  if(!same) document.getElementById('invBody').innerHTML='<div class="empty"><span class="spinner"></span> Opening&hellip;</div>';
   const { data:inv }=await sb.from('invoice_queue').select('*').eq('id',id).single();
   const { data:lines }=await sb.from('invoice_lines').select('*').eq('invoice_id',id).order('line_number');
   const acct=await InvGetAccounts(inv.client_id);
-  Inv.current={ inv, lines:lines||[], acct };
-  InvRenderDetail();
+  const prevDoc = same ? Inv.current.doc : null;
+  const docOk = prevDoc && prevDoc.url && prevDoc.path===inv.file_path && (Date.now()-(prevDoc.at||0))<50*60*1000;
+  Inv.current={ inv, lines:lines||[], acct, doc: docOk ? prevDoc : { url:null, err:null, loading:!!inv.file_path, path:inv.file_path } };
+  if(same && document.getElementById('invDetail')){ InvRenderDetail(); if(!docOk){ InvRenderDoc(); InvLoadDoc(inv); } return; }
+  InvRenderShell();
+  InvLoadDoc(inv);
 }
 function InvRenderDetail(){
   const { inv, lines, acct }=Inv.current;
@@ -8972,7 +9016,8 @@ function InvRenderDetail(){
   const lineRow=l=>{
     const cls=l.needs_review?'inv-needs':(l.is_charge?'inv-charge':'');
     const cell=l.needs_review?'<select class="inv-acctsel" data-line="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'">'+optsFor(l.final_account)+'</select>':'<span class="inv-coded">'+invEsc(InvAcctLabel(acct,l.final_account))+'</span>';
-    return '<tr class="'+cls+'"><td><input type="checkbox" class="inv-linechk" data-id="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'"></td><td class="inv-dim inv-mono">'+l.line_number+'</td><td>'+invEsc(l.raw_description||'—')+(l.is_charge?' <span class="inv-tag">CHARGE</span>':'')+(l.vendor_item_code?'<br><small class="inv-dim inv-mono">'+invEsc(l.vendor_item_code)+'</small>':'')+'</td><td class="inv-r inv-mono inv-dim">'+(l.quantity??'')+'</td><td class="inv-r inv-mono" id="invAmt-'+l.id+'">'+(inv.status==='pushed'?invMoney(l.amount):'<button class="inv-amtbtn" title="Click to correct this amount" onclick="InvEditAmount(\''+l.id+'\')">'+invMoney(l.amount)+'</button>')+'</td><td>'+cell+'</td></tr>';
+    const was = (l.original_amount!=null && Math.abs(Number(l.original_amount)-Number(l.amount||0))>=0.005) ? '<span class="inv-was">read as '+invMoney(l.original_amount)+'</span>' : '';
+    return '<tr class="'+cls+'"><td><input type="checkbox" class="inv-linechk" data-id="'+l.id+'" data-mk="'+invEsc(l.match_key||'')+'"></td><td class="inv-dim inv-mono">'+l.line_number+'</td><td>'+invEsc(l.raw_description||'—')+(l.is_charge?' <span class="inv-tag">CHARGE</span>':'')+(l.vendor_item_code?'<br><small class="inv-dim inv-mono">'+invEsc(l.vendor_item_code)+'</small>':'')+'</td><td class="inv-r inv-mono inv-dim">'+(l.quantity??'')+'</td><td class="inv-r inv-mono" id="invAmt-'+l.id+'">'+(inv.status==='pushed'?invMoney(l.amount):'<button class="inv-amtbtn" title="Click to correct this amount" onclick="InvEditAmount(\''+l.id+'\')">'+invMoney(l.amount)+'</button>')+was+'</td><td>'+cell+'</td></tr>';
   };
   const notConn=!acct.connected?'<div class="inv-warnbar">QuickBooks isn’t linked for this client yet — accounts show from your chart names; codes still save. Link it in Statement Reconciler to resolve to live QBO accounts.</div>':'';
   const bulk='<div class="inv-bar"><span class="inv-note">Code several at once:</span>'
@@ -8980,13 +9025,15 @@ function InvRenderDetail(){
     +'<button class="btn btn-secondary btn-sm" onclick="InvLineSel(\'none\')">Clear</button>'
     +'<select class="inv-acctsel" id="invBulkSel">'+optsFor('')+'</select>'
     +'<button class="btn btn-primary btn-sm" onclick="InvCodeSelected()">Code selected lines</button></div>';
-  document.getElementById('invBody').innerHTML=
-    '<button class="inv-back" onclick="InvRenderList()">← Back to queue</button>'+notConn
+  const tgt=document.getElementById('invDetail');
+  if(!tgt){ InvRenderShell(); return; }
+  tgt.innerHTML=
+    '<div class="inv-bar" style="margin:0 0 4px"><button class="inv-back" style="margin:0" onclick="InvBack()">'+invBackLabel()+'</button><span class="inv-search-gap"></span><button class="inv-linkbtn" id="invShowDoc" style="'+(invDocHidden()?'':'display:none')+'" onclick="InvToggleDoc()">Show invoice</button></div>'+notConn
     +(inv.review_reason&&inv.status!=='approved'?'<div class="inv-warnbar">'+(inv.status==='needs_review'?'<b>Why this needs you:</b> ':'')+invEsc(inv.review_reason)+'</div>':'')
     +'<div style="font-family:\'Hanken Grotesk\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);margin:.2em 0">'+invEsc(inv.vendor||'—')+' <span class="inv-badge '+b[0]+'" style="vertical-align:middle">'+b[1]+'</span>'
     +(inv.status!=='pushed'?' <button class="inv-linkbtn" onclick="InvVendorPicker()">Match vendor in QuickBooks</button>':'')+'</div>'
     +'<div id="invVendorBox"></div>'
-    +'<div class="inv-meta"><div><small>Invoice #</small><span class="inv-mono">'+invEsc(inv.invoice_number||'—')+'</span></div><div><small>Date</small><span>'+invEsc(inv.invoice_date||'—')+'</span></div><div><small>Client</small><span>'+invEsc(Inv.clients[inv.client_id]||'—')+'</span></div><div><small>Source</small><span>'+invEsc(inv.source||'—')+'</span></div><div><small>Subtotal</small><span class="inv-mono">'+invMoney(inv.subtotal)+'</span></div><div><small>Tax</small><span class="inv-mono">'+invMoney(inv.tax)+'</span></div><div><small>Total</small><span class="inv-mono">'+invMoney(inv.total)+'</span></div></div>'
+    +'<div class="inv-meta"><div><small>Invoice #</small><span class="inv-mono" id="invHdr-invoice_number">'+invHdrCell(inv,'invoice_number',invEsc(inv.invoice_number||'—'))+'</span></div><div><small>Date</small><span id="invHdr-invoice_date">'+invHdrCell(inv,'invoice_date',invEsc(inv.invoice_date||'—'))+'</span></div><div><small>Client</small><span>'+invEsc(Inv.clients[inv.client_id]||'—')+'</span></div><div><small>Source</small><span>'+invEsc(inv.source||'—')+'</span></div><div><small>Subtotal</small><span class="inv-mono">'+invMoney(inv.subtotal)+'</span></div><div><small>Tax</small><span class="inv-mono" id="invHdr-tax">'+invHdrCell(inv,'tax',invMoney(inv.tax))+'</span></div><div><small>Total</small><span class="inv-mono" id="invHdr-total">'+invHdrCell(inv,'total',invMoney(inv.total))+'</span></div></div>'
     +'<div style="margin:8px 0 12px">'+(foots===null?'':foots?'<span class="inv-foot ok">✓ Balances — lines + tax = '+invMoney(grand)+'</span>':'<span class="inv-foot bad">✕ Off by '+invMoney(Math.abs(grand-Number(inv.total)))+' — computed '+invMoney(grand)+' vs '+invMoney(inv.total)+'</span>')+'</div>'
     +bulk
     +'<table class="inv-tbl"><thead><tr><th style="width:28px"><input type="checkbox" title="Select all lines" onclick="InvLineSel(this.checked?\'all\':\'none\')"></th><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
@@ -9028,8 +9075,20 @@ async function InvSaveAmount(lineId){
   if(old===amt){ InvRerenderKeepPicks(); return; }
   inp.disabled=true;
   try{
-    await writeOrThrow(sb.from('invoice_lines').update({amount:amt}).eq('id',lineId),'Correct amount');
-    l.amount=amt;
+    // The first correction keeps what the extractor read in original_amount, so
+    // misreads can be found later. Correcting back to the original clears it.
+    const patch={amount:amt};
+    if(l.original_amount==null) patch.original_amount=old;
+    else if(Math.abs(Number(l.original_amount)-amt)<0.005) patch.original_amount=null;
+    try{ await writeOrThrow(sb.from('invoice_lines').update(patch).eq('id',lineId),'Correct amount'); }
+    catch(e){
+      // original_amount needs 2_add_invoice_lines_original_amount.sql; until it
+      // is run, save the amount on its own rather than fail.
+      if(!/original_amount/.test(e.message||'')) throw e;
+      delete patch.original_amount;
+      await writeOrThrow(sb.from('invoice_lines').update(patch).eq('id',lineId),'Correct amount');
+    }
+    Object.assign(l,patch);
     if(inv.status==='approved'){
       await writeOrThrow(sb.from('invoice_queue').update({status:'pending',approved_at:null,auto_checked_at:new Date().toISOString()}).eq('id',inv.id),'Re-open for approval');
       inv.status='pending'; inv.approved_at=null;
@@ -9038,6 +9097,431 @@ async function InvSaveAmount(lineId){
   }catch(e){
     invToast(e.message||'Could not save the amount.');
   }
+  InvRerenderKeepPicks();
+  try{ await InvLoadCounts(); }catch(_){}
+}
+// ═══ EXPO ADDITIONS (2026-10-07) ═════════════════════════════════════════
+// 1. INVOICE VIEWER — the invoice file sits beside the coding screen, so the
+//    vendor, amounts and coding can be checked against the paper before
+//    approving. It lives in its own panel (#invDoc) that InvRenderDetail never
+//    touches, so editing an amount or picking an account doesn't reload it.
+//    Signed links last an hour and are re-used while the same invoice is open.
+// 2. SEARCH — vendor, invoice # or amount, plus an invoice-date range, on any
+//    tab. "Check a list of invoice #s" takes a pasted list (e.g. from Fintech)
+//    and shows which ones Expo has and which are missing.
+// 3. ITEM LIBRARY — every item Expo knows for a client (the xtraCHEF seed plus
+//    everything learned since) with last price, last bought and GL account,
+//    from the expo_item_library view. Change an item's account here and Expo
+//    uses it from then on.
+// Screens: Inv.screen is 'list' | 'detail' | 'library' | 'check'. The
+// background poll only redraws the list when the list is what's showing.
+
+// ── shared ──────────────────────────────────────────────────────────────
+function InvRenderTabs(){
+  const el=document.getElementById('invTabs'); if(!el) return;
+  const lib=Inv.screen==='library';
+  el.innerHTML = INV_TABS.map(t=>'<button class="inv-tab '+(!lib&&t.key===Inv.tab?'on':'')+'" onclick="InvSetTab(\''+t.key+'\')">'+t.label+(t.where?'<span class="n">'+(Inv.counts[t.key]??'')+'</span>':'')+'</button>').join('')
+    +'<span class="inv-tab-sep"></span><button class="inv-tab '+(lib?'on':'')+'" onclick="InvShowLibrary()">Item Library</button>';
+}
+// Back from an invoice to wherever it was opened from.
+function InvBack(){
+  const to=Inv.returnTo; Inv.returnTo=null;
+  if(to==='library') return InvShowLibrary(true);
+  if(to==='check' && Inv.check && Inv.check.results) return InvRenderCheck();
+  return InvRenderList();
+}
+function invBackLabel(){ return Inv.returnTo==='library'?'← Back to item library':Inv.returnTo==='check'?'← Back to list check':'← Back to queue'; }
+// Called by the 4-second poll while something is processing.
+async function InvPollRefresh(){
+  await InvLoadCounts();
+  if(Inv.screen==='list') await InvRenderList();
+  else if(Inv.screen==='library'||Inv.screen==='check') InvRenderTabs();
+}
+// PostgREST or() value: double-quoted so spaces, dots and commas are literal.
+function invOrVal(s){ return '"*'+String(s).replace(/["\\]/g,'')+'*"'; }
+
+// ── 1. invoice viewer ───────────────────────────────────────────────────
+function invDocHidden(){ try{ return localStorage.getItem('bg_inv_doc')==='off'; }catch(_){ return false; } }
+function InvRenderShell(){
+  Inv.screen='detail';
+  const hide=invDocHidden();
+  document.getElementById('invBody').innerHTML='<div class="inv-split'+(hide?' nodoc':'')+'"><div id="invDetail"></div>'+(hide?'':'<aside class="inv-doc" id="invDoc"></aside>')+'</div>';
+  InvRenderDetail(); InvRenderDoc();
+}
+function InvToggleDoc(){
+  const hide=!invDocHidden();
+  try{ localStorage.setItem('bg_inv_doc', hide?'off':'on'); }catch(_){}
+  const split=document.querySelector('#invBody .inv-split'); if(!split) return;
+  split.classList.toggle('nodoc', hide);
+  let aside=document.getElementById('invDoc');
+  if(hide){ if(aside) aside.remove(); }
+  else if(!aside){ aside=document.createElement('aside'); aside.className='inv-doc'; aside.id='invDoc'; split.appendChild(aside); InvRenderDoc(); }
+  const sl=document.getElementById('invShowDoc'); if(sl) sl.style.display=hide?'':'none';
+}
+async function invFileUrl(filePath){
+  const m=String(filePath||'').match(/^([^/]+)\/(.+)$/); if(!m) return null;
+  const { data, error }=await sb.storage.from(m[1]).createSignedUrl(m[2], 3600);
+  if(error) throw error;
+  return data && data.signedUrl;
+}
+async function InvLoadDoc(inv){
+  const d=Inv.current&&Inv.current.doc; if(!d) return;
+  if(!inv.file_path){ d.loading=false; d.err=null; d.url=null; InvRenderDoc(); return; }
+  d.loading=true; d.err=null; InvRenderDoc();
+  try{ d.url=await invFileUrl(inv.file_path); if(!d.url) d.err='The stored file path isn’t one Expo recognises: '+inv.file_path; }
+  catch(e){ d.url=null; d.err='Couldn’t open the file: '+((e&&e.message)||e); }
+  d.loading=false; d.at=Date.now();
+  if(Inv.current && Inv.current.inv.id===inv.id) InvRenderDoc();
+}
+function InvRenderDoc(){
+  const el=document.getElementById('invDoc'); if(!el||!Inv.current) return;
+  const { inv, doc }=Inv.current;
+  const name=String(inv.file_path||'').split('/').pop();
+  const isImg=/\.(png|jpe?g|gif|webp)$/i.test(name);
+  const head='<div class="inv-doc-head"><b>Invoice</b><span class="inv-doc-name" title="'+invEsc(name)+'">'+invEsc(name||'')+'</span>'
+    +(doc&&doc.url?'<a class="inv-linkbtn" href="'+invEsc(doc.url)+'" target="_blank" rel="noopener">Open in new tab</a>':'')
+    +'<button class="inv-linkbtn" onclick="InvToggleDoc()">Hide</button></div>';
+  let body;
+  if(!inv.file_path) body='<div class="inv-doc-msg">No file is stored for this invoice.</div>';
+  else if(!doc||doc.loading) body='<div class="inv-doc-msg"><span class="spinner"></span> Loading the invoice…</div>';
+  else if(doc.err) body='<div class="inv-doc-msg">'+invEsc(doc.err)+' <button class="inv-linkbtn" onclick="InvLoadDoc(Inv.current.inv)">Try again</button></div>';
+  else if(isImg) body='<div class="inv-doc-imgwrap"><img src="'+invEsc(doc.url)+'" alt="Invoice image"></div>';
+  else body='<iframe src="'+invEsc(doc.url)+'#view=FitH" title="Invoice file"></iframe>';
+  el.innerHTML=head+body;
+}
+
+// ── 2. search ───────────────────────────────────────────────────────────
+function invSearchOn(){ const s=Inv.q||{}; return !!((s.text||'').trim()||s.from||s.to); }
+function InvSearchBarHtml(){
+  const s=Inv.q||{};
+  return '<div class="inv-search">'
+    +'<input id="invQ" class="inv-qin" type="search" placeholder="Search vendor, invoice # or amount" value="'+invEsc(s.text||'')+'" onkeydown="if(event.key===\'Enter\'){event.preventDefault();InvRunSearch()}">'
+    +'<span class="inv-note">Invoice date</span><input type="date" id="invQFrom" value="'+invEsc(s.from||'')+'"><span class="inv-note">to</span><input type="date" id="invQTo" value="'+invEsc(s.to||'')+'">'
+    +'<button class="btn btn-primary btn-sm" onclick="InvRunSearch()">Search</button>'
+    +(invSearchOn()?'<button class="btn btn-secondary btn-sm" onclick="InvClearSearch()">Clear</button>':'')
+    +'<span class="inv-search-gap"></span><button class="btn btn-secondary btn-sm" onclick="InvOpenCheck()">Check a list of invoice #s</button></div>';
+}
+function InvRunSearch(){
+  Inv.q={ text:(document.getElementById('invQ')||{}).value||'', from:(document.getElementById('invQFrom')||{}).value||'', to:(document.getElementById('invQTo')||{}).value||'' };
+  InvRenderList();
+}
+function InvClearSearch(){ Inv.q={text:'',from:'',to:''}; InvRenderList(); }
+function invApplySearch(q){
+  const s=Inv.q||{};
+  const t=(s.text||'').trim();
+  if(t){
+    const parts=['vendor.ilike.'+invOrVal(t),'invoice_number.ilike.'+invOrVal(t)];
+    const bare=t.replace(/[$,\s]/g,'');
+    if(/^-?\d*\.?\d+$/.test(bare)) parts.push('total.eq.'+Number(bare));
+    q=q.or(parts.join(','));
+  }
+  if(s.from) q=q.gte('invoice_date',s.from);
+  if(s.to) q=q.lte('invoice_date',s.to);
+  return q;
+}
+
+// Check a pasted list of invoice numbers against Expo.
+const invNormNo = s => String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').replace(/^0+(?=.)/,'');
+function invParseNos(text){
+  const lines=String(text||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  let toks;
+  if(lines.length<=1) toks=(lines[0]||'').split(/[\s,;]+/);
+  else toks=lines.map(l=>l.split(/[\t,;]/)[0].trim().split(/\s+/)[0]);
+  const seen=new Set(), out=[];
+  toks.forEach(t=>{ t=(t||'').trim(); if(!t||!/\d/.test(t)) return; const k=invNormNo(t); if(!k||seen.has(k)) return; seen.add(k); out.push(t); });
+  return out;
+}
+function InvOpenCheck(){
+  Inv.screen='check'; Inv.returnTo=null;
+  Inv.check=Inv.check||{ text:'', results:null };
+  InvRenderTabs();
+  InvRenderCheck();
+}
+function InvRenderCheck(){
+  Inv.screen='check'; InvRenderTabs();
+  const c=Inv.check||{text:'',results:null};
+  const who=Inv.client?(Inv.clients[Inv.client]||'this client'):'all clients';
+  let html='<button class="inv-back" onclick="InvRenderList()">← Back to queue</button>'
+    +'<div class="inv-checkbox"><h4>Check a list of invoice #s — '+invEsc(who)+'</h4>'
+    +'<div class="inv-note" style="margin-bottom:8px">Paste invoice numbers from Fintech, a vendor portal or a statement: one per line (or the first column copied from a spreadsheet), or separated by commas. Leading zeros and dashes are ignored. '+(Inv.client?'Only '+invEsc(who)+' is checked — switch to All clients to check everyone.':'Every client is checked.')+'</div>'
+    +'<textarea id="invCheckTxt" rows="6" placeholder="685714&#10;684562&#10;07153854">'+invEsc(c.text||'')+'</textarea>'
+    +'<div class="inv-bar" style="margin-top:8px"><button class="btn btn-primary" onclick="InvRunCheck()">Check</button><span class="inv-note" id="invCheckNote"></span></div></div>';
+  if(c.results) html+=InvCheckResultsHtml(c.results);
+  document.getElementById('invBody').innerHTML=html;
+}
+async function InvRunCheck(){
+  const ta=document.getElementById('invCheckTxt'); const text=ta?ta.value:'';
+  const nos=invParseNos(text);
+  Inv.check={ text, results:null };
+  const note=document.getElementById('invCheckNote');
+  if(!nos.length){ if(note) note.textContent='No invoice numbers found in that — each needs at least one digit.'; return; }
+  if(note) note.innerHTML='<span class="spinner"></span> Checking '+nos.length+' number'+(nos.length===1?'':'s')+'…';
+  let all=[];
+  try{
+    for(let from=0, i=0; i<50; i++, from+=1000){
+      let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status').not('invoice_number','is',null).order('created_at',{ascending:false}).range(from,from+999);
+      if(Inv.client) q=q.eq('client_id',Inv.client);
+      const { data, error }=await q; if(error) throw error;
+      all=all.concat(data||[]); if(!data||data.length<1000) break;
+    }
+  }catch(e){ if(note) note.textContent='Couldn’t check: '+((e&&e.message)||e); return; }
+  const rows=all.map(r=>({ ...r, _n:invNormNo(r.invoice_number) }));
+  const results=nos.map(no=>{
+    const k=invNormNo(no);
+    let hits=rows.filter(r=>r._n===k), how='exact';
+    // Some vendors add a suffix in Expo's copy (Fortune Fish "685714-26-09"
+    // for portal "685714"). Only for 5+ characters, so short numbers can't
+    // match by accident.
+    if(!hits.length && k.length>=5){ hits=rows.filter(r=>r._n.startsWith(k)); how='starts'; }
+    return { no, hits, how };
+  });
+  Inv.check.results=results;
+  InvRenderCheck();
+}
+function InvCheckResultsHtml(results){
+  const missing=results.filter(r=>!r.hits.length);
+  const found=results.length-missing.length;
+  const loose=results.filter(r=>r.hits.length&&r.how==='starts').length;
+  let html='<div class="inv-bar" style="margin-top:14px"><span class="inv-foot '+(missing.length?'bad':'ok')+'">'+(missing.length?'✕ ':'✓ ')+found+' of '+results.length+' found'+(missing.length?' — '+missing.length+' missing':'')+'</span>'
+    +(loose?'<span class="inv-note">'+loose+' matched only by the start of the number — check those.</span>':'')
+    +(missing.length?'<button class="btn btn-secondary btn-sm" onclick="InvCopyMissing()">Copy missing #s</button>':'')+'</div>';
+  const showClient=!Inv.client;
+  const rowsHtml=[];
+  // missing first — that's what you're looking for
+  results.slice().sort((a,b)=>(a.hits.length?1:0)-(b.hits.length?1:0)).forEach(r=>{
+    if(!r.hits.length){
+      rowsHtml.push('<tr class="inv-needs"><td class="inv-mono" style="font-weight:600">'+invEsc(r.no)+'</td><td colspan="'+(showClient?6:5)+'"><span class="inv-badge inv-b-dup">Not in Expo</span></td></tr>');
+      return;
+    }
+    r.hits.forEach((h,i)=>{
+      const b=INV_BADGE[h.status]||['inv-b-ready',h.status];
+      rowsHtml.push('<tr class="click" onclick="Inv.returnTo=\'check\';InvOpenInvoice(\''+h.id+'\')"><td class="inv-mono">'+(i?'':invEsc(r.no))+'</td>'
+        +'<td class="inv-mono inv-dim">'+invEsc(h.invoice_number)+(r.how==='starts'?' <span class="inv-tag">STARTS WITH</span>':'')+'</td>'
+        +'<td style="font-weight:600">'+invEsc(h.vendor||'—')+'</td><td class="inv-dim">'+invEsc(h.invoice_date||'—')+'</td><td class="inv-r inv-mono">'+invMoney(h.total)+'</td>'
+        +(showClient?'<td class="inv-dim">'+invEsc(Inv.clients[h.client_id]||'—')+'</td>':'')
+        +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span></td></tr>');
+    });
+  });
+  html+='<table class="inv-tbl"><thead><tr><th>You pasted</th><th>Expo invoice #</th><th>Vendor</th><th>Date</th><th class="inv-r">Total</th>'+(showClient?'<th>Client</th>':'')+'<th>Status</th></tr></thead><tbody>'+rowsHtml.join('')+'</tbody></table>';
+  return html;
+}
+async function InvCopyMissing(){
+  const r=(Inv.check&&Inv.check.results)||[];
+  const txt=r.filter(x=>!x.hits.length).map(x=>x.no).join('\n');
+  try{ await navigator.clipboard.writeText(txt); invToast('Copied '+txt.split('\n').length+' missing number(s).','ok'); }
+  catch(_){ invToast('Couldn’t copy — select them in the table instead.'); }
+}
+
+// ── 3. item library ─────────────────────────────────────────────────────
+const INV_LIB_PAGE = 100;
+const INV_LIB_SORT = {
+  bought:  [['last_bought',{ascending:false,nullsFirst:false}],['match_key',{ascending:true}]],
+  desc:    [['description',{ascending:true,nullsFirst:false}],['match_key',{ascending:true}]],
+  code:    [['match_key',{ascending:true}]],
+  vendor:  [['vendor',{ascending:true}],['match_key',{ascending:true}]],
+  gl:      [['gl_account',{ascending:true,nullsFirst:true}],['match_key',{ascending:true}]],
+};
+function invLibState(){ return Inv.lib || (Inv.lib={ text:'', filter:'all', sort:'bought', page:0, rows:[], total:0, open:null, edit:null, client:null }); }
+async function InvShowLibrary(keep){
+  Inv.screen='library'; Inv.returnTo=null;
+  InvRenderTabs();
+  const L=invLibState();
+  if(L.client!==Inv.client){ L.page=0; L.open=null; L.edit=null; L.client=Inv.client; keep=false; }
+  const body=document.getElementById('invBody');
+  if(!Inv.client){
+    body.innerHTML='<div class="empty">Pick a client to see its item library — use the client switcher at the top.</div>';
+    return;
+  }
+  body.innerHTML='<div class="inv-search">'
+    +'<input id="invLibQ" class="inv-qin" type="search" placeholder="Search item, code, vendor or GL" value="'+invEsc(L.text)+'" oninput="InvLibQueue()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();InvLibSearch()}">'
+    +'<select id="invLibFilter" onchange="InvLibSearch()">'
+    +[['all','All items'],['bought','Bought through Expo'],['uncoded','Not coded yet'],['never','Never bought through Expo']].map(o=>'<option value="'+o[0]+'" '+(L.filter===o[0]?'selected':'')+'>'+o[1]+'</option>').join('')+'</select>'
+    +'<select id="invLibSort" onchange="InvLibSearch()">'
+    +[['bought','Sort: last bought'],['desc','Sort: item'],['code','Sort: item code'],['vendor','Sort: vendor'],['gl','Sort: GL account']].map(o=>'<option value="'+o[0]+'" '+(L.sort===o[0]?'selected':'')+'>'+o[1]+'</option>').join('')+'</select>'
+    +'<span class="inv-search-gap"></span><span class="inv-note" id="invLibCount"></span></div>'
+    +'<div id="invLibTable"><div class="empty"><span class="spinner"></span> Loading items…</div></div>';
+  try{ L.acct=await InvGetAccounts(Inv.client); }catch(e){ L.acct={options:[],byId:{},nameByCode:{}}; }
+  if(keep && L.rows.length) InvLibRender(); else await InvLibLoad();
+}
+let invLibTimer=null;
+function InvLibQueue(){ clearTimeout(invLibTimer); invLibTimer=setTimeout(InvLibSearch,350); }
+function InvLibSearch(){
+  const L=invLibState();
+  L.text=(document.getElementById('invLibQ')||{}).value||'';
+  L.filter=(document.getElementById('invLibFilter')||{}).value||'all';
+  L.sort=(document.getElementById('invLibSort')||{}).value||'bought';
+  L.page=0; L.open=null; L.edit=null;
+  InvLibLoad();
+}
+function InvLibPage(d){ const L=invLibState(); L.page=Math.max(0,L.page+d); L.open=null; L.edit=null; InvLibLoad(); }
+async function InvLibLoad(){
+  const L=invLibState(); const client=Inv.client; if(!client) return;
+  const tbl=document.getElementById('invLibTable'); if(tbl) tbl.innerHTML='<div class="empty"><span class="spinner"></span> Loading items…</div>';
+  let q=sb.from('expo_item_library').select('*',{count:'exact'}).eq('client_id',client);
+  const t=(L.text||'').trim();
+  if(t) q=q.or(['description','match_key','vendor_item_code','vendor','last_vendor','gl_account'].map(c=>c+'.ilike.'+invOrVal(t)).join(','));
+  if(L.filter==='bought') q=q.gt('times_bought',0);
+  else if(L.filter==='never') q=q.eq('times_bought',0);
+  else if(L.filter==='uncoded') q=q.or('in_library.eq.false,gl_account.is.null');
+  (INV_LIB_SORT[L.sort]||INV_LIB_SORT.bought).forEach(([c,o])=>{ q=q.order(c,o); });
+  q=q.range(L.page*INV_LIB_PAGE, L.page*INV_LIB_PAGE+INV_LIB_PAGE-1);
+  const { data, error, count }=await q;
+  if(Inv.screen!=='library'||Inv.client!==client) return;
+  if(error){
+    const missing=/expo_item_library/.test(error.message||'')&&/(does not exist|schema cache|Could not find)/i.test(error.message||'');
+    if(tbl) tbl.innerHTML='<div class="empty">'+(missing?'The item library isn’t set up yet — run <b>1_create_expo_item_library_view.sql</b> in the Supabase SQL Editor, then reload.':'Couldn’t load items: '+invEsc(error.message))+'</div>';
+    return;
+  }
+  L.rows=data||[]; L.total=count||0;
+  InvLibRender();
+}
+function invLibAcctLabel(code){ const a=invLibState().acct||{}; return code?InvAcctLabel({byId:a.byId||{},nameByCode:a.nameByCode||{}},code):''; }
+function InvLibRender(){
+  const L=invLibState();
+  const tbl=document.getElementById('invLibTable'); if(!tbl) return;
+  const cnt=document.getElementById('invLibCount');
+  const first=L.total?L.page*INV_LIB_PAGE+1:0, last=Math.min(L.total,(L.page+1)*INV_LIB_PAGE);
+  if(cnt) cnt.textContent=L.total?(first+'–'+last+' of '+L.total.toLocaleString()+' item'+(L.total===1?'':'s')):'';
+  if(!L.rows.length){ tbl.innerHTML='<div class="empty">'+((L.text||L.filter!=='all')?'No items match.':'No items for this client yet.')+'</div>'; return; }
+  const opts=(L.acct&&L.acct.options)||[];
+  const rows=L.rows.map((r,i)=>{
+    const coded=r.in_library&&r.gl_account;
+    let gl;
+    if(L.edit===i){
+      gl='<span class="inv-amtedit" onclick="event.stopPropagation()"><select class="inv-acctsel" id="invLibSel">'
+        +'<option value="">Select account…</option>'+opts.map(o=>'<option value="'+invEsc(o.value)+'" '+(o.value===r.gl_account?'selected':'')+'>'+invEsc(o.label)+'</option>').join('')+'</select>'
+        +'<button class="btn btn-primary btn-sm" onclick="InvLibSaveGl('+i+')">Save</button><button class="btn btn-secondary btn-sm" onclick="InvLibEdit(null)">Cancel</button></span>';
+    } else {
+      gl='<button class="inv-amtbtn inv-glbtn" title="Change the account for this item" onclick="event.stopPropagation();InvLibEdit('+i+')">'
+        +(coded?'<span class="inv-coded">'+invEsc(invLibAcctLabel(r.gl_account))+'</span>':'<span class="inv-badge inv-b-review">Not coded yet</span>')+'</button>';
+    }
+    const price = r.last_unit_price!=null ? invMoney(r.last_unit_price)+(r.last_qty!=null&&Number(r.last_qty)!==1?' <small class="inv-dim">× '+Number(r.last_qty)+' = '+invMoney(r.last_amount)+'</small>':'')
+      : (r.last_amount!=null?invMoney(r.last_amount):'<span class="inv-dim">—</span>');
+    const vend = invEsc(r.vendor||'—')+(r.last_vendor&&r.vendor&&r.last_vendor!==r.vendor?'<br><small class="inv-dim">last from '+invEsc(r.last_vendor)+'</small>':'');
+    let tr='<tr class="click'+(L.open===i?' inv-open':'')+'" onclick="InvLibToggle('+i+')">'
+      +'<td>'+(r.description?'<span style="font-weight:600">'+invEsc(r.description)+'</span>':'<span class="inv-dim">No description yet</span>')+'</td>'
+      +'<td class="inv-mono">'+invEsc(r.vendor_item_code||r.match_key||'')+'</td>'
+      +'<td>'+vend+'</td>'
+      +'<td class="inv-r inv-mono">'+price+'</td>'
+      +'<td class="inv-dim">'+(r.last_bought?invEsc(r.last_bought)+(r.times_bought>1?' <small>· '+r.times_bought+'×</small>':''):'—')+'</td>'
+      +'<td>'+gl+'</td></tr>';
+    if(L.open===i) tr+='<tr class="inv-histrow"><td colspan="6" id="invLibHist"><span class="spinner"></span> Loading purchases…</td></tr>';
+    return tr;
+  }).join('');
+  const pager = L.total>INV_LIB_PAGE ? '<div class="inv-bar" style="margin-top:12px"><button class="btn btn-secondary btn-sm" '+(L.page?'':'disabled')+' onclick="InvLibPage(-1)">← Previous</button><button class="btn btn-secondary btn-sm" '+(last<L.total?'':'disabled')+' onclick="InvLibPage(1)">Next →</button><span class="inv-note">Page '+(L.page+1)+' of '+Math.ceil(L.total/INV_LIB_PAGE)+'</span></div>' : '';
+  tbl.innerHTML='<table class="inv-tbl"><thead><tr><th>Item</th><th>Item code</th><th>Vendor</th><th class="inv-r">Last price</th><th>Last bought</th><th>GL account</th></tr></thead><tbody>'+rows+'</tbody></table>'+pager;
+  if(L.open!=null) InvLibLoadHist(L.open);
+}
+function InvLibEdit(i){ const L=invLibState(); L.edit=i; InvLibRender(); const s=document.getElementById('invLibSel'); if(s) s.focus(); }
+function InvLibToggle(i){ const L=invLibState(); if(L.edit!=null) return; L.open=(L.open===i?null:i); InvLibRender(); }
+async function InvLibLoadHist(i){
+  const L=invLibState(); const r=L.rows[i]; const cell=document.getElementById('invLibHist'); if(!r||!cell) return;
+  const { data, error }=await sb.from('invoice_lines')
+    .select('quantity,unit_price,amount,raw_description,invoice_queue!inner(id,client_id,vendor,invoice_number,invoice_date,status,created_at)')
+    .eq('match_key',r.match_key).eq('invoice_queue.client_id',Inv.client).eq('is_charge',false).limit(500);
+  const c2=document.getElementById('invLibHist'); if(!c2||L.open!==i) return;
+  if(error){ c2.textContent='Couldn’t load purchases: '+error.message; return; }
+  const hist=(data||[]).map(x=>({ ...x, inv:x.invoice_queue }))
+    .sort((a,b)=>String(b.inv.invoice_date||b.inv.created_at).localeCompare(String(a.inv.invoice_date||a.inv.created_at)));
+  const mapNote = r.in_library ? 'Learned under vendor “'+invEsc(r.vendor)+'”'+(r.updated_at?' · last changed '+invEsc(String(r.updated_at).slice(0,10)):'')+'. ' : 'Not in the library yet — pick an account to add it. ';
+  if(!hist.length){ c2.innerHTML='<div class="inv-note">'+mapNote+'Not bought through Expo yet — this item came from the xtraCHEF item library.</div>'; return; }
+  c2.innerHTML='<div class="inv-note" style="margin-bottom:6px">'+mapNote+hist.length+' purchase'+(hist.length===1?'':'s')+' in Expo. Click one to open the invoice.</div>'
+    +'<table class="inv-tbl inv-histtbl"><thead><tr><th>Date</th><th>Vendor</th><th>Invoice #</th><th>Description on invoice</th><th class="inv-r">Qty</th><th class="inv-r">Unit price</th><th class="inv-r">Amount</th><th>Status</th></tr></thead><tbody>'
+    +hist.map(h=>{ const b=INV_BADGE[h.inv.status]||['inv-b-ready',h.inv.status];
+      return '<tr class="click" onclick="event.stopPropagation();Inv.returnTo=\'library\';InvOpenInvoice(\''+h.inv.id+'\')"><td class="inv-dim">'+invEsc(h.inv.invoice_date||String(h.inv.created_at||'').slice(0,10))+'</td><td>'+invEsc(h.inv.vendor||'—')+'</td><td class="inv-mono">'+invEsc(h.inv.invoice_number||'—')+'</td><td>'+invEsc(h.raw_description||'')+'</td><td class="inv-r inv-mono">'+(h.quantity??'')+'</td><td class="inv-r inv-mono">'+(h.unit_price!=null?invMoney(h.unit_price):'—')+'</td><td class="inv-r inv-mono">'+invMoney(h.amount)+'</td><td><span class="inv-badge '+b[0]+'">'+b[1]+'</span></td></tr>'; }).join('')
+    +'</tbody></table>';
+}
+async function InvLibSaveGl(i){
+  const L=invLibState(); const r=L.rows[i]; if(!r) return;
+  const sel=document.getElementById('invLibSel'); const code=sel?sel.value:'';
+  if(!code){ invToast('Pick an account first.'); return; }
+  if(r.in_library && code===r.gl_account){ InvLibEdit(null); return; }
+  const a=L.acct||{}; const qid=a.byId&&a.byId[code]?a.byId[code].id:null;
+  const now=new Date().toISOString();
+  try{
+    if(r.in_library){
+      await writeOrThrow(sb.from('item_map').update({gl_account:code,qbo_account_id:qid,updated_at:now}).eq('id',r.item_id),'Change item account');
+    } else {
+      await writeOrThrow(sb.from('item_map').insert({client_id:Inv.client,vendor:r.vendor||r.last_vendor||'',match_key:r.match_key,gl_account:code,qbo_account_id:qid,updated_at:now}),'Add item to library');
+    }
+  }catch(e){ invToast(e.message||'Couldn’t save.'); return; }
+  let spread=null;
+  try{ spread=await InvLibSpread(Inv.client, r.match_key, code, qid); }catch(e){ console.warn('[expo] library spread', e); }
+  invToast((r.in_library?'Account changed':'Added to the library')+' — Expo will code this item to '+invLibAcctLabel(code)+' from now on.'+invSpreadCodeNote(spread),'ok');
+  L.edit=null;
+  await InvLibLoad();
+}
+// Codes this item on open invoices where it is still waiting for an account —
+// the same thing saving a line on an invoice does. Lines already coded are
+// left alone, and nothing already approved or posted changes.
+async function InvLibSpread(clientId, mk, code, qid){
+  const { data:open }=await sb.from('invoice_queue').select('id,status').eq('client_id',clientId).in('status',['needs_review','pending']).limit(1000);
+  const openIds=(open||[]).map(o=>o.id); if(!openIds.length) return { lines:0, invoices:0 };
+  const { data:todo }=await sb.from('invoice_lines').select('id,invoice_id').in('invoice_id',openIds).eq('match_key',mk).eq('needs_review',true).limit(2000);
+  if(!todo||!todo.length) return { lines:0, invoices:0 };
+  await writeOrThrow(sb.from('invoice_lines').update({final_account:code,qbo_account_id:qid,needs_review:false}).in('id',todo.map(l=>l.id)),'Code matching lines');
+  const touched=[...new Set(todo.map(l=>l.invoice_id))];
+  const { data:still }=await sb.from('invoice_lines').select('invoice_id').in('invoice_id',touched).eq('needs_review',true).limit(5000);
+  const stillSet=new Set((still||[]).map(x=>x.invoice_id));
+  const statusOf={}; (open||[]).forEach(o=>statusOf[o.id]=o.status);
+  const done=touched.filter(id=>!stillSet.has(id)&&statusOf[id]==='needs_review');
+  if(done.length) await sb.from('invoice_queue').update({status:'pending',auto_checked_at:null,review_reason:null}).in('id',done);
+  try{ await InvLoadCounts(); InvRenderTabs(); }catch(_){}
+  return { lines:todo.length, invoices:touched.length, ready:done.length };
+}
+// ═══ end EXPO ADDITIONS ══════════════════════════════════════════════════
+
+// ── header corrections (2026-10-07) ─────────────────────────────────────
+// Invoice #, Date, Tax and Total can be corrected the same way as a line
+// amount — click, fix, Save — until the invoice is pushed. An Approved invoice
+// drops back to Ready so it is approved again on the corrected figures.
+const INV_HDR = {
+  invoice_number:{ label:'Invoice #', type:'text' },
+  invoice_date:  { label:'Date',      type:'date' },
+  tax:           { label:'Tax',       type:'money' },
+  total:         { label:'Total',     type:'money' },
+};
+function invHdrCell(inv, field, shown){
+  if(inv.status==='pushed'||!INV_HDR[field]) return shown;
+  return '<button class="inv-amtbtn" title="Click to correct" onclick="InvEditHeader(\''+field+'\')">'+shown+'</button>';
+}
+function InvEditHeader(field){
+  const { inv }=Inv.current; const f=INV_HDR[field]; if(!f) return;
+  const el=document.getElementById('invHdr-'+field); if(!el) return;
+  const v=inv[field]==null?'':(f.type==='money'?Number(inv[field]).toFixed(2):String(inv[field]));
+  const typ=f.type==='date'?'date':f.type==='money'?'number" step="0.01" inputmode="decimal':'text';
+  el.innerHTML='<span class="inv-amtedit"><input class="inv-amtin'+(f.type==='text'?' inv-hdrtxt':'')+'" type="'+typ+'" id="invHdrIn" value="'+invEsc(v)+'" '
+    +'onkeydown="if(event.key===\'Enter\'){event.preventDefault();InvSaveHeader(\''+field+'\')}else if(event.key===\'Escape\'){InvRerenderKeepPicks()}">'
+    +'<button class="btn btn-primary btn-sm" onclick="InvSaveHeader(\''+field+'\')">Save</button>'
+    +'<button class="btn btn-secondary btn-sm" onclick="InvRerenderKeepPicks()">Cancel</button></span>';
+  const inp=document.getElementById('invHdrIn'); if(inp){ inp.focus(); if(inp.select) try{ inp.select(); }catch(_){} }
+}
+async function InvSaveHeader(field){
+  const { inv }=Inv.current; const f=INV_HDR[field]; if(!f) return;
+  const inp=document.getElementById('invHdrIn'); if(!inp) return;
+  let val=String(inp.value||'').trim();
+  if(f.type==='money'){
+    const raw=val.replace(/[$,\s]/g,'');
+    if(raw===''){ val=null; }
+    else if(isNaN(Number(raw))){ invToast('Enter an amount, like 341.11.'); inp.focus(); return; }
+    else val=Math.round(Number(raw)*100)/100;
+  } else if(f.type==='date'){
+    if(val && !/^\d{4}-\d{2}-\d{2}$/.test(val)){ invToast('Pick a date.'); inp.focus(); return; }
+    val=val||null;
+  } else {
+    val=val||null;
+  }
+  const old=inv[field]==null?null:(f.type==='money'?Math.round(Number(inv[field])*100)/100:String(inv[field]));
+  if(old===val){ InvRerenderKeepPicks(); return; }
+  inp.disabled=true;
+  try{
+    const patch={}; patch[field]=val;
+    if(inv.status==='approved'){ patch.status='pending'; patch.approved_at=null; patch.auto_checked_at=new Date().toISOString(); }
+    await writeOrThrow(sb.from('invoice_queue').update(patch).eq('id',inv.id),'Correct '+f.label);
+    Object.assign(inv,patch);
+    const show=x=>x==null?'blank':(f.type==='money'?invMoney(x):x);
+    invToast(f.label+' changed from '+show(old)+' to '+show(val)+'.'+(patch.status==='pending'?' Approve it again when ready.':''),'ok');
+  }catch(e){ invToast(e.message||'Could not save.'); }
   InvRerenderKeepPicks();
   try{ await InvLoadCounts(); }catch(_){}
 }
@@ -9508,7 +9992,9 @@ function InvStartPolling(){
     let q=sb.from('invoice_queue').select('id',{count:'exact',head:true}).eq('status','processing');
     if(Inv.client) q=q.eq('client_id',Inv.client);
     const { count }=await q;
-    await InvRefresh();
+    // Only redraws the list when the list is showing — the poll used to replace
+    // an open invoice with the queue every 4 seconds while anything processed.
+    await InvPollRefresh();
     if(!count){ clearInterval(invPollTimer); invPollTimer=null; }
   },4000);
 }
