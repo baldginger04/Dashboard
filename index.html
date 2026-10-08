@@ -7308,7 +7308,7 @@ function renderAutoCalendar(){
   for (let d = 1; d <= daysInMonth; d++) {
     const date = new Date(year, month, d), dow = date.getDay();
     const isToday = date.getTime() === today.getTime();
-    const runs = AUTO_SCHEDULE.filter(e => (e.daily || (Array.isArray(e.dow) && e.dow.includes(dow))) && (!autoVendorFilter || e.vendor === autoVendorFilter));
+    const runs = AUTO_SCHEDULE.filter(e => (e.daily || (e.oddDays && d % 2 === 1) || (Array.isArray(e.dow) && e.dow.includes(dow))) && (!autoVendorFilter || e.vendor === autoVendorFilter));
     cells += `<div class="auto-cal-cell${isToday ? ' is-today' : ''}"><span class="auto-cal-daynum">${d}</span>${runs.map(chipFor).join('')}</div>`;
   }
   const trail = (7 - ((startDow + daysInMonth) % 7)) % 7;
@@ -7321,24 +7321,30 @@ async function loadAutomation() {
   const board = document.getElementById('autoBoard');
   if (!board) return;
   try {
-    const { data, error } = await sb
-      .from('automation_runs')
-      .select('pipeline,stage,status,detail,invoice_count,ran_at')
-      .order('ran_at', { ascending: false })
-      .limit(500);
-    if (error) throw error;
+    // Two reads: the frequent Apps Script heartbeats (hourly / every 15 min)
+    // would otherwise push the every-other-day and weekly portal runs out of
+    // a single row limit.
+    const cols = 'pipeline,stage,status,detail,invoice_count,ran_at';
+    const since = new Date(Date.now() - 15 * 86400000).toISOString();
+    const [scripts, portals] = await Promise.all([
+      sb.from('automation_runs').select(cols).neq('source', 'portal-fetch').order('ran_at', { ascending: false }).limit(300),
+      sb.from('automation_runs').select(cols).eq('source', 'portal-fetch').gte('ran_at', since).order('ran_at', { ascending: false }).limit(2000),
+    ]);
+    if (scripts.error) throw scripts.error;
+    if (portals.error) throw portals.error;
 
-    // Keep only the most recent row per pipeline.
-    const latest = {};
-    (data || []).forEach(r => { if (!latest[r.pipeline]) latest[r.pipeline] = r; });
+    // Group by pipeline (newest first).
+    const byPipe = {};
+    [...(scripts.data || []), ...(portals.data || [])].forEach(r => (byPipe[r.pipeline] = byPipe[r.pipeline] || []).push(r));
+    Object.values(byPipe).forEach(a => a.sort((x, y) => new Date(y.ran_at) - new Date(x.ran_at)));
 
     let ok = 0, warn = 0, down = 0;
-    const sections = { 'Delivery': [], 'Vendor ingestion': [], 'Pending': [] };
+    const sections = {};
 
     AUTO_PIPELINES.forEach(p => {
-      const row = latest[p.key];
+      const row = autoLatestRun(p, byPipe);
       let cls = 's-idle', ageTxt = '', stale = false;
-      if (!p.pending && row) {
+      if (row) {
         const ageH = (Date.now() - new Date(row.ran_at)) / 3600000;
         stale = ageH > p.staleH;
         ageTxt = relTime(row.ran_at);
@@ -7355,9 +7361,11 @@ async function loadAutomation() {
     document.getElementById('am-down').textContent = down;
 
     let out = '';
-    ['Delivery', 'Vendor ingestion', 'Pending'].forEach(sec => {
-      if (!sections[sec] || !sections[sec].length) return;
-      out += `<div class="auto-section-title">${sec}</div><div class="auto-grid">${sections[sec].join('')}</div>`;
+    AUTO_SECTIONS.forEach(sec => {
+      if (!sections[sec.name] || !sections[sec.name].length) return;
+      out += `<div class="auto-section-title">${autoEsc(sec.name)}</div>` +
+        (sec.note ? `<div style="font-size:12px;color:var(--text3);margin:-4px 0 8px">${autoEsc(sec.note)}</div>` : '') +
+        `<div class="auto-grid">${sections[sec.name].join('')}</div>`;
     });
     board.innerHTML = out || '<div class="empty">No automation data yet — pipelines appear here as they run.</div>';
   } catch (e) {
@@ -7365,58 +7373,89 @@ async function loadAutomation() {
   }
 }
 
+// One card per pipeline. portal-fetch logs one row PER CLIENT on each run, so
+// a card combines every row from the latest run (rows within 3 hours of the
+// newest) and shows the worst status among them, the clients that need a look,
+// and the total files saved.
+function autoLatestRun(p, byPipe) {
+  const rows = [];
+  [p.key, ...(p.alias || [])].forEach(k => (byPipe[k] || []).forEach(r => rows.push(r)));
+  if (!rows.length) return null;
+  rows.sort((x, y) => new Date(y.ran_at) - new Date(x.ran_at));
+  if (!p.perClient) return { ...rows[0], detail: String(rows[0].detail || '').split('\n')[0] };
+  const newest = new Date(rows[0].ran_at).getTime();
+  // Newest row per client within the run (a client re-run by hand counts once).
+  // The client is how each row's detail starts: "vanhorns [live]: …",
+  // "radius ← Farm to Table [live]: …", "dehy-garnish: login failed …".
+  const seen = new Set(), run = [];
+  rows.filter(r => newest - new Date(r.ran_at).getTime() <= 3 * 3600000).forEach(r => {
+    const who = (String(r.detail || '').match(/^(.+?)(?: \[|:)/) || [, r.detail])[1];
+    if (seen.has(who)) return;
+    seen.add(who); run.push(r);
+  });
+  const rank = { error: 2, partial: 1 };
+  const worst = run.reduce((w, r) => ((rank[r.status] || 0) > (rank[w.status] || 0) ? r : w), run[0]);
+  const bad = run.filter(r => r.status === 'error' || r.status === 'partial');
+  const firstLine = r => String(r.detail || '').split('\n')[0];
+  const detail = run.length === 1 ? firstLine(run[0])
+    : `${run.length} clients — ${run.length - bad.length} ok` + (bad.length ? `, ${bad.length} need a look: ` + bad.map(firstLine).join(' · ') : '');
+  return { ...worst, ran_at: rows[0].ran_at, detail, invoice_count: run.reduce((n, r) => n + (r.invoice_count || 0), 0) };
+}
+
 // The full set of pipelines we expect to hear from. Listing them here (rather
 // than only rendering whatever rows exist) means a pipeline that has gone
 // SILENT still shows up — which is exactly the failure we want to catch.
 // key must match the label each script passes to logRun/logRun2 exactly.
 // staleH = hours of silence past which we flag it overdue (cadence + buffer).
+const AUTO_SECTIONS = [
+  { name: 'Delivery', note: 'Apps Script — sends Drive invoices on to XtraChef / Ramp, and Audubon bills to QuickBooks.' },
+  { name: 'Vendor portals', note: 'portal-fetch on GitHub, every other day ~5:47am. Downloads only invoices that are not already in the client’s QuickBooks.' },
+  { name: 'Browser tasks', note: 'Claude scheduled tasks in Ed’s Claude app browser (Mac must be awake; Ed signs in to BILL, Ecolab and Ben E. Keith first).' },
+];
 const AUTO_PIPELINES = [
   { key: 'XtraChef Delivery', section: 'Delivery', cadence: 'hourly',  staleH: 3 },
   { key: 'Audubon → QBO',     section: 'Delivery', cadence: '~15 min', staleH: 1 },
 
-  { key: 'Mr. Greens',     section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
-  { key: 'Segovia',        section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
-  { key: 'UNFI',           section: 'Vendor ingestion', cadence: 'daily',   staleH: 30 },
-  { key: 'US Foods',       section: 'Vendor ingestion', cadence: '2×/week', staleH: 120 },
-  { key: 'Kehe',           section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Fintech',        section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Faire',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Slow Dough',     section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'ALSCO',          section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
-  { key: 'Skyvern Direct', section: 'Vendor ingestion', cadence: 'weekly',  staleH: 200 },
+  // perClient: one heartbeat row per client per run — the card combines them.
+  { key: 'Mr. Greens (portal-fetch)',     label: 'Mr. Greens',     section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'Fintech (portal-fetch)',        label: 'Fintech',        section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'US Foods (portal-fetch)',       label: 'US Foods',       section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'Wholesail (portal-fetch)',      label: 'Wholesail (Farm to Table, Barton Springs Mill, Green Air, Quality Seafood)', section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'PFG (portal-fetch)',            label: 'PFG',            section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'Segovia (portal-fetch)',        label: 'Segovia',        section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'Allen Brothers (portal-fetch)', label: 'Allen Brothers', section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'ALSCO (portal-fetch)',          label: 'ALSCO',          section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'KeHE (portal-fetch)',           label: 'KeHE',           section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+  { key: 'Labatt (portal-fetch)',         label: 'Labatt',         section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+
+  { key: 'Faire (portal-fetch)',            label: 'Faire',               section: 'Browser tasks', cadence: 'every other day', staleH: 54,  perClient: true },
+  { key: 'Slow Dough (portal-fetch)',       label: 'Slow Dough (BILL)',   section: 'Browser tasks', cadence: 'Mondays',         staleH: 200, perClient: true },
+  { key: 'Ecolab check (portal-fetch)',     label: 'Ecolab check',        section: 'Browser tasks', cadence: 'Mondays',         staleH: 200 },
+  { key: 'Ben E. Keith check (portal-fetch)', label: 'Ben E. Keith check', section: 'Browser tasks', cadence: 'Mon + Tue',      staleH: 200, alias: ['Ben E. Keith (portal-fetch)'] },
 ];
 
 // ── Automation Calendar schedule ─────────────────────────
 // Every scheduled run on the Run Schedule calendar, color-coded by vendor.
-//   daily: true  -> shows on every day
-//   dow: [n,...] -> shows on those weekdays (0=Sun, 1=Mon, ... 6=Sat)
-// Days come from the Apps Script triggers: Kehe Mon, Fintech Tue,
-// US Foods Van Horn's Wed / Teddy's Thu, ALSCO Thu, Faire Fri,
-// Slow Dough Sun, Skyvern Direct weekly Mon. Edit a label or move a run here.
+//   daily: true     -> shows on every day
+//   oddDays: true   -> shows on odd days of the month (GitHub cron 1-31/2)
+//   dow: [n,...]    -> shows on those weekdays (0=Sun, 1=Mon, ... 6=Sat)
+// Updated 10/8/26: Skyvern retired. Vendor portals run from portal-fetch on
+// GitHub (odd days, ~5:47am CT); Faire, Slow Dough, Ecolab and Ben E. Keith
+// run as Claude scheduled tasks in Ed's browser.
 const AUTO_VENDOR_COLORS = {
-  'Mr. Greens':     '#16A34A',
-  'Segovia':        '#65A30D',
-  'UNFI':           '#7C3AED',
-  'US Foods':       '#DC2626',
-  'Kehe':           '#EA580C',
-  'Fintech':        '#4F46E5',
+  'Vendor portals':  '#16A34A',
   'Faire':          '#DB2777',
   'Slow Dough':     '#B45309',
-  'ALSCO':          '#0891B2',
-  'Skyvern Direct': '#C026D3',
+  'Ecolab':         '#0891B2',
+  'Ben E. Keith':   '#DC2626',
 };
 const AUTO_SCHEDULE = [
-  { label: 'Mr. Greens — All Vendors',      vendor: 'Mr. Greens',     daily: true },
-  { label: 'Segovia — All Clients',         vendor: 'Segovia',        daily: true },
-  { label: 'UNFI — All Clients',            vendor: 'UNFI',           daily: true },
-  { label: 'Kehe — Radius',                 vendor: 'Kehe',           dow: [1] },
-  { label: 'Skyvern Direct — Segovia/UNFI', vendor: 'Skyvern Direct', dow: [1] },
-  { label: 'Fintech — All Clients',         vendor: 'Fintech',        dow: [2] },
-  { label: "US Foods — Van Horn's",         vendor: 'US Foods',       dow: [3] },
-  { label: "US Foods — Teddy's",            vendor: 'US Foods',       dow: [4] },
-  { label: 'ALSCO — All Clients',           vendor: 'ALSCO',          dow: [4] },
-  { label: 'Faire — Radius + Tiny Grocer',  vendor: 'Faire',          dow: [5] },
-  { label: 'Slow Dough — All Clients',      vendor: 'Slow Dough',     dow: [0] },
+  { label: 'Vendor portals — Mr. Greens, Fintech, US Foods, Wholesail, PFG, Segovia, Allen Bros, ALSCO, KeHE, Labatt (~5:47am)', vendor: 'Vendor portals', oddDays: true },
+  { label: 'Faire — Radius (6:20am)',                 vendor: 'Faire',        oddDays: true },
+  { label: 'Slow Dough (BILL) — 9:30am',              vendor: 'Slow Dough',   dow: [1] },
+  { label: 'Ecolab check — 9:35am',                   vendor: 'Ecolab',       dow: [1] },
+  { label: "Ben E. Keith check — Small's (9:45am)",   vendor: 'Ben E. Keith', dow: [1] },
+  { label: 'Ben E. Keith check — Nickel City Austin (9:30am)', vendor: 'Ben E. Keith', dow: [2] },
 ];
 
 function autoEsc(s) {
@@ -7426,7 +7465,7 @@ function autoEsc(s) {
 }
 
 function autoCardHtml(p, row, cls, ageTxt, stale) {
-  const name = autoEsc(p.key);
+  const name = autoEsc(p.label || p.key);
   if (p.pending) {
     return `<div class="auto-card s-idle"><div class="auto-card-top"><span class="auto-dot"></span><span class="auto-name">${name}</span><span class="auto-age">not wired yet</span></div><div class="auto-detail" style="color:var(--text3)">Railway Gmail watcher — heartbeat coming once its code is added.</div><div class="auto-meta"><span class="auto-pill">${autoEsc(p.cadence)}</span></div></div>`;
   }
