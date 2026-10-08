@@ -1019,6 +1019,63 @@
     .arch-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#F4F2EC;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin:-.5rem 0 1.25rem;font-size:13px;color:var(--text2)}
     .arch-pill{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;padding:3px 9px;border-radius:999px;background:#ECEAE3;color:var(--text3)}
     #archToggleBtn[aria-pressed="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+    /* ── Review Queue (10/8/26) ── */
+    #page-rq .rq-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+    #page-rq .rq-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
+    #page-rq .rq-field{display:flex;flex-direction:column;gap:.25rem}
+    #page-rq .rq-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-rq select,#page-rq input[type=text]{font:inherit;font-size:13px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:7px;background:var(--bg)}
+    #page-rq .rq-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.5rem 1.05rem;cursor:pointer}
+    #page-rq .rq-btn:hover{filter:brightness(.93)}
+    #page-rq button:disabled{opacity:.45;cursor:default}
+    #page-rq .rq-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-rq .rq-status.err,#page-rq .rq-err{color:var(--red)}
+    #page-rq .rq-runmeta{font-size:11.5px;color:var(--text3);margin-top:.35rem}
+    #page-rq .rq-views,#page-rq .rq-filters{display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-bottom:.9rem}
+    #page-rq .rq-chip{font:inherit;font-size:13px;font-weight:500;padding:.42rem .8rem;border:1px solid var(--border2);border-radius:999px;background:var(--bg);cursor:pointer;color:var(--text2)}
+    #page-rq .rq-chip[aria-pressed=true]{background:var(--navy);border-color:var(--navy);color:#fff}
+    #page-rq .rq-dim{color:var(--text3);font-size:11.5px}
+    #page-rq .rq-toggle{display:flex;gap:.4rem;align-items:center;font-size:12px;color:var(--text2);margin-bottom:.6rem;cursor:pointer}
+    #page-rq .rq-table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+    #page-rq .rq-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;padding:.5rem .6rem;border-bottom:1px solid var(--border2)}
+    #page-rq .rq-table td{padding:.45rem .6rem;border-bottom:1px solid var(--border);vertical-align:top}
+    #page-rq .rq-table tr:last-child td{border-bottom:none}
+    #page-rq .rq-table .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #page-rq .rq-click{cursor:pointer}
+    #page-rq .rq-click:hover td{background:var(--bg3)}
+    #page-rq .rq-item{background:var(--bg2);border:1px solid var(--border);border-left-width:3px;border-radius:9px;padding:.75rem .9rem;margin-bottom:.55rem}
+    #page-rq .rq-item.sev-high{border-left-color:var(--red)}
+    #page-rq .rq-item.sev-medium{border-left-color:var(--yellow-border)}
+    #page-rq .rq-item.is-staged{background:var(--green-bg)}
+    #page-rq .rq-item.is-done{opacity:.75}
+    #page-rq .rq-head{display:flex;gap:.5rem;align-items:baseline;flex-wrap:wrap}
+    #page-rq .rq-line1{font-size:13px;color:var(--text);flex:1;min-width:220px}
+    #page-rq .rq-amt{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+    #page-rq .rq-reason{font-size:13px;color:var(--text);margin-top:.3rem}
+    #page-rq .rq-memo{font-size:11.5px;color:var(--text3);margin-top:.25rem}
+    #page-rq .rq-tag{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.15rem .5rem;white-space:nowrap}
+    #page-rq .t-uncategorized{background:var(--red-bg);color:var(--red)}
+    #page-rq .t-missing_payee{background:var(--blue-bg);color:var(--blue)}
+    #page-rq .t-unusual_account{background:var(--yellow-bg);color:var(--yellow)}
+    #page-rq .t-duplicate{background:var(--purple-bg);color:var(--purple)}
+    #page-rq .t-balance_sheet{background:var(--bg3);color:var(--text2)}
+    #page-rq .t-mute{background:var(--green-bg);color:var(--green)}
+    #page-rq .t-wont{background:var(--yellow-bg);color:var(--yellow)}
+    #page-rq .rq-sev.high{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);border:1px solid var(--red);border-radius:999px;padding:.05rem .4rem}
+    #page-rq .rq-fix{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap;margin-top:.55rem}
+    #page-rq .rq-fix label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-rq .rq-fix input[type=text]{min-width:260px;flex:0 1 380px}
+    #page-rq .rq-staged{font-size:12px;color:var(--green);font-weight:600;margin-top:.4rem}
+    #page-rq .rq-acts{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.55rem}
+    #page-rq .rq-act{font:inherit;font-size:11.5px;font-weight:600;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:.28rem .6rem;cursor:pointer;color:var(--text2);text-decoration:none}
+    #page-rq .rq-act:hover{border-color:var(--accent);color:var(--accent)}
+    #page-rq .rq-act.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    #page-rq .rq-form{margin-top:.55rem;padding:.6rem;background:var(--bg3);border-radius:7px;display:flex;flex-direction:column;gap:.4rem}
+    #page-rq .rq-bulk{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 .9rem;padding:.6rem .75rem;background:var(--bg3);border-radius:9px;position:sticky;top:0;z-index:5}
+    #page-rq .rq-res{font-size:12.5px;padding:.6rem .75rem;border-radius:9px;margin-bottom:.75rem}
+    #page-rq .rq-res.good{background:var(--green-bg);color:var(--green);border:1px solid var(--green-border)}
+    #page-rq .rq-res.warn{background:var(--yellow-bg);color:var(--yellow);border:1px solid var(--yellow-border)}
+    #page-rq .rq-res ul{margin:.4rem 0 .2rem 1.1rem}
     #page-vendoraudit .va-cfg{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.75rem}
     #page-vendoraudit .va-cfg label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;margin-bottom:.2rem}
     #page-vendoraudit .va-cfg input{width:100%}
@@ -1187,8 +1244,10 @@
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Expo</div>
         <div class="nav-item" onclick="showPage('syncmon')" id="nav-syncmon"><span>📆</span> Daily Sales Sync Monitor</div>
         <div class="nav-item" onclick="showPage('salesmap')" id="nav-salesmap"><span>🔗</span> Sales Mapping</div>
-        <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
-        <div class="nav-item" onclick="showPage('mv')" id="nav-mv"><span>🏷️</span> Missing Vendors</div>
+        <div class="nav-item" onclick="showPage('rq')" id="nav-rq"><span>✅</span> Review Queue <span class="nav-badge" id="rqBadge" style="display:none">0</span></div>
+        <!-- Vendor Audit and Missing Vendors retired 10/8/26 (replaced by Review Queue); hidden, code left in place -->
+        <div class="nav-item" onclick="showPage('vendoraudit')" id="nav-vendoraudit" style="display:none"><span>🔎</span> Vendor Audit <span class="nav-badge" id="vendorAuditBadge" style="display:none">0</span></div>
+        <div class="nav-item" onclick="showPage('mv')" id="nav-mv" style="display:none"><span>🏷️</span> Missing Vendors</div>
         <div class="nav-item" onclick="showPage('w9')" id="nav-w9"><span>📄</span> W-9 Audit</div>
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
@@ -1532,6 +1591,30 @@
           <div style="font-weight:600;font-size:14px;margin-bottom:.6rem">Backfill a range of months</div>
           <div id="laBackfill"></div>
         </div>
+      </div>
+
+      <div class="page" id="page-rq">
+        <div class="page-header"><div><div class="page-title">Review Queue</div><div class="page-sub">Transactions from last month and this month that need a second look. Fixes write straight to QuickBooks.</div></div></div>
+        <div class="rq-views">
+          <button class="rq-chip" id="rqView_queue" aria-pressed="true" onclick="RQ.setView('queue')">Queue</button>
+          <button class="rq-chip" id="rqView_mutes" aria-pressed="false" onclick="RQ.setView('mutes')">Mutes &amp; exceptions</button>
+          <button class="rq-chip" id="rqView_log" aria-pressed="false" onclick="RQ.setView('log')">Changes written</button>
+        </div>
+        <div class="rq-panel">
+          <div class="rq-controls">
+            <div class="rq-field"><label for="rqClient">Client</label>
+              <select id="rqClient" style="min-width:260px"></select></div>
+            <button class="rq-btn" id="rqScanBtn" onclick="RQ.scan()" disabled>Scan now</button>
+          </div>
+          <div class="rq-runmeta" id="rqRunMeta"></div>
+          <div class="rq-status" id="rqStatus"></div>
+        </div>
+        <div id="rqResult"></div>
+        <div id="rqBulk"></div>
+        <div class="rq-filters" id="rqFilters"></div>
+        <div id="rqBody"><div class="empty">Loading…</div></div>
+        <datalist id="rqAcctList"></datalist>
+        <datalist id="rqVendList"></datalist>
       </div>
 
       <div class="page" id="page-mv">
@@ -3240,7 +3323,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; const _nsm = document.getElementById('nav-section-marketing'); if (_nsm) _nsm.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; const _nsm = document.getElementById('nav-section-marketing'); if (_nsm) _nsm.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.RqBadgeBoot) window.RqBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -7425,6 +7508,7 @@ function autoLatestRun(p, byPipe) {
 const AUTO_SECTIONS = [
   { name: 'Delivery', note: 'Apps Script — sends Drive invoices on to XtraChef / Ramp, and Audubon bills to QuickBooks.' },
   { name: 'Vendor portals', note: 'portal-fetch on GitHub, every other day ~5:47am. Downloads only invoices that are not already in the client’s QuickBooks.' },
+  { name: 'Bookkeeping checks', note: 'Review Queue scan — Supabase cron, every connected client each morning ~5–7am. Flags show up in Review Queue.' },
   { name: 'Browser tasks', note: 'Claude scheduled tasks in Ed’s Claude app browser (Mac must be awake; Ed signs in to BILL, Ecolab and Ben E. Keith first).' },
 ];
 const AUTO_PIPELINES = [
@@ -7442,6 +7526,8 @@ const AUTO_PIPELINES = [
   { key: 'ALSCO (portal-fetch)',          label: 'ALSCO',          section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
   { key: 'KeHE (portal-fetch)',           label: 'KeHE',           section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
   { key: 'Labatt (portal-fetch)',         label: 'Labatt',         section: 'Vendor portals', cadence: 'every other day', staleH: 54, perClient: true },
+
+  { key: 'Review Queue scan', label: 'Review Queue nightly scan', section: 'Bookkeeping checks', cadence: 'daily', staleH: 30, perClient: true },
 
   { key: 'Faire (portal-fetch)',            label: 'Faire',               section: 'Browser tasks', cadence: 'every other day', staleH: 54,  perClient: true },
   { key: 'Slow Dough (portal-fetch)',       label: 'Slow Dough (BILL)',   section: 'Browser tasks', cadence: 'Mondays',         staleH: 200, perClient: true },
@@ -7542,6 +7628,7 @@ function showPage(name) {
   if (name === 'analyses') loadAnalyses();
   if (name === 'salestax') loadTaxPage();
   if (name === 'flbz' && window.FlbzOpen) window.FlbzOpen();
+  if (name === 'rq' && window.RqOpen) window.RqOpen();
   if (name === 'mv' && window.MvOpen) window.MvOpen();
   if (name === 'w9' && window.W9Open) window.W9Open();
   if (name === 'labor' && window.LaborAccrualOpen) window.LaborAccrualOpen();
@@ -17329,6 +17416,613 @@ init();
   check();
   setInterval(check, CHECK_MS);
   setInterval(tryReload, 30 * 1000);
+})();
+</script>
+<script>
+/* ============================================================
+   REVIEW QUEUE — added 2026-10-08
+
+   Replaces Vendor Audit and Missing Vendors (both still in this file,
+   just hidden from the nav). Every row is ONE transaction or line that
+   needs a look, found by the review-scan Edge Function nightly (and on
+   Scan now):
+
+     uncategorized    Uncategorized / Ask My Accountant / Suspense
+     missing_payee    Expense / Check / Card charge with no payee
+     unusual_account  vendor coded to an account it hasn't used in 12 months
+     duplicate        same payee + amount within 7 days
+     balance_sheet    bill / expense line on a balance-sheet account that
+                      vendor hasn't used before
+
+   Fixes are staged first and written to QuickBooks only on "Write to
+   QuickBooks" (qbo-txn-write re-fetches each transaction and refuses
+   anything that changed since the scan). "Looks right" and mutes never
+   touch QuickBooks. Mutes are coding_exceptions rows, so the old Vendor
+   Audit won't-fix register carries over.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n) || 0)
+    .toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = d => d ? new Date(d + (String(d).length === 10 ? 'T12:00:00' : '')).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const fmtWhen = d => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  const meName = () => (($('sidebarName') || {}).textContent || '').trim();
+
+  const CHECKS = [
+    { key: 'uncategorized',   label: 'Uncategorized' },
+    { key: 'missing_payee',   label: 'Missing payee' },
+    { key: 'unusual_account', label: 'Unusual account' },
+    { key: 'duplicate',       label: 'Possible duplicate' },
+    { key: 'balance_sheet',   label: 'Balance sheet' },
+  ];
+  const CHECK_LABEL = Object.fromEntries(CHECKS.map(c => [c.key, c.label]));
+  const LEGACY_LABEL = { boundary: 'Unusual account (old Vendor Audit)', new_account: 'Unusual account (old Vendor Audit)',
+    dominance: 'Unusual account (old Vendor Audit)', cross_client: 'Unusual account (old Vendor Audit)',
+    item_map: 'Unusual account (old Vendor Audit)', balance_sheet: 'Balance sheet' };
+  const DONE_LABEL = { fixed: 'Fixed', accepted: 'Looks right', muted: 'Muted', resolved: 'Cleared in QBO' };
+
+  const S = {
+    booted: false,
+    view: 'queue',          // queue | mutes | log
+    clientId: '',
+    check: 'all',
+    mode: 'open',           // open | done
+    showAll: false,         // overview: every client, not just mine
+    items: [],
+    lists: {},              // clientId -> { accounts, vendors, error }
+    staged: {},             // item id -> { account_id, account_name } | { vendor_id, vendor_name } | { new_vendor_name }
+    openForm: null,         // item id with the mute form open
+    result: null,
+    busy: false,
+  };
+
+  function setStatus(msg, isErr) {
+    const el = $('rqStatus'); if (!el) return;
+    el.textContent = msg || '';
+    el.className = 'rq-status' + (isErr ? ' err' : '');
+  }
+
+  const clientsList = () => (typeof allClients !== 'undefined' ? allClients : [])
+    .filter(c => c && !c.is_firm)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const clientById = id => clientsList().find(c => c.id === id);
+  const mineSet = () => (typeof myClientIdSet === 'function' ? myClientIdSet() : null);
+
+  function fillClients() {
+    const sel = $('rqClient'); if (!sel) return;
+    sel.innerHTML = '<option value="">All clients — overview</option>' +
+      clientsList().map(c => '<option value="' + c.id + '">' + esc(c.name) + '</option>').join('');
+    sel.value = S.clientId || '';
+  }
+
+  function renderChips() {
+    ['queue', 'mutes', 'log'].forEach(v => {
+      const b = $('rqView_' + v); if (b) b.setAttribute('aria-pressed', S.view === v ? 'true' : 'false');
+    });
+    const f = $('rqFilters'); if (!f) return;
+    if (S.view !== 'queue' || !S.clientId) { f.innerHTML = ''; return; }
+    const counts = {};
+    S.items.forEach(i => { counts[i.check_type] = (counts[i.check_type] || 0) + 1; });
+    f.innerHTML =
+      '<button class="rq-chip" aria-pressed="' + (S.check === 'all') + '" onclick="RQ.setCheck(\'all\')">All ' + S.items.length + '</button>' +
+      CHECKS.map(c => '<button class="rq-chip" aria-pressed="' + (S.check === c.key) + '" onclick="RQ.setCheck(\'' + c.key + '\')">' +
+        esc(c.label) + ' ' + (counts[c.key] || 0) + '</button>').join('') +
+      '<span style="flex:1"></span>' +
+      '<select id="rqMode" onchange="RQ.setMode(this.value)">' +
+        '<option value="open"' + (S.mode === 'open' ? ' selected' : '') + '>To review</option>' +
+        '<option value="done"' + (S.mode === 'done' ? ' selected' : '') + '>Done (last 200)</option>' +
+      '</select>';
+  }
+
+  // ---------------------------------------------------------------- data
+
+  async function loadItems() {
+    if (!S.clientId) { S.items = []; return; }
+    let q = sb.from('review_items').select('*').eq('client_id', S.clientId);
+    if (S.mode === 'open') {
+      q = q.eq('status', 'open').order('txn_date', { ascending: false }).limit(1000);
+    } else {
+      q = q.neq('status', 'open').order('status_at', { ascending: false, nullsFirst: false }).limit(200);
+    }
+    const { data, error } = await q;
+    if (error) throw error;
+    S.items = data || [];
+  }
+
+  async function loadLists(clientId) {
+    if (S.lists[clientId] && !S.lists[clientId].error) return S.lists[clientId];
+    const { data, error } = await sb.functions.invoke('review-scan', { body: { action: 'lists', client_id: clientId } });
+    const err = error ? (error.message || String(error)) : (data && data.ok === false ? data.error : null);
+    S.lists[clientId] = err ? { accounts: [], vendors: [], error: err } : { accounts: data.accounts || [], vendors: data.vendors || [] };
+    return S.lists[clientId];
+  }
+
+  async function lastRun(clientId) {
+    const { data } = await sb.from('review_scan_runs').select('*').eq('client_id', clientId)
+      .order('started_at', { ascending: false }).limit(1);
+    return (data || [])[0] || null;
+  }
+
+  // ---------------------------------------------------------------- overview
+
+  async function renderOverview() {
+    const body = $('rqBody');
+    body.innerHTML = '<div class="empty">Loading…</div>';
+    const rows = await fetchAllRows(() => sb.from('review_items').select('id,client_id,check_type,severity').eq('status', 'open'));
+    const { data: runs } = await sb.from('review_scan_runs').select('client_id,status,started_at,completed_at,error')
+      .order('started_at', { ascending: false }).limit(1000);
+    const latest = {};
+    (runs || []).forEach(r => { if (!latest[r.client_id]) latest[r.client_id] = r; });
+    const tally = {};
+    rows.forEach(r => {
+      const t = tally[r.client_id] = tally[r.client_id] || { total: 0, high: 0 };
+      t.total++; t[r.check_type] = (t[r.check_type] || 0) + 1; if (r.severity === 'high') t.high++;
+    });
+    const mine = mineSet();
+    const list = clientsList().filter(c => tally[c.id] || latest[c.id])
+      .filter(c => S.showAll || !mine || mine.has(c.id))
+      .sort((a, b) => ((tally[b.id] || {}).total || 0) - ((tally[a.id] || {}).total || 0) || a.name.localeCompare(b.name));
+
+    const toggle = mine
+      ? '<label class="rq-toggle"><input type="checkbox" ' + (S.showAll ? 'checked' : '') + ' onchange="RQ.toggleAll(this.checked)"> Show every client, not just mine</label>'
+      : '';
+    if (!list.length) {
+      body.innerHTML = toggle + '<div class="empty">Nothing waiting. Clients appear here after their first scan — the nightly scan runs around 5am, or pick a client and press Scan now.</div>';
+      return;
+    }
+    body.innerHTML = toggle +
+      '<table class="rq-table"><thead><tr><th>Client</th><th>Preparer</th>' +
+      CHECKS.map(c => '<th class="num">' + esc(c.label) + '</th>').join('') +
+      '<th class="num">Total</th><th>Last scan</th></tr></thead><tbody>' +
+      list.map(c => {
+        const t = tally[c.id] || { total: 0 };
+        const r = latest[c.id];
+        const scan = !r ? '<span class="rq-dim">never</span>'
+          : r.status === 'error' ? '<span class="rq-err" title="' + esc(r.error || '') + '">failed ' + esc(fmtWhen(r.started_at)) + '</span>'
+          : r.status === 'running' ? '<span class="rq-dim">running…</span>'
+          : esc(fmtWhen(r.completed_at || r.started_at));
+        return '<tr class="rq-click" onclick="RQ.pick(\'' + c.id + '\')"><td><b>' + esc(c.name) + '</b>' +
+          (t.high ? ' <span class="rq-sev high" title="high priority">' + t.high + ' high</span>' : '') + '</td>' +
+          '<td>' + esc(c.preparer || '') + '</td>' +
+          CHECKS.map(k => '<td class="num">' + (t[k.key] || '<span class="rq-dim">–</span>') + '</td>').join('') +
+          '<td class="num"><b>' + t.total + '</b></td><td>' + scan + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  // ---------------------------------------------------------------- queue
+
+  function qboLink(i) {
+    const page = i.entity_type === 'Bill' ? 'bill' : i.entity_type === 'Deposit' ? 'deposit'
+      : i.txn_type === 'Check' ? 'check' : 'expense';
+    return 'https://app.qbo.intuit.com/app/' + page + '?txnId=' + encodeURIComponent(i.entity_id);
+  }
+
+  const sameVA = (a, b) => a.check_type === b.check_type && a.vendor_key && a.vendor_key === b.vendor_key && a.account_id === b.account_id;
+
+  function stagedLabel(st) {
+    if (!st) return '';
+    if (st.account_id) return '→ ' + st.account_name;
+    if (st.vendor_id) return 'payee → ' + st.vendor_name;
+    if (st.new_vendor_name) return 'payee → ' + st.new_vendor_name + ' (new vendor)';
+    return '';
+  }
+
+  function itemHtml(i) {
+    const st = S.staged[i.id];
+    const sug = i.suggestion || null;
+    const head =
+      '<div class="rq-head">' +
+        '<span class="rq-tag t-' + i.check_type + '">' + esc(CHECK_LABEL[i.check_type] || i.check_type) + '</span>' +
+        (i.severity === 'high' ? '<span class="rq-sev high">high</span>' : '') +
+        '<span class="rq-line1">' + esc(fmtDate(i.txn_date)) + ' · ' + esc(i.txn_type || i.entity_type) +
+          (i.doc_num ? ' #' + esc(i.doc_num) : '') + ' · <b>' + esc(i.vendor_name || '(no payee)') + '</b></span>' +
+        '<span class="rq-amt">' + money(i.amount) + (i.txn_total != null && Number(i.txn_total) !== Number(i.amount) ? ' <span class="rq-dim">of ' + money(i.txn_total) + '</span>' : '') + '</span>' +
+      '</div>' +
+      '<div class="rq-reason">' + esc(i.reason || '') + '</div>' +
+      (i.account_name && i.check_type !== 'uncategorized' && i.check_type !== 'unusual_account' && i.check_type !== 'balance_sheet'
+        ? '<div class="rq-memo">Coded to ' + esc(i.account_name) + '</div>' : '') +
+      (i.memo ? '<div class="rq-memo">Memo: ' + esc(i.memo) + '</div>' : '');
+
+    if (S.mode === 'done') {
+      return '<div class="rq-item is-done">' + head +
+        '<div class="rq-memo"><b>' + esc(DONE_LABEL[i.status] || i.status) + '</b>' +
+        (i.status_note ? ' — ' + esc(i.status_note) : '') +
+        (i.status_by_name ? ' · ' + esc(i.status_by_name) : '') + (i.status_at ? ' · ' + esc(fmtWhen(i.status_at)) : '') +
+        '</div>' +
+        (i.status === 'accepted' ? '<div class="rq-acts"><button class="rq-act" onclick="RQ.reopen(\'' + i.id + '\')">Reopen</button></div>' : '') +
+        '</div>';
+    }
+
+    let fix = '';
+    const peers = S.items.filter(o => o.id !== i.id && sameVA(o, i));
+    if (i.check_type === 'uncategorized' || i.check_type === 'unusual_account' || i.check_type === 'balance_sheet') {
+      const val = st && st.account_name ? st.account_name : (sug && sug.account_name ? sug.account_name : '');
+      fix = '<div class="rq-fix">' +
+        '<label>Recode to</label>' +
+        '<input type="text" list="rqAcctList" id="rqIn_' + i.id + '" value="' + esc(val) + '" placeholder="account">' +
+        '<button class="rq-act primary" onclick="RQ.stageAccount(\'' + i.id + '\', false)">Stage fix</button>' +
+        (peers.length ? '<button class="rq-act" onclick="RQ.stageAccount(\'' + i.id + '\', true)">Stage this + ' + peers.length + ' like it</button>' : '') +
+        (sug && sug.basis ? '<span class="rq-dim">suggested: ' + esc(sug.basis) + '</span>' : '') +
+        '</div>';
+    } else if (i.check_type === 'missing_payee') {
+      const val = st ? (st.vendor_name || st.new_vendor_name || '') : (sug && sug.vendor_name ? sug.vendor_name : '');
+      fix = '<div class="rq-fix">' +
+        '<label>Payee</label>' +
+        '<input type="text" list="rqVendList" id="rqIn_' + i.id + '" value="' + esc(val) + '" placeholder="vendor">' +
+        '<button class="rq-act primary" onclick="RQ.stagePayee(\'' + i.id + '\')">Stage fix</button>' +
+        (sug && sug.basis ? '<span class="rq-dim">guess: ' + esc(sug.basis) + '</span>' : '') +
+        '</div>';
+    } else if (i.check_type === 'duplicate') {
+      const r = i.related || {};
+      fix = '<div class="rq-memo">Compare with ' + esc(r.txn_type || r.entity_type || '') + (r.doc_num ? ' #' + esc(r.doc_num) : '') +
+        ' on ' + esc(fmtDate(r.txn_date)) + ' for ' + money(r.amount) +
+        (r.entity_id ? ' · <a href="' + qboLink({ entity_type: r.entity_type, txn_type: r.txn_type, entity_id: r.entity_id }) + '" target="_blank" rel="noopener">open it</a>' : '') +
+        '. Delete or void the extra one in QuickBooks yourself — Triple never deletes.</div>';
+    }
+
+    const acts = '<div class="rq-acts">' +
+      (i.check_type === 'duplicate'
+        ? '<button class="rq-act" onclick="RQ.accept(\'' + i.id + '\', \'Not a duplicate\')">Not a duplicate</button>' +
+          '<button class="rq-act" onclick="RQ.handled(\'' + i.id + '\')">Handled in QuickBooks</button>'
+        : '<button class="rq-act" onclick="RQ.accept(\'' + i.id + '\')">Looks right</button>') +
+      '<button class="rq-act" onclick="RQ.toggleMute(\'' + i.id + '\')">Mute…</button>' +
+      (st ? '<button class="rq-act" onclick="RQ.unstage(\'' + i.id + '\')">Unstage</button>' : '') +
+      '<a class="rq-act" href="' + qboLink(i) + '" target="_blank" rel="noopener">Open in QBO ↗</a>' +
+      '</div>';
+
+    const muteForm = S.openForm === i.id ? muteFormHtml(i) : '';
+
+    return '<div class="rq-item sev-' + esc(i.severity) + (st ? ' is-staged' : '') + '" id="rqItem_' + i.id + '">' +
+      head + fix + (st ? '<div class="rq-staged">Staged: ' + esc(stagedLabel(st)) + '</div>' : '') + acts + muteForm + '</div>';
+  }
+
+  function muteFormHtml(i) {
+    const hasVendor = i.vendor_key && i.vendor_key !== '(none)';
+    const opts = [];
+    if (hasVendor && i.account_key) opts.push(['vendor_account', 'This vendor on ' + (i.account_name || 'this account')]);
+    if (hasVendor) opts.push(['vendor', 'Everything from ' + (i.vendor_name || 'this vendor')]);
+    if (i.account_key) opts.push(['account', 'Anything coded to ' + (i.account_name || 'this account')]);
+    if (!opts.length) return '<div class="rq-form"><div class="rq-memo">This row has no vendor or account to mute on — use Looks right instead.</div></div>';
+    return '<div class="rq-form">' +
+      '<div class="rq-memo">Stops <b>' + esc(CHECK_LABEL[i.check_type]) + '</b> flags for:</div>' +
+      '<select id="rqMuteScope">' + opts.map(o => '<option value="' + o[0] + '">' + esc(o[1]) + '</option>').join('') + '</select>' +
+      '<select id="rqMuteDisp">' +
+        '<option value="correct">It’s correct — stop flagging</option>' +
+        '<option value="wont_fix">Client’s choice (won’t fix) — keep on the exceptions register</option>' +
+      '</select>' +
+      '<input type="text" id="rqMuteReason" placeholder="Reason (required)">' +
+      '<div class="rq-acts"><button class="rq-act primary" onclick="RQ.saveMute(\'' + i.id + '\')">Save mute</button>' +
+      '<button class="rq-act" onclick="RQ.toggleMute(\'' + i.id + '\')">Cancel</button></div>' +
+      '</div>';
+  }
+
+  function renderBulk() {
+    const el = $('rqBulk'); if (!el) return;
+    const n = Object.keys(S.staged).length;
+    if (!n || S.view !== 'queue' || !S.clientId) { el.innerHTML = ''; return; }
+    el.innerHTML = '<div class="rq-bulk"><b>' + n + ' fix' + (n === 1 ? '' : 'es') + ' staged</b>' +
+      '<span class="rq-dim">Nothing changes in QuickBooks until you write.</span><span style="flex:1"></span>' +
+      '<button class="rq-act" onclick="RQ.clearStaged()"' + (S.busy ? ' disabled' : '') + '>Clear</button>' +
+      '<button class="rq-btn" onclick="RQ.commit()"' + (S.busy ? ' disabled' : '') + '>' +
+        (S.busy ? 'Writing…' : 'Write ' + n + ' to QuickBooks') + '</button></div>';
+  }
+
+  function renderResult() {
+    const el = $('rqResult'); if (!el) return;
+    const r = S.result;
+    if (!r) { el.innerHTML = ''; return; }
+    const t = r.tally || {};
+    const bad = (r.results || []).filter(x => x.status !== 'ok');
+    el.innerHTML = '<div class="rq-res ' + (bad.length ? 'warn' : 'good') + '">' +
+      (t.ok || 0) + ' written to QuickBooks' + (bad.length ? ', ' + bad.length + ' not written:' : '.') +
+      (bad.length ? '<ul>' + bad.map(b => {
+        const it = S.lastCommitted && S.lastCommitted[b.review_item_id];
+        return '<li>' + esc(it ? (it.vendor_name || '(no payee)') + ' ' + money(it.amount) + ' ' + fmtDate(it.txn_date) : b.id) +
+          ' — ' + esc(b.status) + ': ' + esc(b.message || '') + '</li>';
+      }).join('') + '</ul>' : '') +
+      ' <button class="rq-act" onclick="RQ.dismissResult()">Dismiss</button></div>';
+  }
+
+  function renderLists() {
+    const L = S.lists[S.clientId];
+    const a = $('rqAcctList'), v = $('rqVendList');
+    if (a) a.innerHTML = L ? L.accounts.map(x => '<option value="' + esc(x.name) + '">' + esc(x.type || '') + '</option>').join('') : '';
+    if (v) v.innerHTML = L ? L.vendors.map(x => '<option value="' + esc(x.name) + '"></option>').join('') : '';
+  }
+
+  async function renderQueue() {
+    const body = $('rqBody');
+    const run = await lastRun(S.clientId);
+    const meta = $('rqRunMeta');
+    if (meta) {
+      meta.innerHTML = !run ? 'Not scanned yet — press Scan now.'
+        : run.status === 'error' ? '<span class="rq-err">Last scan failed ' + esc(fmtWhen(run.started_at)) + ': ' + esc(run.error || '') + '</span>'
+        : run.status === 'running' ? 'Scan running since ' + esc(fmtWhen(run.started_at)) + '…'
+        : 'Last scan ' + esc(fmtWhen(run.completed_at)) + ' · checked ' + (run.txns_scanned ?? '?') + ' transactions from ' +
+          esc(fmtDate(run.window_start)) + ' on' + (run.new_items ? ' · ' + run.new_items + ' new' : '') +
+          (run.resolved ? ' · ' + run.resolved + ' cleared in QBO' : '');
+    }
+    const list = S.items.filter(i => S.check === 'all' || i.check_type === S.check);
+    if (!list.length) {
+      body.innerHTML = '<div class="empty">' + (S.mode === 'open' ? 'Nothing to review here.' : 'Nothing done yet.') + '</div>';
+      return;
+    }
+    const L = S.lists[S.clientId];
+    const warn = L && L.error ? '<div class="rq-res warn">Couldn’t load this client’s accounts and vendors from QuickBooks (' + esc(L.error) + '). You can still accept or mute.</div>' : '';
+    body.innerHTML = warn + list.map(itemHtml).join('');
+  }
+
+  // ---------------------------------------------------------------- mutes + log
+
+  async function renderMutes() {
+    const body = $('rqBody');
+    body.innerHTML = '<div class="empty">Loading…</div>';
+    let q = sb.from('coding_exceptions').select('*').eq('active', true).order('created_at', { ascending: false });
+    if (S.clientId) q = q.eq('client_id', S.clientId);
+    const { data, error } = await q;
+    if (error) { body.innerHTML = '<div class="rq-res warn">' + esc(error.message) + '</div>'; return; }
+    const rows = data || [];
+    if (!rows.length) { body.innerHTML = '<div class="empty">No mutes' + (S.clientId ? ' for this client' : '') + '.</div>'; return; }
+    const scopeText = r => r.scope === 'general' ? 'Client note' :
+      r.scope === 'vendor' ? (r.vendor_name || r.vendor_key) :
+      r.scope === 'account' ? 'Account ' + (r.account_name || r.account_key) :
+      (r.vendor_name || r.vendor_key) + ' on ' + (r.account_name || r.account_key || 'any account');
+    body.innerHTML = rows.map(r => {
+      const c = clientById(r.client_id);
+      return '<div class="rq-item">' +
+        '<div class="rq-head"><span class="rq-tag ' + (r.disposition === 'wont_fix' ? 't-wont' : 't-mute') + '">' +
+          (r.disposition === 'wont_fix' ? 'Won’t fix' : 'Correct') + '</span>' +
+          '<span class="rq-line1"><b>' + esc(r.title || scopeText(r)) + '</b>' + (!S.clientId && c ? ' · ' + esc(c.name) : '') + '</span>' +
+          '<span class="rq-dim">' + esc(r.strategy ? (CHECK_LABEL[r.strategy] || LEGACY_LABEL[r.strategy] || r.strategy) : 'All checks') + '</span></div>' +
+        '<div class="rq-reason">' + esc(r.reason || '') + '</div>' +
+        '<div class="rq-memo">' + esc(fmtWhen(r.created_at)) + '</div>' +
+        (r.scope !== 'general' ? '<div class="rq-acts"><button class="rq-act" onclick="RQ.unmute(\'' + r.id + '\')">Remove mute</button></div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  async function renderLog() {
+    const body = $('rqBody');
+    body.innerHTML = '<div class="empty">Loading…</div>';
+    let q = sb.from('qbo_write_log').select('*').order('created_at', { ascending: false }).limit(200);
+    if (S.clientId) q = q.eq('client_id', S.clientId);
+    const { data, error } = await q;
+    if (error) { body.innerHTML = '<div class="rq-res warn">' + esc(error.message) + '</div>'; return; }
+    const rows = data || [];
+    if (!rows.length) { body.innerHTML = '<div class="empty">Nothing has been written to QuickBooks from Triple yet.</div>'; return; }
+    body.innerHTML = '<table class="rq-table"><thead><tr><th>When</th><th>Who</th>' + (S.clientId ? '' : '<th>Client</th>') +
+      '<th>Transaction</th><th>Change</th><th>Result</th></tr></thead><tbody>' +
+      rows.map(r => {
+        const c = clientById(r.client_id);
+        return '<tr><td>' + esc(fmtWhen(r.created_at)) + '</td><td>' + esc(r.changed_by_name || '') + '</td>' +
+          (S.clientId ? '' : '<td>' + esc(c ? c.name : '') + '</td>') +
+          '<td>' + esc(r.entity_type) + (r.doc_num ? ' #' + esc(r.doc_num) : '') + ' ' + esc(fmtDate(r.txn_date)) +
+            (r.amount != null ? ' ' + money(r.amount) : '') + '</td>' +
+          '<td>' + (r.field === 'AccountRef' ? 'Account: ' : 'Payee: ') + esc(r.old_value || '—') + ' → ' + esc(r.new_value || '—') + '</td>' +
+          '<td>' + (r.status === 'ok' ? 'Written' : '<span class="rq-err">' + esc(r.status) + (r.error ? ': ' + esc(r.error) : '') + '</span>') + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  // ---------------------------------------------------------------- render
+
+  async function render() {
+    renderChips(); renderBulk(); renderResult();
+    const scanBtn = $('rqScanBtn'); if (scanBtn) scanBtn.disabled = !S.clientId || S.busy;
+    const meta = $('rqRunMeta'); if (meta && (!S.clientId || S.view !== 'queue')) meta.innerHTML = '';
+    try {
+      if (S.view === 'mutes') return await renderMutes();
+      if (S.view === 'log') return await renderLog();
+      if (!S.clientId) return await renderOverview();
+      return await renderQueue();
+    } catch (e) {
+      $('rqBody').innerHTML = '<div class="rq-res warn">' + esc(e.message || String(e)) + '</div>';
+    }
+  }
+
+  async function reload() {
+    try {
+      if (S.view === 'queue' && S.clientId) await loadItems();
+    } catch (e) { setStatus(e.message || String(e), true); }
+    await render();
+    refreshBadge();
+  }
+
+  // ---------------------------------------------------------------- actions
+
+  async function setStatusOn(ids, status, note) {
+    if (!ids.length) return;
+    const { error } = await sb.from('review_items').update({
+      status, status_note: note || null, status_by: (typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null),
+      status_by_name: meName(), status_at: new Date().toISOString(),
+    }).in('id', ids);
+    if (error) throw error;
+    ids.forEach(id => delete S.staged[id]);
+  }
+
+  function findAccount(name) {
+    const L = S.lists[S.clientId]; if (!L) return null;
+    const n = String(name || '').trim().toLowerCase();
+    return L.accounts.find(a => a.name.toLowerCase() === n) || null;
+  }
+  function findVendor(name) {
+    const L = S.lists[S.clientId]; if (!L) return null;
+    const n = String(name || '').trim().toLowerCase();
+    return L.vendors.find(v => v.name.toLowerCase() === n) || null;
+  }
+
+  window.RQ = {
+    setView(v) { S.view = v; S.openForm = null; reload(); },
+    setCheck(c) { S.check = c; render(); },
+    setMode(m) { S.mode = m; S.staged = {}; reload(); },
+    toggleAll(on) { S.showAll = !!on; render(); },
+    pick(id) { S.clientId = id; S.view = 'queue'; S.check = 'all'; S.staged = {}; S.result = null; const sel = $('rqClient'); if (sel) sel.value = id; RQ._clientChanged(); },
+    async _clientChanged() {
+      setStatus('');
+      if (S.clientId) loadLists(S.clientId).then(() => { renderLists(); if (S.view === 'queue') render(); });
+      renderLists();
+      await reload();
+    },
+
+    stageAccount(id, withPeers) {
+      const i = S.items.find(x => x.id === id); if (!i) return;
+      const L = S.lists[S.clientId];
+      if (!L || L.error) { setStatus('Accounts haven’t loaded for this client yet.', true); return; }
+      const name = ($('rqIn_' + id) || {}).value;
+      const a = findAccount(name);
+      if (!a) { setStatus('Pick an account from the list — "' + (name || '') + '" isn’t one of this client’s accounts.', true); return; }
+      if (a.id === i.account_id) { setStatus('That’s the account it’s already on. Use Looks right if it’s correct.', true); return; }
+      const targets = withPeers ? [i, ...S.items.filter(o => o.id !== i.id && sameVA(o, i))] : [i];
+      targets.forEach(t => { S.staged[t.id] = { account_id: a.id, account_name: a.name }; });
+      setStatus(targets.length + ' staged.');
+      render();
+    },
+
+    stagePayee(id) {
+      const i = S.items.find(x => x.id === id); if (!i) return;
+      const L = S.lists[S.clientId];
+      if (!L || L.error) { setStatus('Vendors haven’t loaded for this client yet.', true); return; }
+      const name = String(($('rqIn_' + id) || {}).value || '').trim();
+      if (!name) { setStatus('Type or pick a vendor.', true); return; }
+      const v = findVendor(name);
+      if (v) S.staged[id] = { vendor_id: v.id, vendor_name: v.name };
+      else {
+        if (!confirm('"' + name + '" isn’t a vendor in this client’s QuickBooks. Create it when you write?')) return;
+        S.staged[id] = { new_vendor_name: name };
+      }
+      render();
+    },
+
+    unstage(id) { delete S.staged[id]; render(); },
+    clearStaged() { S.staged = {}; render(); },
+    dismissResult() { S.result = null; renderResult(); },
+
+    async commit() {
+      const ids = Object.keys(S.staged);
+      if (!ids.length || S.busy) return;
+      const changes = [];
+      S.lastCommitted = {};
+      for (const id of ids) {
+        const i = S.items.find(x => x.id === id); const st = S.staged[id];
+        if (!i || !st) continue;
+        S.lastCommitted[id] = i;
+        const base = { entity_type: i.entity_type, id: i.entity_id, sync_token: i.sync_token, txn_date: i.txn_date,
+          amount: i.txn_total, doc_num: i.doc_num, review_item_id: i.id };
+        if (st.account_id) changes.push({ ...base, kind: 'account', line_id: i.line_id, old_account_id: i.account_id, account_id: st.account_id, account_name: st.account_name });
+        else changes.push({ ...base, kind: 'payee', vendor_id: st.vendor_id, vendor_name: st.vendor_name, new_vendor_name: st.new_vendor_name });
+      }
+      if (!confirm('Write ' + changes.length + ' change' + (changes.length === 1 ? '' : 's') + ' to ' + ((clientById(S.clientId) || {}).name || 'this client') + '’s QuickBooks?')) return;
+      S.busy = true; renderBulk(); setStatus('Writing to QuickBooks…');
+      const all = { results: [], tally: { ok: 0, stale: 0, error: 0, skipped: 0 } };
+      try {
+        for (let k = 0; k < changes.length; k += 200) {
+          const { data, error } = await sb.functions.invoke('qbo-txn-write', { body: { client_id: S.clientId, changes: changes.slice(k, k + 200) } });
+          if (error) throw new Error(error.message || String(error));
+          if (!data || data.ok === false) throw new Error((data && data.error) || 'write failed');
+          all.results.push(...(data.results || []));
+          Object.keys(all.tally).forEach(t => { all.tally[t] += (data.tally || {})[t] || 0; });
+        }
+        all.results.filter(r => r.status === 'ok' && r.review_item_id).forEach(r => { delete S.staged[r.review_item_id]; });
+        S.result = all; setStatus('');
+      } catch (e) {
+        setStatus('Write failed: ' + (e.message || e), true);
+      }
+      S.busy = false;
+      await reload();
+    },
+
+    async accept(id, note) {
+      try { await setStatusOn([id], 'accepted', note || null); setStatus(''); await reload(); }
+      catch (e) { setStatus(e.message || String(e), true); }
+    },
+    async handled(id) {
+      try { await setStatusOn([id], 'fixed', 'Handled in QuickBooks'); await reload(); }
+      catch (e) { setStatus(e.message || String(e), true); }
+    },
+    async reopen(id) {
+      try {
+        const { error } = await sb.from('review_items').update({ status: 'open', status_note: null, status_at: null, status_by: null, status_by_name: null }).eq('id', id);
+        if (error) throw error;
+        await reload();
+      } catch (e) { setStatus(e.message || String(e), true); }
+    },
+
+    toggleMute(id) { S.openForm = S.openForm === id ? null : id; render(); },
+
+    async saveMute(id) {
+      const i = S.items.find(x => x.id === id); if (!i) return;
+      const scope = ($('rqMuteScope') || {}).value;
+      const disposition = ($('rqMuteDisp') || {}).value || 'correct';
+      const reason = String(($('rqMuteReason') || {}).value || '').trim();
+      if (!reason) { setStatus('A reason is required for a mute.', true); return; }
+      const row = {
+        client_id: S.clientId, scope, disposition, strategy: i.check_type, reason, active: true,
+        created_by: (typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null),
+        vendor_key: scope === 'account' ? null : i.vendor_key, vendor_name: scope === 'account' ? null : i.vendor_name,
+        account_key: scope === 'vendor' ? null : i.account_key, account_name: scope === 'vendor' ? null : i.account_name,
+      };
+      try {
+        const { error } = await sb.from('coding_exceptions').insert(row);
+        if (error) throw error;
+        const hit = S.items.filter(o => o.check_type === i.check_type && (
+          scope === 'vendor' ? o.vendor_key === i.vendor_key :
+          scope === 'account' ? o.account_key === i.account_key :
+          o.vendor_key === i.vendor_key && o.account_key === i.account_key)).map(o => o.id);
+        await setStatusOn(hit, 'muted', 'Muted: ' + reason);
+        S.openForm = null;
+        setStatus('Muted ' + hit.length + ' row' + (hit.length === 1 ? '' : 's') + '. Future scans will skip this pattern.');
+        await reload();
+      } catch (e) { setStatus(e.message || String(e), true); }
+    },
+
+    async unmute(exId) {
+      if (!confirm('Remove this mute? Matching transactions will be flagged again from the next scan.')) return;
+      const { error } = await sb.from('coding_exceptions').update({ active: false, updated_at: new Date().toISOString() }).eq('id', exId);
+      if (error) { setStatus(error.message, true); return; }
+      await render();
+    },
+
+    async scan() {
+      if (!S.clientId || S.busy) return;
+      S.busy = true; render();
+      setStatus('Scanning ' + ((clientById(S.clientId) || {}).name || '') + ' in QuickBooks — this can take a minute…');
+      try {
+        const { data, error } = await sb.functions.invoke('review-scan', { body: { client_id: S.clientId } });
+        if (error) throw new Error(error.message || String(error));
+        if (!data || data.ok === false) throw new Error((data && data.error) || 'scan failed');
+        setStatus('Scan done: ' + data.txns_scanned + ' transactions checked, ' + data.new_items + ' new, ' + data.resolved + ' cleared.');
+      } catch (e) {
+        const m = e.message || String(e);
+        setStatus(m === 'reauth_needed' ? 'QuickBooks needs reconnecting for this client.' : m === 'not_connected' ? 'This client isn’t connected to QuickBooks.' : 'Scan failed: ' + m, true);
+      }
+      S.busy = false;
+      await reload();
+    },
+  };
+
+  async function refreshBadge() {
+    const el = $('rqBadge'); if (!el || typeof sb === 'undefined') return;
+    try {
+      const rows = await fetchAllRows(() => sb.from('review_items').select('id,client_id').eq('status', 'open'));
+      const mine = mineSet();
+      const n = rows.filter(r => !mine || mine.has(r.client_id)).length;
+      el.textContent = n > 999 ? '999+' : String(n);
+      el.style.display = n ? '' : 'none';
+    } catch (e) { /* badge is best-effort */ }
+  }
+
+  window.RqOpen = async function () {
+    if (!S.booted) {
+      S.booted = true;
+      const sel = $('rqClient');
+      if (sel) sel.addEventListener('change', e => { S.clientId = e.target.value; S.check = 'all'; S.staged = {}; S.result = null; RQ._clientChanged(); });
+    }
+    fillClients();
+    if (S.clientId && !S.lists[S.clientId]) loadLists(S.clientId).then(() => { renderLists(); render(); });
+    renderLists();
+    await reload();
+  };
+  window.RqBadgeBoot = refreshBadge;
 })();
 </script>
 </body>
