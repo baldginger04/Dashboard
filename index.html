@@ -17592,12 +17592,6 @@ init();
 
   // ---------------------------------------------------------------- queue
 
-  function qboLink(i) {
-    const page = i.entity_type === 'Bill' ? 'bill' : i.entity_type === 'Deposit' ? 'deposit'
-      : i.txn_type === 'Check' ? 'check' : 'expense';
-    return 'https://app.qbo.intuit.com/app/' + page + '?txnId=' + encodeURIComponent(i.entity_id);
-  }
-
   const sameVA = (a, b) => a.check_type === b.check_type && a.vendor_key && a.vendor_key === b.vendor_key && a.account_id === b.account_id;
 
   function stagedLabel(st) {
@@ -17657,7 +17651,6 @@ init();
       const r = i.related || {};
       fix = '<div class="rq-memo">Compare with ' + esc(r.txn_type || r.entity_type || '') + (r.doc_num ? ' #' + esc(r.doc_num) : '') +
         ' on ' + esc(fmtDate(r.txn_date)) + ' for ' + money(r.amount) +
-        (r.entity_id ? ' · <a href="' + qboLink({ entity_type: r.entity_type, txn_type: r.txn_type, entity_id: r.entity_id }) + '" target="_blank" rel="noopener">open it</a>' : '') +
         '. Delete or void the extra one in QuickBooks yourself — Triple never deletes.</div>';
     }
 
@@ -17668,7 +17661,6 @@ init();
         : '<button class="rq-act" onclick="RQ.accept(\'' + i.id + '\')">Looks right</button>') +
       '<button class="rq-act" onclick="RQ.toggleMute(\'' + i.id + '\')">Mute…</button>' +
       (st ? '<button class="rq-act" onclick="RQ.unstage(\'' + i.id + '\')">Unstage</button>' : '') +
-      '<a class="rq-act" href="' + qboLink(i) + '" target="_blank" rel="noopener">Open in QBO ↗</a>' +
       '</div>';
 
     const muteForm = S.openForm === i.id ? muteFormHtml(i) : '';
