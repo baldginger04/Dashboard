@@ -18696,7 +18696,8 @@ init();
         const outcome = held ? 'held' : (still || unchecked) ? 'missing' : '';
         if (bad.length) out.statements = { state: 'bad', text: String(held + needsVendor + errored + queued + still), tip: bad.join(' · ') + (foundSince ? ` · ${foundSince} entered since` : '') + (unchecked ? ` · ${unchecked} missing item${unchecked === 1 ? '' : 's'} not rechecked yet` : ''), company, outcome };
         else if (unchecked) out.statements = { state: 'warn', text: unchecked + ' to recheck', tip: `${unchecked} item${unchecked === 1 ? ' was' : 's were'} missing when reconciled — not rechecked yet (the morning scan does it, or press Re-run in the Log)`, company, outcome };
-        else if (!recsAll.length) out.statements = { state: 'warn', text: 'none yet', tip: 'No statements dated in the month have been reconciled yet' };
+        // Nothing reconciled for the month yet reads as a dash, not amber (Ed, 10/8/26).
+        else if (!recsAll.length) out.statements = { state: 'na', text: '—', tip: 'No statements dated in this month have been reconciled yet' };
         else out.statements = { state: 'ok', text: '✓', tip: plural(recsAll.length, 'statement') + ' reconciled' + (foundSince ? `; all ${foundSince} missing item${foundSince === 1 ? '' : 's'} since entered` : ', nothing missing') + (okCount ? `; ${okCount} marked OK` : ''), company };
       }
     }
