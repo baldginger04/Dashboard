@@ -14865,7 +14865,11 @@ init();
   // 10/8/26 (later): "Mark as OK" — a person looked at the statement and
   // cleared it. A marked statement counts as nothing outstanding everywhere
   // (stats, filters, Close Board); its lines are still shown in the detail.
-  const isOk      = r => !!(r && r.marked_ok_at);
+  // 10/8/26 (later still): "Change vendor" re-reconciles a statement against
+  // the right QuickBooks vendor as a NEW run and marks this one replaced. A
+  // replaced run is history only — it counts as nothing outstanding.
+  const isReplaced = r => !!(r && r.replaced_at);
+  const isOk      = r => !!(r && (r.marked_ok_at || r.replaced_at));
   const missingOf = r => isOk(r) ? 0 : (r && r.recheck && r.recheck.still_missing != null)
     ? Number(r.recheck.still_missing || 0) : Number(sum(r).missing_in_qbo || 0);
   const rcNorm = s => String(s == null ? '' : s).toLowerCase().replace(/[\s\-_#./:]/g, '').replace(/^0+(?=.)/, '');
@@ -14907,7 +14911,8 @@ init();
         let q = sb.from('reconciliations')
           .select('id,realm_id,company_name,vendor_name,statement_date,summary,run_by,created_at,' +
                   'release_requested_at,release_requested_by,released_at,held,held_reason,recheck,' +
-                  'client_id,vendor_id,drive_watch_item_id,marked_ok_at,marked_ok_by,marked_ok_note');
+                  'client_id,vendor_id,drive_watch_item_id,marked_ok_at,marked_ok_by,marked_ok_note,' +
+                  'replaced_at,replaced_by,replaced_vendor_name');
         if(since) q = q.gte('created_at', since);
         return q;
       };
@@ -14932,7 +14937,7 @@ init();
   async function loadPeople(){
     // release_requested_by as well as run_by: the held panel names whoever
     // pressed Send anyway, and an unresolved id would read as "someone".
-    const ids = [...new Set(runs.flatMap(r => [r.run_by, r.release_requested_by, r.marked_ok_by])
+    const ids = [...new Set(runs.flatMap(r => [r.run_by, r.release_requested_by, r.marked_ok_by, r.replaced_by])
                                 .filter(Boolean))];
     const need = ids.filter(id => !(id in people));
     if(!need.length) return;
@@ -15003,7 +15008,9 @@ init();
       const s = sum(r), miss = missingOf(r), mis = mismatchOf(r);
       // A statement with an open QBO bill the vendor never listed is NOT clean
       // — it just isn't a document to chase, so it gets its own wording.
-      const chip = isOk(r)
+      const chip = isReplaced(r)
+        ? '<span class="rc-pill" style="background:#8a8f98">Vendor changed \u2192 ' + esc(r.replaced_vendor_name || '') + '</span>'
+        : isOk(r)
         ? '<span class="rc-pill" style="background:var(--green)">Marked OK</span>'
         : isHeld(r)
         ? (r.released_at
@@ -15052,6 +15059,11 @@ init();
     act('data-rcrerun', rerun);
     act('data-rcok',    markOk);
     act('data-rcunok',  unmarkOk);
+    act('data-rcvc',    openVendorChange);
+    act('data-rcvcx',   id => { delete vc[id]; render(); });
+    act('data-rcvcgo',  applyVendorChange);
+    host.querySelectorAll('[data-rcvcstop]').forEach(el =>
+      el.addEventListener('click', ev => ev.stopPropagation()));
     host.querySelectorAll('[data-rcrelease]').forEach(b =>
       b.addEventListener('click', ev => {
         // The row itself toggles open/closed on click, so this must not bubble.
@@ -15073,7 +15085,7 @@ init();
       (c ? ' style="color:' + c + '"' : '') + '>' + n + '</div>' +
       '<div class="rc-card-l">' + l + '</div></div>';
     host.innerHTML =
-      card(list.length, 'Statements reconciled') +
+      card(list.filter(r => !isReplaced(r)).length, 'Statements reconciled') +
       card(needDocs, 'Need documents', needDocs ? 'var(--red)' : '') +
       card(needRev, 'Need review', needRev ? 'var(--yellow)' : '') +
       card(lines, 'Missing line items', lines ? 'var(--red)' : '') +
@@ -15158,7 +15170,11 @@ init();
   // names on the letterhead, and how much history the vendor has in QuickBooks
   // — are only available at reconcile time and are not in this row. A rule
   // re-derived here would mark statements held that were deliberately sent.
-  function isHeld(r){ return !!r.held && !r.released_at && !r.marked_ok_at; }
+  // A held statement whose recheck finds every item now in QuickBooks has
+  // nothing left to send, so it stops reading as held.
+  const recheckClear = r => !!(r && r.recheck && r.recheck.still_missing != null &&
+                               Number(r.recheck.still_missing) === 0);
+  function isHeld(r){ return !!r.held && !r.released_at && !isOk(r) && !recheckClear(r); }
 
   function heldPanel(r){
     if(!isHeld(r)) return '';
@@ -15225,17 +15241,158 @@ init();
       (title ? ' title="' + esc(title) + '"' : '') + ' style="margin:0 6px 6px 0">' + label + '</button>';
     let h = '<div style="display:flex;flex-wrap:wrap;align-items:center;margin-bottom:10px">';
     if(r.drive_watch_item_id) h += b('data-rcpdf', '📄 View statement', 'Open the vendor statement PDF');
+    if(isReplaced(r)){
+      h += '</div><div class="rc-dnone" style="margin-bottom:10px">Vendor changed to <strong>' +
+        esc(r.replaced_vendor_name || '') + '</strong> by ' + esc(people[r.replaced_by] || 'someone') + ' ' +
+        esc(when(r.replaced_at)) + ' — the re-reconciled run is its own row in the log. This one is kept as history.</div>';
+      return h;
+    }
     if(origMissing > 0 && r.client_id) h += b('data-rcrerun', '↻ Re-run', 'Check QuickBooks again now for every item that was missing');
+    if(r.client_id && r.realm_id) h += b('data-rcvc', '⇄ Change vendor', 'Re-reconcile this statement against a different QuickBooks vendor');
     h += isOk(r)
       ? b('data-rcunok', 'Undo “OK”', 'Put this statement back to its open status')
       : b('data-rcok', '✓ Mark as OK', 'Clear this statement — nothing more to chase');
     h += '</div>';
     if(isOk(r)){
+      h += vcPanel(r);
       h += '<div class="rc-dnone" style="margin-bottom:10px;color:var(--green)">Marked OK by ' +
         esc(people[r.marked_ok_by] || 'someone') + ' ' + esc(when(r.marked_ok_at)) +
         (r.marked_ok_note ? ' — “' + esc(r.marked_ok_note) + '”' : '') + '.</div>';
-    }
+    } else h += vcPanel(r);
     return h;
+  }
+
+  // ── Change vendor ──────────────────────────────────────────────────────
+  // The drain matched the statement to the wrong QuickBooks vendor (a
+  // co-branded letterhead: Dairyland Produce printed on what are Hardie's
+  // invoices). This re-reconciles the statement's own lines against the vendor
+  // a person picks, through qbo-reconcile exactly as the Reconcile tab does,
+  // so the new run gets real Matched / Mismatch / Missing results. The old run
+  // is kept and marked replaced. Optionally the pairing is learned — sent as
+  // statement_vendor, which qbo-reconcile stores in statement_vendor_map — so
+  // the next statement for this client goes to the right vendor by itself.
+  const vc = {};             // run id -> { loading, err, vendors, busy, msg }
+
+  const siblingsOf = r => runs.filter(x => x !== r && !isReplaced(x) &&
+    String(x.client_id || '') === String(r.client_id || '') &&
+    String(x.vendor_id || '') === String(r.vendor_id || '') && x.vendor_id);
+
+  function suggestedVendor(r){
+    const tally = {};
+    [r].concat(siblingsOf(r)).forEach(x => ((x.recheck && x.recheck.found_items) || []).forEach(f => {
+      if(f.other_vendor_id) tally[f.other_vendor_id] = (tally[f.other_vendor_id] || 0) + 1;
+    }));
+    let best = null, n = 0;
+    Object.keys(tally).forEach(k => { if(tally[k] > n){ best = k; n = tally[k]; } });
+    return best;
+  }
+
+  function vcPanel(r){
+    const st = vc[r.id];
+    if(!st) return '';
+    const box = inner => '<div data-rcvcstop="1" style="margin:0 0 12px;padding:11px 13px;border-radius:9px;' +
+      'background:rgba(60,90,160,.06);border:1px solid rgba(60,90,160,.3)">' + inner + '</div>';
+    if(st.loading) return box('<div class="rc-muted">Loading this client’s QuickBooks vendors…</div>');
+    if(st.err && !st.vendors) return box('<div class="rc-err">' + esc(st.err) + '</div>' +
+      '<button class="btn btn-secondary btn-sm" data-rcvcx="' + esc(r.id) + '" style="margin-top:8px">Close</button>');
+    const sib = siblingsOf(r);
+    const pick = st.pick || suggestedVendor(r) || '';
+    const opts = '<option value="">Pick the right vendor…</option>' + (st.vendors || []).map(v =>
+      '<option value="' + esc(v.id) + '"' + (String(v.id) === String(pick) ? ' selected' : '') + '>' + esc(v.name) + '</option>').join('');
+    const old = r.vendor_name || 'this vendor';
+    return box(
+      '<div style="font-weight:700;margin-bottom:6px">Change vendor — re-reconcile against a different QuickBooks vendor</div>' +
+      '<div class="rc-muted" style="margin-bottom:8px">Currently matched to <strong>' + esc(old) + '</strong>.' +
+        (suggestedVendor(r) ? ' The recheck found these invoices under the vendor pre-selected below.' : '') + '</div>' +
+      '<select id="rcVcSel-' + esc(r.id) + '" class="form-select" style="max-width:360px;margin-bottom:8px">' + opts + '</select>' +
+      (sib.length ? '<label style="display:block;margin:4px 0"><input type="checkbox" id="rcVcSib-' + esc(r.id) + '" checked> ' +
+        'Also change the other ' + sib.length + ' ' + esc(old) + ' statement' + (sib.length === 1 ? '' : 's') + ' for ' +
+        esc(r.company_name || 'this client') + ' in this list (' + sib.map(x => esc(x.statement_date || '?')).join(', ') + ')</label>' : '') +
+      '<label style="display:block;margin:4px 0 10px"><input type="checkbox" id="rcVcLearn-' + esc(r.id) + '" checked> ' +
+        'Remember it: future ' + esc(r.company_name || 'client') + ' statements read as “' + esc(old) + '” go to the vendor picked here</label>' +
+      (st.msg ? '<div class="rc-' + (st.err ? 'err' : 'muted') + '" style="margin-bottom:8px">' + esc(st.msg) + '</div>' : '') +
+      '<button class="btn btn-primary btn-sm" data-rcvcgo="' + esc(r.id) + '"' + (st.busy ? ' disabled' : '') + ' style="margin-right:6px">' +
+        (st.busy ? 'Re-reconciling…' : 'Re-reconcile') + '</button>' +
+      '<button class="btn btn-secondary btn-sm" data-rcvcx="' + esc(r.id) + '"' + (st.busy ? ' disabled' : '') + '>Cancel</button>');
+  }
+
+  async function openVendorChange(id){
+    const r = runs.find(x => String(x.id) === String(id));
+    if(!r) return;
+    vc[id] = { loading: true };
+    render();
+    try {
+      const { data, error } = await sb.functions.invoke('review-scan', { body: { action: 'lists', client_id: r.client_id } });
+      if(error) throw error;
+      if(!data || data.ok === false) throw new Error(
+        data && data.error === 'reauth_needed' ? 'This client’s QuickBooks connection has expired — reconnect it first.'
+        : ((data && data.error) || 'could not load vendors'));
+      vc[id] = { vendors: data.vendors || [] };
+    } catch(e){
+      vc[id] = { err: 'Could not load vendors: ' + ((e && e.message) || e) };
+    }
+    render();
+  }
+
+  async function linesOf(r){
+    if(Array.isArray(detail[r.id])) return detail[r.id];
+    const { data, error } = await sb.from('reconciliations').select('rows').eq('id', r.id).maybeSingle();
+    if(error) throw error;
+    detail[r.id] = (data && Array.isArray(data.rows)) ? data.rows : [];
+    return detail[r.id];
+  }
+
+  async function applyVendorChange(id){
+    const r = runs.find(x => String(x.id) === String(id));
+    const st = vc[id];
+    if(!r || !st || st.busy) return;
+    const sel = document.getElementById('rcVcSel-' + id);
+    const vid = sel && sel.value;
+    if(!vid){ st.msg = 'Pick a vendor first.'; st.err = true; render(); return; }
+    const vname = ((st.vendors || []).find(v => String(v.id) === String(vid)) || {}).name || '';
+    if(String(vid) === String(r.vendor_id)){ st.msg = 'That is the vendor it is already matched to.'; st.err = true; render(); return; }
+    const sibBox = document.getElementById('rcVcSib-' + id);
+    const learn = !!(document.getElementById('rcVcLearn-' + id) || {}).checked;
+    const targets = [r].concat(sibBox && sibBox.checked ? siblingsOf(r) : []);
+    st.pick = vid; st.busy = true; st.err = false; st.msg = '';
+    render();
+
+    const done = [], failed = [];
+    for(const t of targets){
+      try {
+        const lines = (await linesOf(t)).filter(x => x && x.match !== 'NOT_IN_STATEMENT')
+          .map(x => ({ invoice_number: x.invoice_number, date: x.date, amount: x.amount,
+                       description: x.description || null, status: x.status || null }));
+        if(!lines.length) throw new Error('no statement lines saved on this run');
+        const { data, error } = await sb.functions.invoke('qbo-reconcile', { body: {
+          realm_id: t.realm_id, vendor_id: vid, vendor_name: vname,
+          company_name: t.company_name, statement_date: t.statement_date,
+          client_id: t.client_id, source: 'manual', drive_watch_item_id: t.drive_watch_item_id || null,
+          invoices: lines,
+          // What the statement called the supplier. Sending it is what makes
+          // qbo-reconcile learn the pairing; leaving it empty learns nothing.
+          statement_vendor: learn ? (t.vendor_name || '') : ''
+        }});
+        if(error) throw error;
+        if(!data || data.error) throw new Error((data && data.error) || 'reconcile failed');
+        if(data.saved === false) throw new Error('reconciled, but the new run could not be saved — the old one was left as it was');
+        await writeOrThrow(sb.from('reconciliations').update({
+          replaced_at: new Date().toISOString(),
+          replaced_by: (currentUser && currentUser.id) || null,
+          replaced_vendor_name: data.vendor_name || vname
+        }).eq('id', t.id), 'Mark statement replaced');
+        done.push(t.statement_date + ': ' + (data.summary ? (data.summary.matched || 0) + ' matched, ' +
+          (data.summary.missing_in_qbo || 0) + ' missing' : 'done'));
+      } catch(e){
+        failed.push((t.statement_date || t.id) + ': ' + ((e && e.message) || e));
+      }
+    }
+    delete vc[id];
+    alert((done.length ? 'Re-reconciled against ' + vname + ':\n' + done.join('\n') : '') +
+          (failed.length ? (done.length ? '\n\n' : '') + 'Not changed:\n' + failed.join('\n') : '') +
+          (done.length && learn ? '\n\nFuture ' + (r.company_name || '') + ' statements read as “' + (r.vendor_name || '') +
+             '” will go to ' + vname + '.' : ''));
+    window.RcLogReload();
   }
 
   async function openPdf(id, btn){
@@ -18340,7 +18497,7 @@ init();
         .not('status', 'in', '(pushed,duplicate)')))),
       safe(async () => { const r = await scope(sb.from('expo_client_flags').select('client_id')); if (r.error) throw r.error; return r.data || []; }),
       safe(() => all(() => scope(sb.from('invoice_queue').select('id,client_id').gte('created_at', addDays(B.start, -60) + 'T00:00:00Z')))),
-      safe(() => all(() => scope(sb.from('reconciliations').select('id,client_id,company_name,statement_date,held,released_at,summary,recheck,marked_ok_at')
+      safe(() => all(() => scope(sb.from('reconciliations').select('id,client_id,company_name,statement_date,held,released_at,summary,recheck,marked_ok_at,replaced_at')
         .gte('statement_date', B.start).lte('statement_date', stmtEnd)))),
       safe(async () => { const r = await scope(sb.from('drive_watches').select('id,client_id').eq('kind', 'statement').eq('active', true)); if (r.error) throw r.error; return r.data || []; }),
       safe(async () => { const r = await scope(sb.from('labor_accrual_config').select('client_id,enabled,pay_frequency,start_month')); if (r.error) throw r.error; return r.data || []; }),
@@ -18496,12 +18653,16 @@ init();
       else if (!D.recs.ok) out.statements = UNK(D.recs.err);
       else if (!D.waiting.ok) out.statements = UNK(D.waiting.err);
       else {
-        const recsAll = D.recs.v.filter(r => r.client_id === id);
+        // A run replaced by "Change vendor" is history — its re-reconciled
+        // run stands in for it.
+        const recsAll = D.recs.v.filter(r => r.client_id === id && !r.replaced_at);
         // Statements a person marked OK in the Log count as reconciled with
         // nothing outstanding (10/8/26).
         const okCount = recsAll.filter(r => r.marked_ok_at).length;
         const recs = recsAll.filter(r => !r.marked_ok_at);
-        const held = recs.filter(r => r.held && !r.released_at).length;
+        // Held, unless the recheck has since found every item in QuickBooks.
+        const held = recs.filter(r => r.held && !r.released_at &&
+          !(r.recheck && r.recheck.still_missing != null && Number(r.recheck.still_missing) === 0)).length;
         const waitingFiles = D.waiting.v.filter(w => myWatches.includes(w.watch_id));
         const needsVendor = waitingFiles.filter(w => w.status === 'needs_vendor').length;
         const errored = waitingFiles.filter(w => w.status === 'error').length;
