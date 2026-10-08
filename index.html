@@ -9754,7 +9754,8 @@ const INV_PUSH_ERR = {
   not_connected:'This client isn’t linked to QuickBooks.', reauth_needed:'The QuickBooks connection needs re-authorising for this client.',
   not_approved:'Only approved invoices can be pushed.', no_lines:'This invoice has no lines.', forbidden:'Your login isn’t allowed to push.',
   unresolved_accounts:'Some GL accounts don’t match an account in QuickBooks.', vendor_not_found:'The vendor isn’t in QuickBooks under that name.',
-  does_not_foot:'The bill wouldn’t match the invoice total.', server_error:'QuickBooks returned an error.'
+  does_not_foot:'The bill wouldn’t match the invoice total.', server_error:'QuickBooks returned an error.',
+  amounts_missing:'Not posted — amounts are missing. Fill in the invoice total and every line amount, then try again.'
 };
 async function InvCallPush(invoiceId, dryRun){
   const r=await sb.functions.invoke('qbo-push',{ body:{ invoice_id:invoiceId, dry_run:dryRun } });
@@ -9786,7 +9787,8 @@ function InvPushPreviewHtml(d){
         : 'Vendor “'+invEsc(d.vendor||'')+'” not found in QuickBooks <button class="inv-linkbtn" onclick="InvVendorPicker()">Match vendor</button>')
     +ck(!un.length, un.length?'Accounts not found: '+un.map(invEsc).join(', '):'All accounts found')
     +(d.txn_type==='vendor_credit'?'<li class="ok">↩ Negative invoice — posts as a <b>vendor credit</b> for '+invMoney(Math.abs(Number(d.computed_total)||0))+'</li>':'')
-    +(d.zero_total?'<li class="ok">○ $0 invoice — posts as a $0 bill'+(d.no_total_read?' (<b>no amounts were read — check it really is $0</b>)':'')+'</li>':'')
+    +(d.amounts_blocked?ck(false,'Amounts missing — '+invEsc(d.amounts_detail||'')+' Fill them in before posting.'):'')
+    +(d.zero_total&&!d.amounts_blocked?'<li class="ok">○ $0 invoice — posts as a $0 bill</li>':'')
     +ck(d.foots!==false, d.foots===false?'Bill total '+invMoney(d.computed_total)+' ≠ invoice '+invMoney(d.invoice_total):'Bill total '+invMoney(d.computed_total)+' matches the invoice')
     +ck(!dup.found, !dup.checked?'No invoice # to check for duplicates':dup.overridden?'Marked not a duplicate — duplicate check skipped':dup.found?'Already in QuickBooks as '+invTxnWord(dup.existing_type)+' #'+invEsc(dup.existing_qbo_bill_id)+(dup.existing_total!=null?' for '+invMoney(dup.existing_total):'')+' <button class="inv-linkbtn" onclick="InvMarkDuplicate(\''+invEsc(dup.existing_qbo_bill_id)+'\')">Mark as duplicate</button>':'Not already in QuickBooks')
     +ck(d.will_attach, d.will_attach?'PDF will be attached':'No stored PDF to attach')
@@ -9986,7 +9988,7 @@ async function InvPushSelected(){
     const pv=await InvCallPush(ids[i], true);
     const label=(pv.vendor||'')+(pv.invoice_total!=null?' '+invMoney(pv.invoice_total):'');
     if(!pv.error && pv.mode!=='duplicate' && pv.would_post && pv.reason==='dry_run' && pv.global_push_enabled!==false && pv.client_push_enabled!==false) ready.push({id:ids[i],pv});
-    else blocked.push((label||ids[i])+': '+(pv.error?(INV_PUSH_ERR[pv.error]||pv.error):pv.mode==='duplicate'?'already in QuickBooks':!pv.vendor_resolved?'vendor not matched in QuickBooks':(pv.unresolved_accounts||[]).length?'accounts not found':pv.foots===false?'does not match invoice total':pv.client_push_enabled===false?'push is off for this client':'not ready'));
+    else blocked.push((label||ids[i])+': '+(pv.error?(INV_PUSH_ERR[pv.error]||pv.error):pv.mode==='duplicate'?'already in QuickBooks':!pv.vendor_resolved?'vendor not matched in QuickBooks':pv.amounts_blocked?'amounts missing':(pv.unresolved_accounts||[]).length?'accounts not found':pv.foots===false?'does not match invoice total':pv.client_push_enabled===false?'push is off for this client':'not ready'));
   }
   const tot=ready.reduce((s,x)=>s+(Number(x.pv.computed_total)||0),0);
   if(!ready.length){ alert('None of the selected invoices can be pushed yet:\n\n'+blocked.join('\n')); InvPickUpdate(); return; }
