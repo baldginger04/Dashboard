@@ -14859,7 +14859,14 @@ init();
   const detail = {};          // reconciliation id -> rows array, or {__error}
 
   const sum       = r => (r && r.summary) || {};
-  const missingOf = r => Number(sum(r).missing_in_qbo || 0);
+  // 10/8/26: the morning Review Queue scan re-checks every statement that had
+  // missing items and saves the answer as r.recheck. When it exists, "missing"
+  // means STILL missing today, not missing when the statement was reconciled.
+  const missingOf = r => (r && r.recheck && r.recheck.still_missing != null)
+    ? Number(r.recheck.still_missing || 0) : Number(sum(r).missing_in_qbo || 0);
+  const rcNorm = s => String(s == null ? '' : s).toLowerCase().replace(/[\s\-_#./:]/g, '').replace(/^0+(?=.)/, '');
+  const foundSet = r => new Set(((r && r.recheck && r.recheck.found_items) || []).map(x => rcNorm(x.invoice_number)));
+  const stillMissingLines = (r, d) => { const f = foundSet(r); return d.filter(x => x.match === 'MISSING_IN_QBO' && !f.has(rcNorm(x.invoice_number))); };
   const mismatchOf= r => Number(sum(r).amount_mismatch || 0) + Number(sum(r).date_mismatch || 0);
   const strayOf   = r => Number(sum(r).not_in_statement || 0);
 
@@ -14895,7 +14902,7 @@ init();
       const build = () => {
         let q = sb.from('reconciliations')
           .select('id,realm_id,company_name,vendor_name,statement_date,summary,run_by,created_at,' +
-                  'release_requested_at,release_requested_by,released_at,held,held_reason');
+                  'release_requested_at,release_requested_by,released_at,held,held_reason,recheck');
         if(since) q = q.gte('created_at', since);
         return q;
       };
@@ -15083,14 +15090,28 @@ init();
     } else {
       const matched = d.filter(x => x.match === 'MATCHED').length;
       let out = '';
+      const fs = foundSet(r);
+      if(r.recheck){
+        out += '<div class="rc-dnone" style="margin-bottom:6px">Rechecked ' + esc(when(r.recheck.checked_at)) + ': ' +
+          Number(r.recheck.found || 0) + ' of ' + Number(r.recheck.original_missing || 0) +
+          ' missing item' + (Number(r.recheck.original_missing) === 1 ? '' : 's') + ' now in QuickBooks, ' +
+          Number(r.recheck.still_missing || 0) + ' still missing.' +
+          (r.recheck.credits_unverified ? ' ' + Number(r.recheck.credits_unverified) + ' credit(s) could not be checked.' : '') + '</div>';
+      }
       GROUPS.forEach(g => {
-        const rows = d.filter(x => x.match === g[0]);
+        let rows = d.filter(x => x.match === g[0]);
+        if(g[0] === 'MISSING_IN_QBO') {
+          const entered = rows.filter(x => fs.has(rcNorm(x.invoice_number)));
+          rows = rows.filter(x => !fs.has(rcNorm(x.invoice_number)));
+          if(entered.length) out += '<div class="rc-dgrp" style="color:var(--green)">Entered in QuickBooks since — found on recheck · ' +
+            entered.length + '</div>' + lineTable(entered, g[0]);
+        }
         if(!rows.length) return;
         out += '<div class="rc-dgrp" style="color:' + g[2] + '">' + g[1] +
                ' · ' + rows.length + '</div>' + lineTable(rows, g[0]);
       });
       if(!out) out = '<div class="rc-dnone">Everything on this statement matched the books.</div>';
-      const miss = d.filter(x => x.match === 'MISSING_IN_QBO').length;
+      const miss = stillMissingLines(r, d).length;
       const copy = miss
         ? '<button class="btn btn-secondary btn-sm" data-rccopy="' + esc(r.id) + '" ' +
           'style="margin-top:12px">Copy the ' + miss + ' missing item' + (miss===1?'':'s') +
@@ -15214,7 +15235,7 @@ init();
     const r = runs.find(x => String(x.id) === String(id));
     const d = detail[id];
     if(!r || !Array.isArray(d)) return;
-    const miss = d.filter(x => x.match === 'MISSING_IN_QBO');
+    const miss = stillMissingLines(r, d);
     if(!miss.length) return;
     const pad = (s, w) => { s = String(s); return s + ' '.repeat(Math.max(1, w - s.length)); };
     const lines = miss.map(x =>
@@ -15727,6 +15748,15 @@ init();
       await loadMonth();
     },
     setClient(key) { S.clientId = key; loadMonth(); },
+    // Close Board (10/8/26): set the client and month before the page opens,
+    // without loading, so showPage('syncmon') lands straight on them.
+    prime(key, ym) {
+      if (key) S.clientId = key;
+      const m = /^(\d{4})-(\d{2})$/.exec(ym || '');
+      if (m) S.month = new Date(Number(m[1]), Number(m[2]) - 1, 1);
+      const sel = document.getElementById('smClient');
+      if (sel && key && [...sel.options].some(o => o.value === key)) sel.value = key;
+    },
     shift(n) { S.month = new Date(S.month.getFullYear(), S.month.getMonth() + n, 1); loadMonth(); },
     today() { S.month = monthStart(new Date()); loadMonth(); },
     reload() { loadClients().then(loadMonth); },
@@ -18095,7 +18125,9 @@ init();
      Daily sales      every day of the month posted; no red, purple or dry-run days
      Review Queue     no open rows dated in the month
      Expo             no unposted invoices dated in the month
-     Statements       statements filed for the month reconciled, none waiting or held
+     Statements       statements filed for the month reconciled, none waiting or held,
+                      and every item that was missing now found in QuickBooks
+                      (the morning Review Queue scan re-checks them — 10/8/26)
      Payroll accrual  accrual posted for the month (accrual clients)
      W-9              W-9 audit signed off for the month or the month after
 
@@ -18187,7 +18219,7 @@ init();
         .not('status', 'in', '(pushed,duplicate)')))),
       safe(async () => { const r = await scope(sb.from('expo_client_flags').select('client_id')); if (r.error) throw r.error; return r.data || []; }),
       safe(() => all(() => scope(sb.from('invoice_queue').select('id,client_id').gte('created_at', addDays(B.start, -60) + 'T00:00:00Z')))),
-      safe(() => all(() => scope(sb.from('reconciliations').select('id,client_id,statement_date,held,released_at,summary')
+      safe(() => all(() => scope(sb.from('reconciliations').select('id,client_id,company_name,statement_date,held,released_at,summary,recheck')
         .gte('statement_date', B.start).lte('statement_date', stmtEnd)))),
       safe(async () => { const r = await scope(sb.from('drive_watches').select('id,client_id').eq('kind', 'statement').eq('active', true)); if (r.error) throw r.error; return r.data || []; }),
       safe(async () => { const r = await scope(sb.from('labor_accrual_config').select('client_id,enabled,pay_frequency,start_month')); if (r.error) throw r.error; return r.data || []; }),
@@ -18314,16 +18346,24 @@ init();
         || (D.expoRecent.ok && D.expoRecent.v.some(x => x.client_id === id));
       if (!usesExpo) out.expo = NA;
       else {
-        const open = D.inv.v.filter(r => r.client_id === id && (
-          (r.invoice_date && r.invoice_date >= B.start && r.invoice_date <= B.end) ||
-          (!r.invoice_date && String(r.created_at || '').slice(0, 10) <= addDays(B.end, STATEMENT_GRACE_DAYS))));
-        if (!open.length) out.expo = { state: 'ok', text: '✓', tip: 'Every invoice dated in the month is posted' };
-        else {
-          const by = {};
-          open.forEach(r => { by[r.status] = (by[r.status] || 0) + 1; });
-          const name = { needs_review: 'needs review', approved: 'approved, not posted', pending: 'ready / processing', error: 'error', processing: 'processing' };
-          out.expo = { state: 'bad', text: String(open.length), tip: Object.keys(by).map(k => by[k] + ' ' + (name[k] || k)).join(' · ') };
-        }
+        const mine = D.inv.v.filter(r => r.client_id === id);
+        // Real invoices dated in the month that haven't posted.
+        const open = mine.filter(r => r.invoice_date && r.invoice_date >= B.start && r.invoice_date <= B.end);
+        // Files Expo couldn't read at all (no invoice date) — often not an
+        // invoice (a tax letter, an EIN notice). They sit under Expo's All tab.
+        const unreadable = mine.filter(r => !r.invoice_date && r.status === 'error' &&
+          String(r.created_at || '').slice(0, 10) <= addDays(B.end, STATEMENT_GRACE_DAYS));
+        const undated = mine.filter(r => !r.invoice_date && r.status !== 'error' &&
+          String(r.created_at || '').slice(0, 10) <= addDays(B.end, STATEMENT_GRACE_DAYS));
+        const name = { needs_review: 'needs review', approved: 'approved, not posted', pending: 'ready', error: 'error', processing: 'processing' };
+        const by = {};
+        open.concat(undated).forEach(r => { by[r.status] = (by[r.status] || 0) + 1; });
+        const parts = Object.keys(by).map(k => by[k] + ' ' + (name[k] || k));
+        if (unreadable.length) parts.push(plural(unreadable.length, 'file') + ' Expo couldn’t read (All tab — delete if not an invoice)');
+        const tab = by.needs_review ? 'needs_review' : by.approved ? 'approved' : by.pending ? 'pending' : by.processing ? 'processing' : 'all';
+        if (open.length || undated.length) out.expo = { state: 'bad', text: String(open.length + undated.length), tip: parts.join(' · '), tab };
+        else if (unreadable.length) out.expo = { state: 'warn', text: unreadable.length + ' unreadable', tip: parts.join(' · '), tab: 'all' };
+        else out.expo = { state: 'ok', text: '✓', tip: 'Every invoice dated in the month is posted' };
       }
     }
 
@@ -18341,16 +18381,26 @@ init();
         const needsVendor = waitingFiles.filter(w => w.status === 'needs_vendor').length;
         const errored = waitingFiles.filter(w => w.status === 'error').length;
         const queued = waitingFiles.filter(w => w.status === 'delivered').length;
-        const missing = recs.reduce((n, r) => n + (Number(r.summary && r.summary.missing_in_qbo) || 0), 0);
+        // Missing items: use the morning recheck when there is one (what is
+        // STILL missing), otherwise what was missing when it reconciled.
+        let still = 0, unchecked = 0, foundSince = 0;
+        recs.forEach(r => {
+          if (r.recheck && r.recheck.still_missing != null) { still += Number(r.recheck.still_missing) || 0; foundSince += Number(r.recheck.found) || 0; }
+          else unchecked += Number(r.summary && r.summary.missing_in_qbo) || 0;
+        });
+        const lastCheck = recs.map(r => r.recheck && r.recheck.checked_at).filter(Boolean).sort().pop();
         const bad = [];
         if (held) bad.push(plural(held, 'statement') + ' held');
         if (needsVendor) bad.push(plural(needsVendor, 'file') + ' needing a vendor match');
         if (errored) bad.push(plural(errored, 'file') + ' that failed');
         if (queued) bad.push(plural(queued, 'file') + ' still in line');
-        if (bad.length) out.statements = { state: 'bad', text: String(held + needsVendor + errored + queued), tip: bad.join(' · ') };
+        if (still) bad.push(`${still} item${still === 1 ? '' : 's'} still not in QuickBooks` + (lastCheck ? ` (rechecked ${new Date(lastCheck).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : ''));
+        const company = (recs.find(r => r.company_name) || {}).company_name || '';
+        const outcome = held ? 'held' : (still || unchecked) ? 'missing' : '';
+        if (bad.length) out.statements = { state: 'bad', text: String(held + needsVendor + errored + queued + still), tip: bad.join(' · ') + (foundSince ? ` · ${foundSince} entered since` : '') + (unchecked ? ` · ${unchecked} missing item${unchecked === 1 ? '' : 's'} not rechecked yet` : ''), company, outcome };
+        else if (unchecked) out.statements = { state: 'warn', text: unchecked + ' to recheck', tip: `${unchecked} item${unchecked === 1 ? ' was' : 's were'} missing when reconciled — not rechecked yet (the morning scan does it)`, company, outcome };
         else if (!recs.length) out.statements = { state: 'warn', text: 'none yet', tip: 'No statements dated in the month have been reconciled yet' };
-        else if (missing) out.statements = { state: 'warn', text: missing + ' missing', tip: `${plural(recs.length, 'statement')} reconciled; ${missing} item${missing === 1 ? ' was' : 's were'} missing from QuickBooks when reconciled (may since be entered — see Reconciliation Log)` };
-        else out.statements = { state: 'ok', text: '✓', tip: plural(recs.length, 'statement') + ' reconciled, nothing missing' };
+        else out.statements = { state: 'ok', text: '✓', tip: plural(recs.length, 'statement') + ' reconciled' + (foundSince ? `; all ${foundSince} missing item${foundSince === 1 ? '' : 's'} since entered` : ', nothing missing'), company };
       }
     }
 
@@ -18393,9 +18443,9 @@ init();
     const cls = 'cb-cell s-' + r.state;
     let inner = esc(r.text);
     if (r.state === 'progress') inner = '<span class="cb-bar"><span style="width:' + r.pct + '%"></span></span>' + esc(r.text);
-    const act = colKey === 'tasks' ? `onclick="openClient('${c.id}')"`
-      : colKey === 'review' ? `onclick="CloseBoard.go('rq','${c.id}')"`
-      : col.page ? `onclick="CloseBoard.go('${col.page}','${c.id}')"` : '';
+    const act = r.state === 'na' ? ''
+      : colKey === 'tasks' ? `onclick="openClient('${c.id}')"`
+      : `onclick="CloseBoard.go('${colKey}','${c.id}')"`;
     return `<td><button type="button" class="${cls}" ${act} title="${esc(r.tip || '')}">${inner}</button></td>`;
   }
 
@@ -18464,9 +18514,53 @@ init();
     setPreparer(v) { S.preparer = v; render(); },
     setHideDone(v) { S.hideDone = !!v; render(); },
     reload,
-    go(page, clientId) {
-      if (typeof showPage === 'function') showPage(page);
-      if (page === 'rq' && window.RQ && clientId) setTimeout(() => window.RQ.pick(clientId), 50);
+    // Open the page for a column with this client (and month) already chosen.
+    async go(colKey, clientId) {
+      const col = COLS.find(k => k.key === colKey);
+      if (!col || !col.page || typeof showPage !== 'function') return;
+      const c = clientsList().find(x => x.id === clientId);
+      const r = (S.data && c) ? evalClient(c, S.data) : {};
+      const cell = r[colKey] || {};
+      const waitFor = async (test, ms = 6000) => {
+        const t0 = Date.now();
+        while (Date.now() - t0 < ms) { try { if (test()) return true; } catch (e) {} await new Promise(f => setTimeout(f, 120)); }
+        return false;
+      };
+      try {
+        if (colKey === 'review') {
+          showPage('rq');
+          if (window.RQ) setTimeout(() => window.RQ.pick(clientId), 50);
+        } else if (colKey === 'sales') {
+          // Choose this client's POS (its first live one) and the board's
+          // month BEFORE the page loads, so it opens straight onto them.
+          const src = (S.data.srcs.v || []).find(x => x.client_id === clientId && x.enabled);
+          const key = clientId + '|' + (src ? src.source : '');
+          if (window.SyncMon && window.SyncMon.prime) window.SyncMon.prime(key, S.period);
+          showPage('syncmon');
+        } else if (colKey === 'expo') {
+          // Same idea for Expo: client and tab set first, then the page loads them.
+          if (typeof Inv !== 'undefined') {
+            Inv.client = clientId; Inv.tab = cell.tab || 'all'; Inv.screen = 'list';
+            try { localStorage.setItem('bg_inv_client', clientId); } catch (e) {}
+          }
+          showPage('invoices');
+        } else if (colKey === 'statements') {
+          showPage('reconciler');
+          if (window.RcLogView) {
+            window.RcLogView('log');
+            const company = cell.company || '';
+            await waitFor(() => { const el = document.getElementById('rcLogClient'); return el && (!company || [...el.options].some(o => o.value === company)); });
+            const cs = document.getElementById('rcLogClient'); if (cs && company) cs.value = company;
+            const os = document.getElementById('rcLogOutcome'); if (os) os.value = cell.outcome || '';
+            if (window.RcLogRender) window.RcLogRender();
+          }
+        } else if (colKey === 'w9') {
+          showPage('w9');
+          if (window.W9 && window.W9.openClient) setTimeout(() => window.W9.openClient(clientId), 50);
+        } else {
+          showPage(col.page);
+        }
+      } catch (e) { console.warn('[close board] open failed', e); }
     },
   };
 
@@ -18519,6 +18613,8 @@ init();
   window.__CloseBoardInternals = { evalClient, monthBounds, closePeriodKey, defaultPeriod, addDays };
 })();
 </script>
+
+
 
 </body>
 </html>
