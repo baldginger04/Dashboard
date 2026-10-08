@@ -1056,6 +1056,7 @@
     #page-close .cb-cell.s-na{background:transparent;color:var(--text3);cursor:default}
     #page-close .cb-cell.s-unknown{background:var(--bg3);color:var(--text2);border-color:var(--border2)}
     #page-close .cb-cell.s-progress{background:var(--bg);color:var(--text2);border-color:var(--border2)}
+    #page-close .cb-cell.s-info{background:var(--bg);color:var(--text2);border-color:var(--border2);font-weight:500}
     #page-close .cb-bar{display:inline-block;width:36px;height:6px;border-radius:3px;background:var(--bg3);overflow:hidden}
     #page-close .cb-bar span{display:block;height:100%;background:var(--navy)}
     /* ── Review Queue (10/8/26) ── */
@@ -14859,6 +14860,10 @@ init();
   const $ = id => document.getElementById(id);
 
   let runs = [], people = {}, loaded = false, openId = null, current = 'work';
+  // Statement files that have arrived but not reconciled yet (10/8/26). They
+  // have no reconciliation row, so before this they were visible nowhere.
+  let waiting = [], waitingErr = '';
+  const HOLD_HOURS = 48;     // must match HOLD_HOURS in statement-autorun
   const detail = {};          // reconciliation id -> rows array, or {__error}
 
   const sum       = r => (r && r.summary) || {};
@@ -14921,6 +14926,7 @@ init();
       };
       runs = await fetchAllRows(build, 1000);
       runs.sort((a,b) => String(b.created_at||'').localeCompare(String(a.created_at||'')));
+      await loadWaiting();
       await loadPeople();
       loaded = true;
       fillClients();
@@ -14932,6 +14938,127 @@ init();
         '<div class="rc-muted" style="margin-top:.45rem">If that mentions permissions, or the log ' +
         'stays empty while the Reconcile tab shows history, the <code>reconciliations</code> table ' +
         'is missing a team select policy.</div>';
+    }
+  }
+
+  async function loadWaiting(){
+    waiting = []; waitingErr = '';
+    try {
+      const w = await sb.from('drive_watches').select('id,client_id').eq('kind', 'statement');
+      if(w.error) throw w.error;
+      const byWatch = {};
+      (w.data || []).forEach(x => { byWatch[x.id] = x.client_id; });
+      const ids = Object.keys(byWatch);
+      const items = [];
+      for(let i = 0; i < ids.length; i += 100){
+        const r = await sb.from('drive_watch_items')
+          .select('id,watch_id,file_name,status,error_message,detected_at,drive_url,reconcile_attempts,blocked_vendor,reconcile_now_at')
+          .eq('storage_bucket', 'statements')
+          .in('watch_id', ids.slice(i, i + 100))
+          .in('status', ['delivered', 'needs_vendor', 'error']);
+        if(r.error) throw r.error;
+        items.push(...(r.data || []));
+      }
+      const cids = [...new Set(items.map(x => byWatch[x.watch_id]).filter(Boolean))];
+      const names = {};
+      if(cids.length){
+        const c = await sb.from('clients').select('id,name').in('id', cids);
+        if(!c.error) (c.data || []).forEach(x => { names[x.id] = x.name; });
+      }
+      waiting = items.map(x => Object.assign({}, x, {
+        client_id: byWatch[x.watch_id] || null,
+        client_name: names[byWatch[x.watch_id]] || ''
+      })).sort((a,b) => String(a.detected_at||'').localeCompare(String(b.detected_at||'')));
+    } catch(e){
+      waitingErr = (e && e.message) || String(e);
+    }
+  }
+
+  // Which waiting files belong to the client picked in the filter. The filter
+  // lists QuickBooks company names (from the runs); a waiting file only knows
+  // its Triple client, so match on either.
+  function waitingFiltered(){
+    const c = (($('rcLogClient')||{}).value) || '';
+    const o = (($('rcLogOutcome')||{}).value) || '';
+    const v = ((($('rcLogVendor')||{}).value) || '').trim().toLowerCase();
+    if(o === 'clean' || o === 'mismatch' || o === 'stray') return [];
+    return waiting.filter(w => {
+      if(c && w.client_name !== c &&
+         !runs.some(r => String(r.client_id) === String(w.client_id) && String(r.company_name||'') === c)) return false;
+      if(v && String(w.file_name||'').toLowerCase().indexOf(v) === -1 &&
+              String(w.blocked_vendor||'').toLowerCase().indexOf(v) === -1) return false;
+      if(o === 'held' && w.status === 'delivered') return false;
+      return true;
+    });
+  }
+
+  function waitingStatus(w){
+    const age = Date.now() - Date.parse(w.detected_at || 0);
+    const due = new Date(Date.parse(w.detected_at || 0) + HOLD_HOURS * 3600000);
+    const dueTxt = due.toLocaleString('en-US', { weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+    if(w.status === 'delivered'){
+      if(w.reconcile_now_at)
+        return { c: 'var(--blue)', t: 'Queued — reconciles on the next run (within 15 minutes)',
+                 tip: 'Reconcile now was pressed ' + when(w.reconcile_now_at) + '. The chase email and filing happen as usual.' };
+      if(age < (HOLD_HOURS + 1) * 3600000)
+        return { c: 'var(--text2)', t: 'Settling — reconciles about ' + dueTxt,
+                 tip: 'Held ' + HOLD_HOURS + ' hours after it arrives so its invoices can come through Expo first.' };
+      return { c: 'var(--red)', t: 'Overdue — should have reconciled by ' + dueTxt,
+               tip: 'Past the settling period and still not picked up. Tell Ed.' };
+    }
+    if(w.status === 'needs_vendor')
+      return { c: 'var(--yellow)', t: 'Needs a vendor match' + (w.blocked_vendor ? ' — statement says “' + w.blocked_vendor + '”' : ''),
+               tip: (w.error_message || '') + ' Reconcile it by hand in the Reconcile tab; the pairing is remembered.' };
+    return { c: 'var(--red)', t: 'Failed' + (w.reconcile_attempts ? ' (attempt ' + w.reconcile_attempts + ' of 3)' : ''),
+             tip: w.error_message || '' };
+  }
+
+  function waitingHtml(){
+    if(waitingErr) return '<div class="rc-err" style="margin-bottom:.8rem">Could not load statements waiting to reconcile: ' + esc(waitingErr) + '</div>';
+    const list = waitingFiltered();
+    if(!list.length) return '';
+    const rows = list.map(w => {
+      const st = waitingStatus(w);
+      const file = w.drive_url
+        ? '<a href="' + esc(w.drive_url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">' + esc(w.file_name || 'statement') + ' ↗</a>'
+        : esc(w.file_name || 'statement');
+      const now = (w.status === 'delivered' && !w.reconcile_now_at)
+        ? '<button class="btn btn-secondary btn-sm" data-rcnow="' + esc(w.id) + '" title="Skip the ' + HOLD_HOURS +
+          '-hour wait — it reconciles on the next run, within 15 minutes">Reconcile now</button>'
+        : '';
+      return '<tr><td>' + esc(when(w.detected_at)) + '</td><td>' + esc(w.client_name || '—') + '</td>' +
+        '<td>' + file + '</td><td title="' + esc(st.tip) + '" style="color:' + st.c + ';font-weight:600">' + esc(st.t) + '</td>' +
+        '<td style="text-align:right">' + now + '</td></tr>';
+    }).join('');
+    return '<div style="margin-bottom:1rem"><div class="rc-dgrp" style="color:var(--text2)">Waiting to reconcile · ' + list.length + '</div>' +
+      '<table class="rc-dtbl"><thead><tr><th>Arrived</th><th>Client</th><th>Statement file</th><th>Status</th><th></th></tr></thead><tbody>' +
+      rows + '</tbody></table>' +
+      '<div class="rc-muted" style="margin-top:4px">New statements wait ' + HOLD_HOURS + ' hours so their invoices can come through first, then reconcile on their own. ' +
+      'Click a file to open it in Drive. <b>Reconcile now</b> skips the wait if its invoices are already in.</div></div>';
+  }
+
+  // Stamps the file so the NEXT scheduled run takes it, wait or no wait. Not
+  // reconciled from here directly: the chase email and the move to Processed
+  // are done by the Apps Script from that scheduled run's result.
+  function bindWaiting(host){
+    host.querySelectorAll('[data-rcnow]').forEach(b =>
+      b.addEventListener('click', ev => { ev.stopPropagation(); reconcileNow(b.getAttribute('data-rcnow'), b); }));
+  }
+
+  async function reconcileNow(id, btn){
+    const w = waiting.find(x => String(x.id) === String(id));
+    if(!w) return;
+    if(btn){ btn.disabled = true; btn.textContent = 'Queueing…'; }
+    const at = new Date().toISOString();
+    try {
+      await writeOrThrow(sb.from('drive_watch_items').update({
+        reconcile_now_at: at, reconcile_now_by: (currentUser && currentUser.id) || null
+      }).eq('id', id).eq('status', 'delivered'), 'Reconcile statement now');
+      w.reconcile_now_at = at;
+      render();
+    } catch(e){
+      if(btn){ btn.disabled = false; btn.textContent = 'Reconcile now'; }
+      alert('Could not queue it: ' + ((e && e.message) || e));
     }
   }
 
@@ -14958,7 +15085,12 @@ init();
     const sel = $('rcLogClient');
     if(!sel) return;
     const keep = sel.value;
-    const list = [...new Set(runs.map(r => String(r.company_name||'').trim()).filter(Boolean))]
+    const runNames = runs.map(r => String(r.company_name||'').trim());
+    // A client whose only statement is still waiting has no run yet; list it
+    // under its Triple name so it can still be picked.
+    const waitNames = waiting.filter(w => !runs.some(r => String(r.client_id) === String(w.client_id)))
+      .map(w => String(w.client_name||'').trim());
+    const list = [...new Set(runNames.concat(waitNames).filter(Boolean))]
       .sort((a,b) => a.localeCompare(b));
     sel.innerHTML = '<option value="">All clients</option>' +
       list.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
@@ -14990,13 +15122,16 @@ init();
     const list = filtered();
     renderStats(list);
 
+    const wait = waitingHtml();
     if(!runs.length){
-      host.innerHTML = '<div class="rc-muted">No reconciliations recorded in this period. ' +
+      host.innerHTML = wait + '<div class="rc-muted">No reconciliations recorded in this period. ' +
         'Widen the period, or run one from the Reconcile tab.</div>';
+      bindWaiting(host);
       return;
     }
     if(!list.length){
-      host.innerHTML = '<div class="rc-muted">No runs match these filters.</div>';
+      host.innerHTML = wait + '<div class="rc-muted">No reconciled runs match these filters.</div>';
+      bindWaiting(host);
       return;
     }
 
@@ -15045,7 +15180,7 @@ init();
       return main + (isOpen ? detailRow(r) : '');
     }).join('');
 
-    host.innerHTML = '<table class="rc-tbl">' + head + '<tbody>' + body + '</tbody></table>' +
+    host.innerHTML = wait + '<table class="rc-tbl">' + head + '<tbody>' + body + '</tbody></table>' +
       '<div class="rc-muted" style="margin-top:.7rem">' + list.length +
       ' run' + (list.length === 1 ? '' : 's') + ' shown. Click any row for the line detail.</div>';
 
@@ -15059,6 +15194,7 @@ init();
     const act = (attr, fn) => host.querySelectorAll('[' + attr + ']').forEach(b =>
       b.addEventListener('click', ev => { ev.stopPropagation(); fn(b.getAttribute(attr), b); }));
     act('data-rcpdf',   openPdf);
+    bindWaiting(host);
     act('data-rcrerun', rerun);
     act('data-rcok',    markOk);
     act('data-rcunok',  unmarkOk);
@@ -18425,6 +18561,7 @@ init();
   const money = n => '$' + Math.round(Math.abs(Number(n) || 0)).toLocaleString('en-US');
   const CATS = (typeof CLOSE_CATS !== 'undefined') ? CLOSE_CATS
     : ['Account Reconciliation', 'Transaction Review', 'Payee/Entity Review', 'Final Review', 'Pre-Close'];
+  const STATEMENT_HOLD_HOURS = 48;      // must match HOLD_HOURS in statement-autorun
   const STATEMENT_GRACE_DAYS = 10;      // statements dated up to the 10th of the next month count
 
   const COLS = [
@@ -18523,7 +18660,7 @@ init();
       waiting = await safe(async () => {
         const out = [];
         for (let i = 0; i < ids.length; i += 100) {
-          const r = await sb.from('drive_watch_items').select('id,watch_id,status,file_name')
+          const r = await sb.from('drive_watch_items').select('id,watch_id,status,file_name,detected_at')
             .in('watch_id', ids.slice(i, i + 100)).in('status', ['delivered', 'needs_vendor', 'error']);
           if (r.error) throw r.error;
           out.push(...(r.data || []));
@@ -18677,7 +18814,20 @@ init();
         const waitingFiles = D.waiting.v.filter(w => myWatches.includes(w.watch_id));
         const needsVendor = waitingFiles.filter(w => w.status === 'needs_vendor').length;
         const errored = waitingFiles.filter(w => w.status === 'error').length;
-        const queued = waitingFiles.filter(w => w.status === 'delivered').length;
+        // A statement is held for STATEMENT_HOLD_HOURS after it arrives so its
+        // invoices can come through first (statement-autorun's HOLD_HOURS).
+        // Inside that window it is "arriving" — not an issue (Ed, 10/8/26).
+        // Only one still waiting well past it is stuck, and that is red.
+        const settleMs = (STATEMENT_HOLD_HOURS + 1) * 3600000;
+        const delivered = waitingFiles.filter(w => w.status === 'delivered');
+        const isSettling = w => w.detected_at && (Date.now() - Date.parse(w.detected_at)) < settleMs;
+        const arriving = delivered.filter(isSettling);
+        const queued = delivered.length - arriving.length;
+        const readyAt = w => new Date(Date.parse(w.detected_at) + STATEMENT_HOLD_HOURS * 3600000)
+          .toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const arrivingTip = arriving.length
+          ? plural(arriving.length, 'statement') + ' arriving — ' + arriving.map(w => (w.file_name || 'file') + ' reconciles about ' + readyAt(w)).join('; ')
+          : '';
         // Missing items: use the morning recheck when there is one (what is
         // STILL missing), otherwise what was missing when it reconciled.
         let still = 0, unchecked = 0, foundSince = 0;
@@ -18690,12 +18840,14 @@ init();
         if (held) bad.push(plural(held, 'statement') + ' held');
         if (needsVendor) bad.push(plural(needsVendor, 'file') + ' needing a vendor match');
         if (errored) bad.push(plural(errored, 'file') + ' that failed');
-        if (queued) bad.push(plural(queued, 'file') + ' still in line');
+        if (queued) bad.push(plural(queued, 'file') + ` waiting more than ${STATEMENT_HOLD_HOURS / 24} days — should have reconciled by now`);
         if (still) bad.push(`${still} item${still === 1 ? '' : 's'} still not in QuickBooks` + (lastCheck ? ` (rechecked ${new Date(lastCheck).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : ''));
-        const company = (recsAll.find(r => r.company_name) || {}).company_name || '';
+        const company = (recsAll.find(r => r.company_name) || {}).company_name || c.name || '';
         const outcome = held ? 'held' : (still || unchecked) ? 'missing' : '';
-        if (bad.length) out.statements = { state: 'bad', text: String(held + needsVendor + errored + queued + still), tip: bad.join(' · ') + (foundSince ? ` · ${foundSince} entered since` : '') + (unchecked ? ` · ${unchecked} missing item${unchecked === 1 ? '' : 's'} not rechecked yet` : ''), company, outcome };
-        else if (unchecked) out.statements = { state: 'warn', text: unchecked + ' to recheck', tip: `${unchecked} item${unchecked === 1 ? ' was' : 's were'} missing when reconciled — not rechecked yet (the morning scan does it, or press Re-run in the Log)`, company, outcome };
+        const plusArr = arrivingTip ? ' · ' + arrivingTip : '';
+        if (bad.length) out.statements = { state: 'bad', text: String(held + needsVendor + errored + queued + still), tip: bad.join(' · ') + (foundSince ? ` · ${foundSince} entered since` : '') + (unchecked ? ` · ${unchecked} missing item${unchecked === 1 ? '' : 's'} not rechecked yet` : '') + plusArr, company, outcome };
+        else if (unchecked) out.statements = { state: 'warn', text: unchecked + ' to recheck', tip: `${unchecked} item${unchecked === 1 ? ' was' : 's were'} missing when reconciled — not rechecked yet (the morning scan does it, or press Re-run in the Log)` + plusArr, company, outcome };
+        else if (arriving.length) out.statements = { state: 'info', text: arriving.length + ' arriving', tip: arrivingTip + (recsAll.length ? ' · ' + plural(recsAll.length, 'statement') + ' already reconciled, nothing missing' : ''), company, outcome: '' };
         // Nothing reconciled for the month yet reads as a dash, not amber (Ed, 10/8/26).
         else if (!recsAll.length) out.statements = { state: 'na', text: '—', tip: 'No statements dated in this month have been reconciled yet' };
         else out.statements = { state: 'ok', text: '✓', tip: plural(recsAll.length, 'statement') + ' reconciled' + (foundSince ? `; all ${foundSince} missing item${foundSince === 1 ? '' : 's'} since entered` : ', nothing missing') + (okCount ? `; ${okCount} marked OK` : ''), company };
@@ -18756,7 +18908,9 @@ init();
     if (S.preparer === '__me') rows = rows.filter(x => x.c.preparer === me || x.c.reviewer === me);
     else if (S.preparer) rows = rows.filter(x => x.c.preparer === S.preparer);
     const reds = x => COLS.filter(k => isRed(x.r[k.key])).length;
-    const allGreen = x => COLS.every(k => ['ok', 'na', 'progress-ok'].includes(x.r[k.key].state)) && x.r.tasks.state !== 'progress';
+    // 'info' = shown for awareness only, e.g. a statement still in its 48-hour
+    // settling period. Not an issue, so it never stops a row being all green.
+    const allGreen = x => COLS.every(k => ['ok', 'na', 'progress-ok', 'info'].includes(x.r[k.key].state)) && x.r.tasks.state !== 'progress';
     if (S.hideDone) rows = rows.filter(x => !allGreen(x));
     const byName = (a, b) => (a.c.name || '').localeCompare(b.c.name || '');
     // Blanks (no preparer, no due date) always sink to the bottom, whichever
