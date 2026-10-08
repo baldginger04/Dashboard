@@ -1044,6 +1044,9 @@
     #page-close .cb-table tr:last-child td{border-bottom:none}
     #page-close .cb-client{font:inherit;font-weight:600;color:var(--navy);background:none;border:none;padding:0;cursor:pointer;text-align:left}
     #page-close .cb-client:hover{text-decoration:underline}
+    #page-close .cb-sort{font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer;white-space:nowrap}
+    #page-close .cb-sort:hover{color:var(--navy)}
+    #page-close .cb-sort.on{color:var(--navy);font-weight:700}
     #page-close .cb-dim{color:var(--text3)}
     #page-close .cb-late{color:var(--red);font-weight:600}
     #page-close .cb-cell{font:inherit;font-size:12px;font-weight:600;min-width:74px;min-height:30px;border-radius:6px;padding:.25rem .5rem;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;gap:.4rem;justify-content:center}
@@ -18434,7 +18437,15 @@ init();
     { key: 'w9',         label: 'W-9',             page: 'w9' },
   ];
 
-  const S = { booted: false, period: '', preparer: '', hideDone: false, data: null, loading: false };
+  const S = { booted: false, period: '', preparer: '', hideDone: false, data: null, loading: false,
+              // Column sort (10/8/26). key '' = the default: most red first.
+              // Click a header for A→Z / soonest first, again to reverse,
+              // a third time to go back to the default. Remembered per browser.
+              sortKey: '', sortDir: 1 };
+  try {
+    const saved = JSON.parse(localStorage.getItem('bg_cb_sort') || 'null');
+    if (saved && ['client', 'preparer', 'due'].includes(saved.key)) { S.sortKey = saved.key; S.sortDir = saved.dir === -1 ? -1 : 1; }
+  } catch (e) {}
 
   // ---------------------------------------------------------------- dates
 
@@ -18746,7 +18757,17 @@ init();
     const reds = x => COLS.filter(k => isRed(x.r[k.key])).length;
     const allGreen = x => COLS.every(k => ['ok', 'na', 'progress-ok'].includes(x.r[k.key].state)) && x.r.tasks.state !== 'progress';
     if (S.hideDone) rows = rows.filter(x => !allGreen(x));
-    rows.sort((a, b) => reds(b) - reds(a) || a.c.name.localeCompare(b.c.name));
+    const byName = (a, b) => (a.c.name || '').localeCompare(b.c.name || '');
+    // Blanks (no preparer, no due date) always sink to the bottom, whichever
+    // direction is chosen.
+    const blankLast = (va, vb, cmp) => (!va && !vb) ? 0 : !va ? 1 : !vb ? -1 : cmp(va, vb) * S.sortDir;
+    const dueOf = x => x.c.close_due_date ? String(x.c.close_due_date).slice(0, 10) : '';
+    if (S.sortKey === 'client') rows.sort((a, b) => byName(a, b) * S.sortDir);
+    else if (S.sortKey === 'preparer') rows.sort((a, b) =>
+      blankLast(a.c.preparer || '', b.c.preparer || '', (x, y) => x.localeCompare(y)) || byName(a, b));
+    else if (S.sortKey === 'due') rows.sort((a, b) =>
+      blankLast(dueOf(a), dueOf(b), (x, y) => x < y ? -1 : x > y ? 1 : 0) || byName(a, b));
+    else rows.sort((a, b) => reds(b) - reds(a) || byName(a, b));
 
     const totals = { ready: 0, red: 0, clients: rows.length };
     rows.forEach(x => { if (allGreen(x)) totals.ready++; if (reds(x)) totals.red++; });
@@ -18756,7 +18777,15 @@ init();
       `<div class="cb-sum bad"><b>${totals.red}</b><span>with something red</span></div>`;
 
     if (!rows.length) { body.innerHTML = '<div class="empty">No clients match.</div>'; return; }
-    body.innerHTML = '<div class="cb-scroll"><table class="cb-table"><thead><tr><th>Client</th><th>Preparer</th><th>Due</th>' +
+    const sortTh = (key, label) => {
+      const on = S.sortKey === key;
+      const arrow = on ? (S.sortDir === 1 ? ' ▲' : ' ▼') : '';
+      return '<th><button type="button" class="cb-sort' + (on ? ' on' : '') + '" onclick="CloseBoard.sortBy(\'' + key + '\')" ' +
+        'title="Sort by ' + label.toLowerCase() + (on ? ' — click again to ' + (S.sortDir === 1 ? 'reverse' : 'go back to most red first') : '') + '">' +
+        label + arrow + '</button></th>';
+    };
+    body.innerHTML = '<div class="cb-scroll"><table class="cb-table"><thead><tr>' +
+      sortTh('client', 'Client') + sortTh('preparer', 'Preparer') + sortTh('due', 'Due') +
       COLS.map(k => '<th>' + esc(k.label) + '</th>').join('') + '</tr></thead><tbody>' +
       rows.map(x => {
         const due = x.c.close_due_date ? new Date(String(x.c.close_due_date).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
@@ -18799,6 +18828,13 @@ init();
     setPeriod(v) { if (/^\d{4}-\d{2}$/.test(v)) { S.period = v; reload(); } },
     setPreparer(v) { S.preparer = v; render(); },
     setHideDone(v) { S.hideDone = !!v; render(); },
+    sortBy(key) {
+      if (S.sortKey !== key) { S.sortKey = key; S.sortDir = 1; }
+      else if (S.sortDir === 1) S.sortDir = -1;
+      else { S.sortKey = ''; S.sortDir = 1; }
+      try { localStorage.setItem('bg_cb_sort', JSON.stringify({ key: S.sortKey, dir: S.sortDir })); } catch (e) {}
+      render();
+    },
     reload,
     // Open the page for a column with this client (and month) already chosen.
     async go(colKey, clientId) {
