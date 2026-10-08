@@ -7377,12 +7377,31 @@ async function loadAutomation() {
 // a card combines every row from the latest run (rows within 3 hours of the
 // newest) and shows the worst status among them, the clients that need a look,
 // and the total files saved.
+//
+// Missing-invoice checks (Ecolab, Ben E. Keith, Bill's Oyster, DEHY) log
+// "partial" when they find invoices missing from QuickBooks — that's the check
+// working, and the preparer has already been emailed, so it's shown as
+// information on a green card, not as a problem (Ed, 10/8/26). Amber/red stay
+// for real trouble: failed sign-ins or downloads, new accounts, overdue runs.
+function autoIsCheckFinding(r) {
+  if (!r || r.status !== 'partial') return false;
+  const d = String(r.detail || '');
+  if (/FAILED|failed|error|NEW ACCOUNT/i.test(d)) return false;
+  return /\[check|missing/i.test(d);
+}
+
 function autoLatestRun(p, byPipe) {
   const rows = [];
   [p.key, ...(p.alias || [])].forEach(k => (byPipe[k] || []).forEach(r => rows.push(r)));
   if (!rows.length) return null;
   rows.sort((x, y) => new Date(y.ran_at) - new Date(x.ran_at));
-  if (!p.perClient) return { ...rows[0], detail: String(rows[0].detail || '').split('\n')[0] };
+  const firstLine = r => String(r.detail || '').split('\n')[0];
+  if (!p.perClient) {
+    const r = rows[0];
+    return autoIsCheckFinding(r)
+      ? { ...r, status: 'success', detail: 'ℹ︎ ' + firstLine(r) + ' — preparer emailed' }
+      : { ...r, detail: firstLine(r) };
+  }
   const newest = new Date(rows[0].ran_at).getTime();
   // Newest row per client within the run (a client re-run by hand counts once).
   // The client is how each row's detail starts: "vanhorns [live]: …",
@@ -7393,20 +7412,16 @@ function autoLatestRun(p, byPipe) {
     if (seen.has(who)) return;
     seen.add(who); run.push(r);
   });
+  const info = run.filter(autoIsCheckFinding);
+  const bad = run.filter(r => (r.status === 'error' || r.status === 'partial') && !autoIsCheckFinding(r));
   const rank = { error: 2, partial: 1 };
-  const worst = run.reduce((w, r) => ((rank[r.status] || 0) > (rank[w.status] || 0) ? r : w), run[0]);
-  const bad = run.filter(r => r.status === 'error' || r.status === 'partial');
-  const firstLine = r => String(r.detail || '').split('\n')[0];
-  const detail = run.length === 1 ? firstLine(run[0])
+  const worst = bad.reduce((w, r) => ((rank[r.status] || 0) > (rank[w.status] || 0) ? r : w), bad[0] || { ...run[0], status: 'success' });
+  let detail = run.length === 1 ? firstLine(run[0])
     : `${run.length} clients — ${run.length - bad.length} ok` + (bad.length ? `, ${bad.length} need a look: ` + bad.map(firstLine).join(' · ') : '');
+  if (info.length) detail += ` · ℹ︎ missing invoices flagged (preparer emailed): ` + info.map(firstLine).join(' · ');
   return { ...worst, ran_at: rows[0].ran_at, detail, invoice_count: run.reduce((n, r) => n + (r.invoice_count || 0), 0) };
 }
 
-// The full set of pipelines we expect to hear from. Listing them here (rather
-// than only rendering whatever rows exist) means a pipeline that has gone
-// SILENT still shows up — which is exactly the failure we want to catch.
-// key must match the label each script passes to logRun/logRun2 exactly.
-// staleH = hours of silence past which we flag it overdue (cadence + buffer).
 const AUTO_SECTIONS = [
   { name: 'Delivery', note: 'Apps Script — sends Drive invoices on to XtraChef / Ramp, and Audubon bills to QuickBooks.' },
   { name: 'Vendor portals', note: 'portal-fetch on GitHub, every other day ~5:47am. Downloads only invoices that are not already in the client’s QuickBooks.' },
