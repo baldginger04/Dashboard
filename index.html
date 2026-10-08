@@ -14862,13 +14862,17 @@ init();
   // 10/8/26: the morning Review Queue scan re-checks every statement that had
   // missing items and saves the answer as r.recheck. When it exists, "missing"
   // means STILL missing today, not missing when the statement was reconciled.
-  const missingOf = r => (r && r.recheck && r.recheck.still_missing != null)
+  // 10/8/26 (later): "Mark as OK" — a person looked at the statement and
+  // cleared it. A marked statement counts as nothing outstanding everywhere
+  // (stats, filters, Close Board); its lines are still shown in the detail.
+  const isOk      = r => !!(r && r.marked_ok_at);
+  const missingOf = r => isOk(r) ? 0 : (r && r.recheck && r.recheck.still_missing != null)
     ? Number(r.recheck.still_missing || 0) : Number(sum(r).missing_in_qbo || 0);
   const rcNorm = s => String(s == null ? '' : s).toLowerCase().replace(/[\s\-_#./:]/g, '').replace(/^0+(?=.)/, '');
   const foundSet = r => new Set(((r && r.recheck && r.recheck.found_items) || []).map(x => rcNorm(x.invoice_number)));
   const stillMissingLines = (r, d) => { const f = foundSet(r); return d.filter(x => x.match === 'MISSING_IN_QBO' && !f.has(rcNorm(x.invoice_number))); };
-  const mismatchOf= r => Number(sum(r).amount_mismatch || 0) + Number(sum(r).date_mismatch || 0);
-  const strayOf   = r => Number(sum(r).not_in_statement || 0);
+  const mismatchOf= r => isOk(r) ? 0 : Number(sum(r).amount_mismatch || 0) + Number(sum(r).date_mismatch || 0);
+  const strayOf   = r => isOk(r) ? 0 : Number(sum(r).not_in_statement || 0);
 
   function when(ts){
     if(!ts) return '—';
@@ -14902,7 +14906,8 @@ init();
       const build = () => {
         let q = sb.from('reconciliations')
           .select('id,realm_id,company_name,vendor_name,statement_date,summary,run_by,created_at,' +
-                  'release_requested_at,release_requested_by,released_at,held,held_reason,recheck');
+                  'release_requested_at,release_requested_by,released_at,held,held_reason,recheck,' +
+                  'client_id,vendor_id,drive_watch_item_id,marked_ok_at,marked_ok_by,marked_ok_note');
         if(since) q = q.gte('created_at', since);
         return q;
       };
@@ -14927,7 +14932,7 @@ init();
   async function loadPeople(){
     // release_requested_by as well as run_by: the held panel names whoever
     // pressed Send anyway, and an unresolved id would read as "someone".
-    const ids = [...new Set(runs.flatMap(r => [r.run_by, r.release_requested_by])
+    const ids = [...new Set(runs.flatMap(r => [r.run_by, r.release_requested_by, r.marked_ok_by])
                                 .filter(Boolean))];
     const need = ids.filter(id => !(id in people));
     if(!need.length) return;
@@ -14998,7 +15003,9 @@ init();
       const s = sum(r), miss = missingOf(r), mis = mismatchOf(r);
       // A statement with an open QBO bill the vendor never listed is NOT clean
       // — it just isn't a document to chase, so it gets its own wording.
-      const chip = isHeld(r)
+      const chip = isOk(r)
+        ? '<span class="rc-pill" style="background:var(--green)">Marked OK</span>'
+        : isHeld(r)
         ? (r.released_at
             ? '<span class="rc-pill" style="background:var(--green)">Released</span>'
             : (r.release_requested_at
@@ -15039,6 +15046,12 @@ init();
         ev.stopPropagation();
         copyMissing(b.getAttribute('data-rccopy'), b);
       }));
+    const act = (attr, fn) => host.querySelectorAll('[' + attr + ']').forEach(b =>
+      b.addEventListener('click', ev => { ev.stopPropagation(); fn(b.getAttribute(attr), b); }));
+    act('data-rcpdf',   openPdf);
+    act('data-rcrerun', rerun);
+    act('data-rcok',    markOk);
+    act('data-rcunok',  unmarkOk);
     host.querySelectorAll('[data-rcrelease]').forEach(b =>
       b.addEventListener('click', ev => {
         // The row itself toggles open/closed on click, so this must not bubble.
@@ -15089,13 +15102,14 @@ init();
               'existed still have their counts above.</div>';
     } else {
       const matched = d.filter(x => x.match === 'MATCHED').length;
-      let out = '';
+      let out = actionBar(r);
       const fs = foundSet(r);
       if(r.recheck){
         out += '<div class="rc-dnone" style="margin-bottom:6px">Rechecked ' + esc(when(r.recheck.checked_at)) + ': ' +
           Number(r.recheck.found || 0) + ' of ' + Number(r.recheck.original_missing || 0) +
           ' missing item' + (Number(r.recheck.original_missing) === 1 ? '' : 's') + ' now in QuickBooks, ' +
           Number(r.recheck.still_missing || 0) + ' still missing.' +
+          (r.recheck.found_other_vendor ? ' ' + Number(r.recheck.found_other_vendor) + ' of those found were entered under a different vendor.' : '') +
           (r.recheck.credits_unverified ? ' ' + Number(r.recheck.credits_unverified) + ' credit(s) could not be checked.' : '') + '</div>';
       }
       GROUPS.forEach(g => {
@@ -15104,7 +15118,12 @@ init();
           const entered = rows.filter(x => fs.has(rcNorm(x.invoice_number)));
           rows = rows.filter(x => !fs.has(rcNorm(x.invoice_number)));
           if(entered.length) out += '<div class="rc-dgrp" style="color:var(--green)">Entered in QuickBooks since — found on recheck · ' +
-            entered.length + '</div>' + lineTable(entered, g[0]);
+            entered.length + '</div>' + lineTable(entered.map(x => {
+              const f = foundItem(r, x.invoice_number);
+              return (f && f.other_vendor_name)
+                ? Object.assign({}, x, { status: 'entered under ' + f.other_vendor_name })
+                : Object.assign({}, x, { status: 'entered' });
+            }), g[0]);
         }
         if(!rows.length) return;
         out += '<div class="rc-dgrp" style="color:' + g[2] + '">' + g[1] +
@@ -15139,7 +15158,7 @@ init();
   // names on the letterhead, and how much history the vendor has in QuickBooks
   // — are only available at reconcile time and are not in this row. A rule
   // re-derived here would mark statements held that were deliberately sent.
-  function isHeld(r){ return !!r.held && !r.released_at; }
+  function isHeld(r){ return !!r.held && !r.released_at && !r.marked_ok_at; }
 
   function heldPanel(r){
     if(!isHeld(r)) return '';
@@ -15193,6 +15212,108 @@ init();
       if(btn){ btn.disabled = false; btn.textContent = 'Send the ' + miss + ' missing item' +
                                                       (miss===1?'':'s') + ' anyway'; }
       alert('Could not queue that release: ' + ((e && e.message) || e));
+    }
+  }
+
+  // ── statement actions: View statement · Re-run · Mark as OK ───────────
+  const foundItem = (r, num) => ((r && r.recheck && r.recheck.found_items) || [])
+    .find(f => rcNorm(f.invoice_number) === rcNorm(num));
+
+  function actionBar(r){
+    const origMissing = Number(sum(r).missing_in_qbo || 0);
+    const b = (attr, label, title) => '<button class="btn btn-secondary btn-sm" ' + attr + '="' + esc(r.id) + '"' +
+      (title ? ' title="' + esc(title) + '"' : '') + ' style="margin:0 6px 6px 0">' + label + '</button>';
+    let h = '<div style="display:flex;flex-wrap:wrap;align-items:center;margin-bottom:10px">';
+    if(r.drive_watch_item_id) h += b('data-rcpdf', '📄 View statement', 'Open the vendor statement PDF');
+    if(origMissing > 0 && r.client_id) h += b('data-rcrerun', '↻ Re-run', 'Check QuickBooks again now for every item that was missing');
+    h += isOk(r)
+      ? b('data-rcunok', 'Undo “OK”', 'Put this statement back to its open status')
+      : b('data-rcok', '✓ Mark as OK', 'Clear this statement — nothing more to chase');
+    h += '</div>';
+    if(isOk(r)){
+      h += '<div class="rc-dnone" style="margin-bottom:10px;color:var(--green)">Marked OK by ' +
+        esc(people[r.marked_ok_by] || 'someone') + ' ' + esc(when(r.marked_ok_at)) +
+        (r.marked_ok_note ? ' — “' + esc(r.marked_ok_note) + '”' : '') + '.</div>';
+    }
+    return h;
+  }
+
+  async function openPdf(id, btn){
+    // Open the tab now, inside the click — a tab opened after an await is
+    // blocked as a pop-up by Safari and Chrome.
+    const w = window.open('', '_blank');
+    const was = btn ? btn.textContent : '';
+    if(btn){ btn.disabled = true; btn.textContent = 'Opening…'; }
+    try {
+      const { data, error } = await sb.functions.invoke('review-scan', { body: { action: 'statement_pdf', reconciliation_id: id } });
+      if(error) throw error;
+      if(!data || !data.ok || !data.url) throw new Error((data && (data.message || data.error)) || 'no file');
+      if(w) w.location.href = data.url; else window.location.href = data.url;
+    } catch(e){
+      if(w) w.close();
+      alert('Could not open the statement: ' + ((e && e.message) || e));
+    } finally {
+      if(btn){ btn.disabled = false; btn.textContent = was; }
+    }
+  }
+
+  async function rerun(id, btn){
+    const r = runs.find(x => String(x.id) === String(id));
+    if(!r) return;
+    if(btn){ btn.disabled = true; btn.textContent = 'Checking QuickBooks…'; }
+    try {
+      const { data, error } = await sb.functions.invoke('review-scan', { body: { action: 'recheck', reconciliation_id: id } });
+      if(error) throw error;
+      if(!data || data.ok === false) {
+        const code = data && data.error;
+        throw new Error(code === 'reauth_needed' ? 'This client’s QuickBooks connection has expired — reconnect it, then try again.'
+                      : code === 'not_connected' ? 'This client is not connected to QuickBooks.'
+                      : (code || 'request failed'));
+      }
+      if(data.recheck) r.recheck = data.recheck;
+      render();
+    } catch(e){
+      if(btn){ btn.disabled = false; btn.textContent = '↻ Re-run'; }
+      alert('Could not re-run: ' + ((e && e.message) || e));
+    }
+  }
+
+  async function markOk(id, btn){
+    const r = runs.find(x => String(x.id) === String(id));
+    if(!r) return;
+    const note = prompt('Mark this ' + (r.vendor_name || '') + ' statement as OK?\n\n' +
+      'It stops counting as outstanding here and on the Close Board.\n' +
+      'Optional — why is it OK? (e.g. "entered before QBO was set up")', '');
+    if(note === null) return;          // Cancel
+    const patch = {
+      marked_ok_at: new Date().toISOString(),
+      marked_ok_by: (currentUser && currentUser.id) || null,
+      marked_ok_note: String(note).trim() || null
+    };
+    if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+    try {
+      await writeOrThrow(sb.from('reconciliations').update(patch).eq('id', id), 'Mark statement OK');
+      Object.assign(r, patch);
+      await loadPeople();
+      render();
+    } catch(e){
+      if(btn){ btn.disabled = false; btn.textContent = '✓ Mark as OK'; }
+      alert('Could not mark it OK: ' + ((e && e.message) || e));
+    }
+  }
+
+  async function unmarkOk(id, btn){
+    const r = runs.find(x => String(x.id) === String(id));
+    if(!r) return;
+    if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+    const patch = { marked_ok_at: null, marked_ok_by: null, marked_ok_note: null };
+    try {
+      await writeOrThrow(sb.from('reconciliations').update(patch).eq('id', id), 'Undo statement OK');
+      Object.assign(r, patch);
+      render();
+    } catch(e){
+      if(btn){ btn.disabled = false; btn.textContent = 'Undo “OK”'; }
+      alert('Could not undo: ' + ((e && e.message) || e));
     }
   }
 
@@ -18219,7 +18340,7 @@ init();
         .not('status', 'in', '(pushed,duplicate)')))),
       safe(async () => { const r = await scope(sb.from('expo_client_flags').select('client_id')); if (r.error) throw r.error; return r.data || []; }),
       safe(() => all(() => scope(sb.from('invoice_queue').select('id,client_id').gte('created_at', addDays(B.start, -60) + 'T00:00:00Z')))),
-      safe(() => all(() => scope(sb.from('reconciliations').select('id,client_id,company_name,statement_date,held,released_at,summary,recheck')
+      safe(() => all(() => scope(sb.from('reconciliations').select('id,client_id,company_name,statement_date,held,released_at,summary,recheck,marked_ok_at')
         .gte('statement_date', B.start).lte('statement_date', stmtEnd)))),
       safe(async () => { const r = await scope(sb.from('drive_watches').select('id,client_id').eq('kind', 'statement').eq('active', true)); if (r.error) throw r.error; return r.data || []; }),
       safe(async () => { const r = await scope(sb.from('labor_accrual_config').select('client_id,enabled,pay_frequency,start_month')); if (r.error) throw r.error; return r.data || []; }),
@@ -18375,7 +18496,11 @@ init();
       else if (!D.recs.ok) out.statements = UNK(D.recs.err);
       else if (!D.waiting.ok) out.statements = UNK(D.waiting.err);
       else {
-        const recs = D.recs.v.filter(r => r.client_id === id);
+        const recsAll = D.recs.v.filter(r => r.client_id === id);
+        // Statements a person marked OK in the Log count as reconciled with
+        // nothing outstanding (10/8/26).
+        const okCount = recsAll.filter(r => r.marked_ok_at).length;
+        const recs = recsAll.filter(r => !r.marked_ok_at);
         const held = recs.filter(r => r.held && !r.released_at).length;
         const waitingFiles = D.waiting.v.filter(w => myWatches.includes(w.watch_id));
         const needsVendor = waitingFiles.filter(w => w.status === 'needs_vendor').length;
@@ -18395,12 +18520,12 @@ init();
         if (errored) bad.push(plural(errored, 'file') + ' that failed');
         if (queued) bad.push(plural(queued, 'file') + ' still in line');
         if (still) bad.push(`${still} item${still === 1 ? '' : 's'} still not in QuickBooks` + (lastCheck ? ` (rechecked ${new Date(lastCheck).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : ''));
-        const company = (recs.find(r => r.company_name) || {}).company_name || '';
+        const company = (recsAll.find(r => r.company_name) || {}).company_name || '';
         const outcome = held ? 'held' : (still || unchecked) ? 'missing' : '';
         if (bad.length) out.statements = { state: 'bad', text: String(held + needsVendor + errored + queued + still), tip: bad.join(' · ') + (foundSince ? ` · ${foundSince} entered since` : '') + (unchecked ? ` · ${unchecked} missing item${unchecked === 1 ? '' : 's'} not rechecked yet` : ''), company, outcome };
-        else if (unchecked) out.statements = { state: 'warn', text: unchecked + ' to recheck', tip: `${unchecked} item${unchecked === 1 ? ' was' : 's were'} missing when reconciled — not rechecked yet (the morning scan does it)`, company, outcome };
-        else if (!recs.length) out.statements = { state: 'warn', text: 'none yet', tip: 'No statements dated in the month have been reconciled yet' };
-        else out.statements = { state: 'ok', text: '✓', tip: plural(recs.length, 'statement') + ' reconciled' + (foundSince ? `; all ${foundSince} missing item${foundSince === 1 ? '' : 's'} since entered` : ', nothing missing'), company };
+        else if (unchecked) out.statements = { state: 'warn', text: unchecked + ' to recheck', tip: `${unchecked} item${unchecked === 1 ? ' was' : 's were'} missing when reconciled — not rechecked yet (the morning scan does it, or press Re-run in the Log)`, company, outcome };
+        else if (!recsAll.length) out.statements = { state: 'warn', text: 'none yet', tip: 'No statements dated in the month have been reconciled yet' };
+        else out.statements = { state: 'ok', text: '✓', tip: plural(recsAll.length, 'statement') + ' reconciled' + (foundSince ? `; all ${foundSince} missing item${foundSince === 1 ? '' : 's'} since entered` : ', nothing missing') + (okCount ? `; ${okCount} marked OK` : ''), company };
       }
     }
 
