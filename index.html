@@ -1019,6 +1019,42 @@
     .arch-banner{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#F4F2EC;border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin:-.5rem 0 1.25rem;font-size:13px;color:var(--text2)}
     .arch-pill{display:inline-block;font-size:11px;font-weight:600;letter-spacing:.03em;padding:3px 9px;border-radius:999px;background:#ECEAE3;color:var(--text3)}
     #archToggleBtn[aria-pressed="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+    /* ── Close Board (10/8/26) ── */
+    #page-close .cb-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+    #page-close .cb-controls{display:flex;gap:.8rem;flex-wrap:wrap;align-items:flex-end}
+    #page-close .cb-field{display:flex;flex-direction:column;gap:.25rem}
+    #page-close .cb-field label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-close select,#page-close input[type=month]{font:inherit;font-size:13px;padding:.45rem .6rem;border:1px solid var(--border);border-radius:7px;background:var(--bg)}
+    #page-close .cb-btn{font:inherit;font-weight:600;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.45rem .85rem;cursor:pointer}
+    #page-close .cb-btn:hover{border-color:var(--accent);color:var(--accent)}
+    #page-close .cb-toggle{display:flex;gap:.4rem;align-items:center;font-size:12.5px;color:var(--text2);cursor:pointer;padding-bottom:.5rem}
+    #page-close .cb-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-close .cb-sums{display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem}
+    #page-close .cb-sum{background:var(--bg2);border:1px solid var(--border);border-radius:9px;padding:.55rem .9rem;display:flex;gap:.5rem;align-items:baseline}
+    #page-close .cb-sum b{font-size:20px;font-weight:700;color:var(--text)}
+    #page-close .cb-sum span{font-size:12px;color:var(--text3)}
+    #page-close .cb-sum.good b{color:var(--green)}
+    #page-close .cb-sum.bad b{color:var(--red)}
+    #page-close .cb-legend{display:flex;gap:.9rem;flex-wrap:wrap;font-size:12px;color:var(--text2);margin-bottom:.75rem;align-items:center}
+    #page-close .cb-legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:.3rem;vertical-align:-1px}
+    #page-close .cb-scroll{overflow-x:auto;border:1px solid var(--border);border-radius:9px;background:var(--bg2)}
+    #page-close .cb-table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:940px}
+    #page-close .cb-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;padding:.55rem .5rem;border-bottom:1px solid var(--border2);white-space:nowrap;position:sticky;top:0;background:var(--bg2)}
+    #page-close .cb-table td{padding:.3rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle;white-space:nowrap}
+    #page-close .cb-table tr:last-child td{border-bottom:none}
+    #page-close .cb-client{font:inherit;font-weight:600;color:var(--navy);background:none;border:none;padding:0;cursor:pointer;text-align:left}
+    #page-close .cb-client:hover{text-decoration:underline}
+    #page-close .cb-dim{color:var(--text3)}
+    #page-close .cb-late{color:var(--red);font-weight:600}
+    #page-close .cb-cell{font:inherit;font-size:12px;font-weight:600;min-width:74px;min-height:30px;border-radius:6px;padding:.25rem .5rem;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;gap:.4rem;justify-content:center}
+    #page-close .cb-cell.s-ok,#page-close .cb-cell.s-progress-ok{background:var(--green-bg);color:var(--green);border-color:var(--green-border)}
+    #page-close .cb-cell.s-bad{background:var(--red-bg);color:var(--red);border-color:var(--red)}
+    #page-close .cb-cell.s-warn{background:var(--yellow-bg);color:var(--yellow);border-color:var(--yellow-border)}
+    #page-close .cb-cell.s-na{background:transparent;color:var(--text3);cursor:default}
+    #page-close .cb-cell.s-unknown{background:var(--bg3);color:var(--text2);border-color:var(--border2)}
+    #page-close .cb-cell.s-progress{background:var(--bg);color:var(--text2);border-color:var(--border2)}
+    #page-close .cb-bar{display:inline-block;width:36px;height:6px;border-radius:3px;background:var(--bg3);overflow:hidden}
+    #page-close .cb-bar span{display:block;height:100%;background:var(--navy)}
     /* ── Review Queue (10/8/26) ── */
     #page-rq .rq-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
     #page-rq .rq-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
@@ -1241,6 +1277,7 @@
         <a class="nav-item" id="nav-portal" href="https://client.baldginger.com/" target="_blank" rel="noopener">
           <span>🌐</span> Client Portal <span class="nav-badge" id="portalBadge" style="display:none">0</span>
         </a>
+        <div class="nav-item" onclick="showPage('close')" id="nav-close"><span>🗂️</span> Close Board</div>
         <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Expo</div>
         <div class="nav-item" onclick="showPage('syncmon')" id="nav-syncmon"><span>📆</span> Daily Sales Sync Monitor</div>
         <div class="nav-item" onclick="showPage('salesmap')" id="nav-salesmap"><span>🔗</span> Sales Mapping</div>
@@ -1591,6 +1628,30 @@
           <div style="font-weight:600;font-size:14px;margin-bottom:.6rem">Backfill a range of months</div>
           <div id="laBackfill"></div>
         </div>
+      </div>
+
+      <div class="page" id="page-close">
+        <div class="page-header"><div><div class="page-title">Close Board</div><div class="page-sub">Every client’s close month at a glance — each check reads what Triple already logs. Hover a cell for details, click it to go fix it.</div></div></div>
+        <div class="cb-panel">
+          <div class="cb-controls">
+            <div class="cb-field"><label for="cbPeriod">Close month</label>
+              <input type="month" id="cbPeriod" onchange="CloseBoard.setPeriod(this.value)"></div>
+            <div class="cb-field"><label for="cbPreparer">Preparer</label>
+              <select id="cbPreparer" onchange="CloseBoard.setPreparer(this.value)"></select></div>
+            <label class="cb-toggle"><input type="checkbox" id="cbHideDone" onchange="CloseBoard.setHideDone(this.checked)"> Hide clients that are all green</label>
+            <button type="button" class="cb-btn" onclick="CloseBoard.reload()">Refresh</button>
+          </div>
+          <div class="cb-status" id="cbStatus"></div>
+        </div>
+        <div class="cb-sums" id="cbSummary"></div>
+        <div class="cb-legend">
+          <span><i style="background:var(--green-bg);border:1px solid var(--green-border)"></i>Done</span>
+          <span><i style="background:var(--red-bg);border:1px solid var(--red)"></i>Needs work (number = how many)</span>
+          <span><i style="background:var(--yellow-bg);border:1px solid var(--yellow-border)"></i>Check it</span>
+          <span><i style="background:var(--bg3);border:1px solid var(--border2)"></i>? Couldn’t check</span>
+          <span>— Not used for this client</span>
+        </div>
+        <div id="cbBody"><div class="empty">Loading…</div></div>
       </div>
 
       <div class="page" id="page-rq">
@@ -4840,6 +4901,9 @@ async function quickDoneTask(id, opts = {}) {
   // those entry points have their own guards.
   const onMyView = !!document.querySelector('.nav-item.active')?.id?.startsWith('nav-my');
   if (onMyView && blockedByViewAs('mark a task done')) return;
+  // Close Board gate (10/8/26): a Final Review task asks first if the client's
+  // close checks are still red. Warn only — OK goes through.
+  if (window.CloseGate && !(await window.CloseGate.okToFinish(id))) return;
   // Remove from local cache + re-render immediately (no DB read).
   // This is the optimistic-feedback path for My Day. My Week doesn't have a
   // matching cache, so we reload it explicitly after the DB write succeeds.
@@ -5737,6 +5801,7 @@ async function toggleTask(id) {
   const task = clientTasks.find(t => t.id === id);
   if (!task) return;
   if (inFlightTasks.has(id)) return;          // ignore extra clicks while saving
+  if (task.status !== 'Done' && window.CloseGate && !(await window.CloseGate.okToFinish(id, task))) return;
   inFlightTasks.add(id);
   const newStatus = task.status === 'Done' ? 'Not Started' : 'Done';
   const now = new Date().toISOString();
@@ -7628,6 +7693,7 @@ function showPage(name) {
   if (name === 'analyses') loadAnalyses();
   if (name === 'salestax') loadTaxPage();
   if (name === 'flbz' && window.FlbzOpen) window.FlbzOpen();
+  if (name === 'close' && window.CloseBoardOpen) window.CloseBoardOpen();
   if (name === 'rq' && window.RqOpen) window.RqOpen();
   if (name === 'mv' && window.MvOpen) window.MvOpen();
   if (name === 'w9' && window.W9Open) window.W9Open();
@@ -18017,5 +18083,442 @@ init();
   window.RqBadgeBoot = refreshBadge;
 })();
 </script>
+<script>
+/* ============================================================
+   CLOSE BOARD — added 2026-10-08
+
+   One row per client for a close month, one column per check, read
+   from data Triple already keeps. Nothing here writes anything except
+   the Final Review warning, which only asks.
+
+     Close tasks      CLOSE_CATS tasks done / total (client's current close only)
+     Daily sales      every day of the month posted; no red, purple or dry-run days
+     Review Queue     no open rows dated in the month
+     Expo             no unposted invoices dated in the month
+     Statements       statements filed for the month reconciled, none waiting or held
+     Payroll accrual  accrual posted for the month (accrual clients)
+     W-9              W-9 audit signed off for the month or the month after
+
+   A check that doesn't apply to a client shows "—". A check whose data
+   could not be read shows "?" — never as a pass.
+
+   Final Review gate (Ed, 10/8/26: warn, don't block): marking a Final
+   Review task Done while any check is red asks first, naming what's red.
+   Asked once per client per session.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => '$' + Math.round(Math.abs(Number(n) || 0)).toLocaleString('en-US');
+  const CATS = (typeof CLOSE_CATS !== 'undefined') ? CLOSE_CATS
+    : ['Account Reconciliation', 'Transaction Review', 'Payee/Entity Review', 'Final Review', 'Pre-Close'];
+  const STATEMENT_GRACE_DAYS = 10;      // statements dated up to the 10th of the next month count
+
+  const COLS = [
+    { key: 'tasks',      label: 'Close tasks' },
+    { key: 'sales',      label: 'Daily sales',     page: 'syncmon' },
+    { key: 'review',     label: 'Review Queue',    page: 'rq' },
+    { key: 'expo',       label: 'Expo',            page: 'invoices' },
+    { key: 'statements', label: 'Statements',      page: 'reconciler' },
+    { key: 'accrual',    label: 'Payroll accrual', page: 'labor' },
+    { key: 'w9',         label: 'W-9',             page: 'w9' },
+  ];
+
+  const S = { booted: false, period: '', preparer: '', hideDone: false, data: null, loading: false };
+
+  // ---------------------------------------------------------------- dates
+
+  const todayIso = () => (typeof tzToday === 'function') ? tzToday()
+    : new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
+  const pad = n => String(n).padStart(2, '0');
+  function monthBounds(key) {                       // 'YYYY-MM'
+    const [y, m] = key.split('-').map(Number);
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    return { start: `${y}-${pad(m)}-01`, end: `${y}-${pad(m)}-${pad(last)}`, y, m, last };
+  }
+  function addDays(iso, n) {
+    const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+  }
+  function nextMonthKey(key) { const [y, m] = key.split('-').map(Number); return m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`; }
+  // clients.close_period is "MM-YYYY"; the board works in "YYYY-MM".
+  function closePeriodKey(cp) {
+    const m = String(cp || '').match(/^(\d{2})-(\d{4})$/);
+    return m ? `${m[2]}-${m[1]}` : '';
+  }
+  const monthLabel = key => { const b = monthBounds(key); return new Date(b.y, b.m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); };
+
+  const clientsList = () => (typeof allClients !== 'undefined' ? allClients : [])
+    .filter(c => c && !c.is_firm && !c.archived_at)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+  function defaultPeriod() {
+    const tally = {};
+    clientsList().forEach(c => { const k = closePeriodKey(c.close_period); if (k) tally[k] = (tally[k] || 0) + 1; });
+    let best = '', n = 0;
+    Object.keys(tally).forEach(k => { if (tally[k] > n) { best = k; n = tally[k]; } });
+    if (best) return best;
+    const t = todayIso(); const [y, m] = t.split('-').map(Number);
+    return m === 1 ? `${y - 1}-12` : `${y}-${pad(m - 1)}`;
+  }
+
+  // ---------------------------------------------------------------- loading
+
+  // Every source is read independently; one failing marks only its own
+  // column as "?" instead of breaking the board.
+  async function safe(fn) { try { return { ok: true, v: await fn() }; } catch (e) { return { ok: false, err: (e && e.message) || String(e) }; } }
+  const all = (build) => fetchAllRows(build);
+
+  async function loadAll(periodKey, onlyClientId) {
+    const B = monthBounds(periodKey);
+    const scope = q => onlyClientId ? q.eq('client_id', onlyClientId) : q;
+    const stmtEnd = addDays(B.end, STATEMENT_GRACE_DAYS);
+    const [tasks, srcs, je, conns, ri, runs, inv, expoFlags, expoRecent, recs, watches, labCfg, lab, w9] = await Promise.all([
+      safe(() => all(() => scope(sb.from('tasks').select('id,client_id,category,title,status').in('category', CATS)))),
+      safe(async () => { const r = await scope(sb.from('sync_sources').select('client_id,source,enabled')); if (r.error) throw r.error; return r.data || []; }),
+      safe(() => all(() => scope(sb.from('je_sync_log').select('id,client_id,source,sales_date,status,rev:raw->revision,lock:raw->locked')
+        .gte('sales_date', addDays(B.start, -7)).lte('sales_date', B.end)))),
+      safe(async () => { const r = await scope(sb.from('qbo_connections').select('client_id')); if (r.error) throw r.error; return r.data || []; }),
+      safe(() => all(() => scope(sb.from('review_items').select('id,client_id,severity').eq('status', 'open')
+        .gte('txn_date', B.start).lte('txn_date', B.end)))),
+      safe(async () => { const r = await scope(sb.from('review_scan_runs').select('client_id,status,completed_at').eq('status', 'complete')
+        .order('completed_at', { ascending: false }).limit(1000)); if (r.error) throw r.error; return r.data || []; }),
+      safe(() => all(() => scope(sb.from('invoice_queue').select('id,client_id,status,invoice_date,created_at')
+        .not('status', 'in', '(pushed,duplicate)')))),
+      safe(async () => { const r = await scope(sb.from('expo_client_flags').select('client_id')); if (r.error) throw r.error; return r.data || []; }),
+      safe(() => all(() => scope(sb.from('invoice_queue').select('id,client_id').gte('created_at', addDays(B.start, -60) + 'T00:00:00Z')))),
+      safe(() => all(() => scope(sb.from('reconciliations').select('id,client_id,statement_date,held,released_at,summary')
+        .gte('statement_date', B.start).lte('statement_date', stmtEnd)))),
+      safe(async () => { const r = await scope(sb.from('drive_watches').select('id,client_id').eq('kind', 'statement').eq('active', true)); if (r.error) throw r.error; return r.data || []; }),
+      safe(async () => { const r = await scope(sb.from('labor_accrual_config').select('client_id,enabled,pay_frequency,start_month')); if (r.error) throw r.error; return r.data || []; }),
+      safe(async () => { const r = await scope(sb.from('labor_accruals').select('client_id,status,total,error').eq('period_month', B.start)); if (r.error) throw r.error; return r.data || []; }),
+      safe(async () => { const r = await scope(sb.from('w9_signoffs').select('client_id,period,signed_at').in('period', [periodKey, nextMonthKey(periodKey)])); if (r.error) throw r.error; return r.data || []; }),
+    ]);
+
+    // Statement files that came in but haven't reconciled.
+    let waiting = { ok: true, v: [] };
+    if (watches.ok && watches.v.length) {
+      const ids = watches.v.map(w => w.id);
+      waiting = await safe(async () => {
+        const out = [];
+        for (let i = 0; i < ids.length; i += 100) {
+          const r = await sb.from('drive_watch_items').select('id,watch_id,status,file_name')
+            .in('watch_id', ids.slice(i, i + 100)).in('status', ['delivered', 'needs_vendor', 'error']);
+          if (r.error) throw r.error;
+          out.push(...(r.data || []));
+        }
+        return out;
+      });
+    }
+    return { periodKey, B, tasks, srcs, je, conns, ri, runs, inv, expoFlags, expoRecent, recs, watches, waiting, labCfg, lab, w9 };
+  }
+
+  // ---------------------------------------------------------------- evaluation
+  //
+  // Each check returns { state, text, tip }:
+  //   ok (green) · bad (red) · warn (amber) · na (—, doesn't apply) · unknown (?)
+
+  const NA = { state: 'na', text: '—', tip: 'Not used for this client' };
+  const UNK = err => ({ state: 'unknown', text: '?', tip: 'Couldn’t check: ' + err });
+  const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+
+  function evalClient(c, D) {
+    const out = {};
+    const id = c.id, today = todayIso();
+    const B = D.B;
+    const monthOver = today > B.end;
+    const lastCounted = monthOver ? B.end : addDays(today, -1);
+
+    // -- close tasks
+    if (!D.tasks.ok) out.tasks = UNK(D.tasks.err);
+    else if (closePeriodKey(c.close_period) !== D.periodKey) {
+      out.tasks = { state: 'na', text: '—', tip: 'This client’s current close is ' + (c.close_period || 'not set') + ', so its task list isn’t for this month' };
+    } else {
+      const mine = D.tasks.v.filter(t => t.client_id === id);
+      const done = mine.filter(t => t.status === 'Done').length;
+      if (!mine.length) out.tasks = { state: 'na', text: '—', tip: 'No close tasks set up' };
+      else if (done === mine.length || c.close_status === 'Done') out.tasks = { state: 'ok', text: 'Done', tip: `${done} of ${mine.length} close tasks done` };
+      else {
+        const waitingOn = mine.filter(t => t.status === 'Waiting on Client').length;
+        const stuck = mine.filter(t => t.status === 'Stuck').length;
+        out.tasks = { state: 'progress', text: `${done}/${mine.length}`, pct: Math.round(done / mine.length * 100),
+          tip: `${done} of ${mine.length} close tasks done` + (waitingOn ? ` · ${waitingOn} waiting on client` : '') + (stuck ? ` · ${stuck} stuck` : '') };
+      }
+    }
+
+    // -- daily sales
+    if (!D.srcs.ok) out.sales = UNK(D.srcs.err);
+    else if (!D.je.ok) out.sales = UNK(D.je.err);
+    else {
+      const live = D.srcs.v.filter(s => s.client_id === id && s.enabled);
+      if (!live.length) out.sales = NA;
+      else if (lastCounted < B.start) out.sales = { state: 'na', text: '—', tip: 'Month hasn’t started' };
+      else {
+        let missing = 0, errors = 0, changed = 0, dry = 0, posted = 0, expected = 0;
+        const notes = [];
+        live.forEach(s => {
+          const rows = D.je.v.filter(r => r.client_id === id && r.source === s.source);
+          // Live = a day that really posted (or tried to). Dry runs from before a
+          // client went live don't count, so a mid-month start is only expected
+          // from its first live day.
+          const isLive = r => r.status === 'posted' || r.status === 'error' || r.status === 'skipped';
+          const before = rows.some(r => r.sales_date < B.start && isLive(r));
+          const inMonth = rows.filter(r => r.sales_date >= B.start && r.sales_date <= lastCounted);
+          const first = before ? B.start
+            : (inMonth.filter(r => r.status === 'posted' || r.status === 'error').map(r => r.sales_date).sort()[0] || null);
+          if (!first) {
+            if (inMonth.length) { dry += inMonth.length; notes.push(s.source + ': only dry runs so far — not live yet'); }
+            else { notes.push(s.source + ': nothing logged this month'); missing += 1; }
+            return;
+          }
+          const byDate = {};
+          inMonth.forEach(r => { byDate[r.sales_date] = r; });
+          for (let d = first; d <= lastCounted; d = addDays(d, 1)) {
+            expected++;
+            const r = byDate[d];
+            if (!r) { missing++; continue; }
+            const rev = r.status === 'posted' && (r.rev || (r.lock && r.lock.matches_toast === false));
+            if (rev) changed++;
+            else if (r.status === 'error') errors++;
+            else if (r.status === 'dry_run' || r.status === 'waiting') dry++;
+            else posted++;
+          }
+        });
+        const bad = [];
+        if (errors) bad.push(plural(errors, 'day') + ' not posted');
+        if (changed) bad.push(plural(changed, 'day') + ' changed in Toast');
+        if (missing) bad.push(plural(missing, 'day') + ' missing');
+        if (dry) bad.push(plural(dry, 'dry-run day'));
+        if (bad.length) out.sales = { state: errors || changed || missing ? 'bad' : 'warn', text: String(errors + changed + missing + dry), tip: bad.concat(notes).join(' · ') };
+        else out.sales = { state: monthOver ? 'ok' : 'progress-ok', text: monthOver ? '✓' : 'so far ✓', tip: `${posted} of ${expected} days posted` + (monthOver ? '' : ' (month not over)') };
+      }
+    }
+
+    // -- review queue
+    if (!D.conns.ok) out.review = UNK(D.conns.err);
+    else if (!D.conns.v.some(x => x.client_id === id)) out.review = NA;
+    else if (!D.ri.ok) out.review = UNK(D.ri.err);
+    else {
+      const open = D.ri.v.filter(r => r.client_id === id);
+      const high = open.filter(r => r.severity === 'high').length;
+      const scanned = D.runs.ok ? D.runs.v.some(r => r.client_id === id) : true;
+      if (!scanned) out.review = { state: 'warn', text: 'not scanned', tip: 'No Review Queue scan has finished for this client yet' };
+      else if (open.length) out.review = { state: 'bad', text: String(open.length), tip: `${open.length} open row${open.length === 1 ? '' : 's'} dated in ${monthLabel(D.periodKey)}` + (high ? ` (${high} high)` : '') };
+      else out.review = { state: 'ok', text: '✓', tip: 'Nothing open for this month' };
+    }
+
+    // -- expo
+    if (!D.inv.ok) out.expo = UNK(D.inv.err);
+    else {
+      const usesExpo = (D.expoFlags.ok && D.expoFlags.v.some(x => x.client_id === id))
+        || (D.expoRecent.ok && D.expoRecent.v.some(x => x.client_id === id));
+      if (!usesExpo) out.expo = NA;
+      else {
+        const open = D.inv.v.filter(r => r.client_id === id && (
+          (r.invoice_date && r.invoice_date >= B.start && r.invoice_date <= B.end) ||
+          (!r.invoice_date && String(r.created_at || '').slice(0, 10) <= addDays(B.end, STATEMENT_GRACE_DAYS))));
+        if (!open.length) out.expo = { state: 'ok', text: '✓', tip: 'Every invoice dated in the month is posted' };
+        else {
+          const by = {};
+          open.forEach(r => { by[r.status] = (by[r.status] || 0) + 1; });
+          const name = { needs_review: 'needs review', approved: 'approved, not posted', pending: 'ready / processing', error: 'error', processing: 'processing' };
+          out.expo = { state: 'bad', text: String(open.length), tip: Object.keys(by).map(k => by[k] + ' ' + (name[k] || k)).join(' · ') };
+        }
+      }
+    }
+
+    // -- statements
+    if (!D.watches.ok) out.statements = UNK(D.watches.err);
+    else {
+      const myWatches = D.watches.v.filter(w => w.client_id === id).map(w => w.id);
+      if (!myWatches.length) out.statements = NA;
+      else if (!D.recs.ok) out.statements = UNK(D.recs.err);
+      else if (!D.waiting.ok) out.statements = UNK(D.waiting.err);
+      else {
+        const recs = D.recs.v.filter(r => r.client_id === id);
+        const held = recs.filter(r => r.held && !r.released_at).length;
+        const waitingFiles = D.waiting.v.filter(w => myWatches.includes(w.watch_id));
+        const needsVendor = waitingFiles.filter(w => w.status === 'needs_vendor').length;
+        const errored = waitingFiles.filter(w => w.status === 'error').length;
+        const queued = waitingFiles.filter(w => w.status === 'delivered').length;
+        const missing = recs.reduce((n, r) => n + (Number(r.summary && r.summary.missing_in_qbo) || 0), 0);
+        const bad = [];
+        if (held) bad.push(plural(held, 'statement') + ' held');
+        if (needsVendor) bad.push(plural(needsVendor, 'file') + ' needing a vendor match');
+        if (errored) bad.push(plural(errored, 'file') + ' that failed');
+        if (queued) bad.push(plural(queued, 'file') + ' still in line');
+        if (bad.length) out.statements = { state: 'bad', text: String(held + needsVendor + errored + queued), tip: bad.join(' · ') };
+        else if (!recs.length) out.statements = { state: 'warn', text: 'none yet', tip: 'No statements dated in the month have been reconciled yet' };
+        else if (missing) out.statements = { state: 'warn', text: missing + ' missing', tip: `${plural(recs.length, 'statement')} reconciled; ${missing} item${missing === 1 ? ' was' : 's were'} missing from QuickBooks when reconciled (may since be entered — see Reconciliation Log)` };
+        else out.statements = { state: 'ok', text: '✓', tip: plural(recs.length, 'statement') + ' reconciled, nothing missing' };
+      }
+    }
+
+    // -- payroll accrual
+    if (!D.labCfg.ok) out.accrual = UNK(D.labCfg.err);
+    else {
+      const cfg = D.labCfg.v.find(x => x.client_id === id && x.enabled);
+      const startOk = cfg && (!cfg.start_month || String(cfg.start_month).slice(0, 7) <= D.periodKey);
+      if (!cfg || !startOk) out.accrual = NA;
+      else if (!D.lab.ok) out.accrual = UNK(D.lab.err);
+      else {
+        const row = D.lab.v.find(x => x.client_id === id);
+        const lastDow = new Date(B.end + 'T12:00:00Z').getUTCDay();
+        if (row && row.status === 'posted') out.accrual = { state: 'ok', text: money(row.total), tip: 'Accrual and reversal posted' };
+        else if (row && (row.status === 'partial' || row.status === 'error')) out.accrual = { state: 'bad', text: '!', tip: row.status === 'partial' ? 'Accrual posted but the reversal didn’t' : ('Last post failed' + (row.error ? ': ' + row.error : '')) };
+        else if ((cfg.pay_frequency || 'weekly') === 'weekly' && lastDow === 0) out.accrual = { state: 'na', text: 'none', tip: 'Month ends on a Sunday — no accrual' };
+        else if (!monthOver) out.accrual = { state: 'na', text: 'later', tip: 'Post after month end' };
+        else out.accrual = { state: 'bad', text: 'not posted', tip: 'No accrual posted for ' + monthLabel(D.periodKey) };
+      }
+    }
+
+    // -- W-9
+    if (!D.conns.ok) out.w9 = UNK(D.conns.err);
+    else if (!D.conns.v.some(x => x.client_id === id)) out.w9 = NA;
+    else if (!D.w9.ok) out.w9 = UNK(D.w9.err);
+    else {
+      const so = D.w9.v.find(x => x.client_id === id);
+      out.w9 = so ? { state: 'ok', text: '✓', tip: 'Signed off ' + new Date(so.signed_at).toLocaleDateString('en-US') }
+        : { state: 'bad', text: 'not signed', tip: 'W-9 audit not signed off for ' + monthLabel(D.periodKey) + ' or the month after' };
+    }
+    return out;
+  }
+
+  const isRed = r => r && r.state === 'bad';
+
+  // ---------------------------------------------------------------- render
+
+  function cellHtml(c, colKey, r) {
+    const col = COLS.find(x => x.key === colKey);
+    const cls = 'cb-cell s-' + r.state;
+    let inner = esc(r.text);
+    if (r.state === 'progress') inner = '<span class="cb-bar"><span style="width:' + r.pct + '%"></span></span>' + esc(r.text);
+    const act = colKey === 'tasks' ? `onclick="openClient('${c.id}')"`
+      : colKey === 'review' ? `onclick="CloseBoard.go('rq','${c.id}')"`
+      : col.page ? `onclick="CloseBoard.go('${col.page}','${c.id}')"` : '';
+    return `<td><button type="button" class="${cls}" ${act} title="${esc(r.tip || '')}">${inner}</button></td>`;
+  }
+
+  function render() {
+    const body = $('cbBody'); if (!body) return;
+    const D = S.data;
+    if (!D) { body.innerHTML = '<div class="empty">Loading…</div>'; return; }
+    const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : '';
+    let rows = clientsList().map(c => ({ c, r: evalClient(c, D) }));
+    if (S.preparer === '__me') rows = rows.filter(x => x.c.preparer === me || x.c.reviewer === me);
+    else if (S.preparer) rows = rows.filter(x => x.c.preparer === S.preparer);
+    const reds = x => COLS.filter(k => isRed(x.r[k.key])).length;
+    const allGreen = x => COLS.every(k => ['ok', 'na', 'progress-ok'].includes(x.r[k.key].state)) && x.r.tasks.state !== 'progress';
+    if (S.hideDone) rows = rows.filter(x => !allGreen(x));
+    rows.sort((a, b) => reds(b) - reds(a) || a.c.name.localeCompare(b.c.name));
+
+    const totals = { ready: 0, red: 0, clients: rows.length };
+    rows.forEach(x => { if (allGreen(x)) totals.ready++; if (reds(x)) totals.red++; });
+    $('cbSummary').innerHTML =
+      `<div class="cb-sum"><b>${totals.clients}</b><span>clients shown</span></div>` +
+      `<div class="cb-sum good"><b>${totals.ready}</b><span>all green</span></div>` +
+      `<div class="cb-sum bad"><b>${totals.red}</b><span>with something red</span></div>`;
+
+    if (!rows.length) { body.innerHTML = '<div class="empty">No clients match.</div>'; return; }
+    body.innerHTML = '<div class="cb-scroll"><table class="cb-table"><thead><tr><th>Client</th><th>Preparer</th><th>Due</th>' +
+      COLS.map(k => '<th>' + esc(k.label) + '</th>').join('') + '</tr></thead><tbody>' +
+      rows.map(x => {
+        const due = x.c.close_due_date ? new Date(String(x.c.close_due_date).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+        const late = x.c.close_due_date && String(x.c.close_due_date).slice(0, 10) < todayIso() && x.c.close_status !== 'Done';
+        return '<tr><td><button type="button" class="cb-client" onclick="openClient(\'' + x.c.id + '\')">' + esc(x.c.name) + '</button></td>' +
+          '<td class="cb-dim">' + esc(x.c.preparer || '') + '</td>' +
+          '<td class="' + (late ? 'cb-late' : 'cb-dim') + '">' + esc(due) + '</td>' +
+          COLS.map(k => cellHtml(x.c, k.key, x.r[k.key])).join('') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function fillControls() {
+    const p = $('cbPeriod'); if (p && !p.value) p.value = S.period;
+    const sel = $('cbPreparer');
+    if (sel) {
+      const names = [...new Set(clientsList().map(c => c.preparer).filter(Boolean))].sort();
+      const keep = S.preparer;
+      sel.innerHTML = '<option value="">Everyone</option><option value="__me">My clients</option>' +
+        names.map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+      sel.value = keep;
+    }
+    const hd = $('cbHideDone'); if (hd) hd.checked = S.hideDone;
+  }
+
+  async function reload() {
+    if (S.loading) return;
+    S.loading = true;
+    const st = $('cbStatus'); if (st) st.textContent = 'Loading ' + monthLabel(S.period) + '…';
+    try {
+      S.data = await loadAll(S.period);
+      if (st) st.textContent = 'Updated ' + new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + ' · hover a cell for details, click to go fix it';
+    } catch (e) {
+      if (st) st.textContent = 'Couldn’t load: ' + (e.message || e);
+    }
+    S.loading = false;
+    render();
+  }
+
+  window.CloseBoard = {
+    setPeriod(v) { if (/^\d{4}-\d{2}$/.test(v)) { S.period = v; reload(); } },
+    setPreparer(v) { S.preparer = v; render(); },
+    setHideDone(v) { S.hideDone = !!v; render(); },
+    reload,
+    go(page, clientId) {
+      if (typeof showPage === 'function') showPage(page);
+      if (page === 'rq' && window.RQ && clientId) setTimeout(() => window.RQ.pick(clientId), 50);
+    },
+  };
+
+  window.CloseBoardOpen = async function () {
+    if (!S.booted) {
+      S.booted = true;
+      S.period = defaultPeriod();
+      const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : '';
+      const isOwner = (typeof isAdmin === 'function') && isAdmin() && !(typeof viewingAsName !== 'undefined' && viewingAsName);
+      S.preparer = isOwner ? '' : (clientsList().some(c => c.preparer === me || c.reviewer === me) ? '__me' : '');
+    }
+    fillControls();
+    await reload();
+  };
+
+  // ---------------------------------------------------------------- Final Review gate
+
+  const confirmed = new Set();     // client ids already confirmed this session
+  window.CloseGate = {
+    // Returns true to let the task be marked Done. Never throws: if the
+    // checks can't be read, the task goes through (a warning that breaks
+    // marking work done would be worse than no warning).
+    async okToFinish(taskId, taskObj) {
+      try {
+        let t = taskObj;
+        if (!t || !t.category || !t.client_id) {
+          const r = await sb.from('tasks').select('id,client_id,category,title,status').eq('id', taskId).maybeSingle();
+          t = r.data;
+        }
+        if (!t || t.category !== 'Final Review' || t.status === 'Done') return true;
+        if (confirmed.has(t.client_id)) return true;
+        const c = (typeof allClients !== 'undefined' ? allClients : []).find(x => x.id === t.client_id);
+        if (!c) return true;
+        const key = closePeriodKey(c.close_period) || defaultPeriod();
+        const D = await loadAll(key, c.id);
+        const r = evalClient(c, D);
+        const red = COLS.filter(k => k.key !== 'tasks' && isRed(r[k.key])).map(k => '• ' + k.label + ': ' + (r[k.key].tip || r[k.key].text));
+        if (!red.length) return true;
+        const ok = confirm(`${c.name} — ${monthLabel(key)} close still has red checks:\n\n${red.join('\n')}\n\nMark "${t.title}" done anyway?`);
+        if (ok) confirmed.add(t.client_id);
+        return ok;
+      } catch (e) {
+        console.warn('[close gate] skipped:', e);
+        return true;
+      }
+    },
+  };
+
+  // Exposed for tests.
+  window.__CloseBoardInternals = { evalClient, monthBounds, closePeriodKey, defaultPeriod, addDays };
+})();
+</script>
+
 </body>
 </html>
