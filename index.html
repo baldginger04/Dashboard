@@ -1282,7 +1282,7 @@
           <span>🌐</span> Client Portal <span class="nav-badge" id="portalBadge" style="display:none">0</span>
         </a>
         <div class="nav-item" onclick="showPage('close')" id="nav-close"><span>🗂️</span> Close Board</div>
-        <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Expo</div>
+        <div class="nav-item" onclick="showPage('invoices')" id="nav-invoices"><span>📥</span> Expo <span class="nav-badge" id="expoBadge" style="display:none" title="Invoices waiting to be coded for your clients">0</span></div>
         <div class="nav-item" onclick="showPage('syncmon')" id="nav-syncmon"><span>📆</span> Daily Sales Sync Monitor</div>
         <div class="nav-item" onclick="showPage('salesmap')" id="nav-salesmap"><span>🔗</span> Sales Mapping</div>
         <div class="nav-item" onclick="showPage('rq')" id="nav-rq"><span>✅</span> Review Queue <span class="nav-badge" id="rqBadge" style="display:none">0</span></div>
@@ -3388,7 +3388,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; const _nsm = document.getElementById('nav-section-marketing'); if (_nsm) _nsm.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.RqBadgeBoot) window.RqBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; const _nsm = document.getElementById('nav-section-marketing'); if (_nsm) _nsm.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.RqBadgeBoot) window.RqBadgeBoot(); if (window.ExpoBadgeBoot) window.ExpoBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -4280,9 +4280,10 @@ async function loadMyWeek() {
     });
 
     const totalPending = weekTasks.length + weekSubs.length;
+    // No count bubble on My Week (Ed, 10/8/26) — it counted everything due
+    // this week and was too big to mean anything. The page still lists it all.
     const badge = document.getElementById('myweekBadge');
-    if (totalPending > 0) { badge.textContent = totalPending; badge.style.display = 'inline'; }
-    else badge.style.display = 'none';
+    if (badge) badge.style.display = 'none';
 
     renderMyWeek(weekTasks, weekSubs, todayStr, weekEndStr);
   } catch (err) {
@@ -19093,5 +19094,40 @@ init();
 
 
 
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   EXPO NAV BADGE — added 2026-10-08
+   How many Expo invoices are waiting to be coded (status 'needs_review') for
+   the clients YOU prepare — for everyone, Ed included (his own clients only).
+   Viewing as someone else shows theirs. Refreshed on sign-in, every time a
+   page is opened (so it drops as soon as you leave Expo), and every 5 minutes.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  let busy = false;
+  function myPreparerClients() {
+    const me = typeof getViewingUserName === 'function' ? getViewingUserName() : '';
+    const ids = new Set();
+    (typeof allClients !== 'undefined' ? allClients || [] : []).forEach(c => { if (c && c.preparer === me) ids.add(c.id); });
+    return ids;
+  }
+  async function refresh() {
+    const el = document.getElementById('expoBadge');
+    if (!el || typeof sb === 'undefined' || busy) return;
+    busy = true;
+    try {
+      const rows = await fetchAllRows(() => sb.from('invoice_queue').select('id,client_id').eq('status', 'needs_review'));
+      const mine = myPreparerClients();
+      const n = rows.filter(r => mine.has(r.client_id)).length;
+      el.textContent = n > 999 ? '999+' : String(n);
+      el.style.display = n ? '' : 'none';
+    } catch (e) { /* the badge is best-effort; never break the page over it */ }
+    busy = false;
+  }
+  window.ExpoBadgeBoot = refresh;
+  const _sp = window.showPage;
+  window.showPage = function (n) { _sp.apply(this, arguments); setTimeout(refresh, 400); };
+  setInterval(refresh, 5 * 60 * 1000);
+})();
+</script>
 </body>
 </html>
