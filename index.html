@@ -1077,6 +1077,9 @@
     #page-rq .rq-dim{color:var(--text3);font-size:11.5px}
     #page-rq .rq-toggle{display:flex;gap:.4rem;align-items:center;font-size:12px;color:var(--text2);margin-bottom:.6rem;cursor:pointer}
     #page-rq .rq-table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--bg2);border:1px solid var(--border);border-radius:9px;overflow:hidden}
+    #page-rq .rq-sort{font:inherit;text-transform:inherit;letter-spacing:inherit;color:inherit;background:none;border:none;padding:0;cursor:pointer;white-space:nowrap}
+    #page-rq .rq-sort:hover,#page-rq .rq-sort.on{color:var(--navy)}
+    #page-rq .rq-sort.on{font-weight:700}
     #page-rq .rq-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600;padding:.5rem .6rem;border-bottom:1px solid var(--border2)}
     #page-rq .rq-table td{padding:.45rem .6rem;border-bottom:1px solid var(--border);vertical-align:top}
     #page-rq .rq-table tr:last-child td{border-bottom:none}
@@ -18062,6 +18065,18 @@ init();
 
   // ---------------------------------------------------------------- overview
 
+  // Overview sort, remembered per browser. dir 1 = the column's natural first
+  // order (A→Z for text, biggest / newest first for counts and dates).
+  function rqOvSort() {
+    if (!S.ovSort) {
+      S.ovSort = { key: '', dir: 1 };
+      try { const v = JSON.parse(localStorage.getItem('bg_rq_ovsort') || 'null'); if (v && typeof v.key === 'string') S.ovSort = { key: v.key, dir: v.dir === -1 ? -1 : 1 }; } catch (e) {}
+    }
+    // Text sorts compare a→b; counts and dates compare b→a, so flip their sign.
+    const textual = S.ovSort.key === 'client' || S.ovSort.key === 'preparer';
+    return { key: S.ovSort.key, dir: textual ? S.ovSort.dir : -S.ovSort.dir, shownDir: S.ovSort.dir };
+  }
+
   async function renderOverview() {
     const body = $('rqBody');
     body.innerHTML = '<div class="empty">Loading…</div>';
@@ -18076,9 +18091,34 @@ init();
       t.total++; t[r.check_type] = (t[r.check_type] || 0) + 1; if (r.severity === 'high') t.high++;
     });
     const mine = mineSet();
+    // Click a column header to sort by it (10/9/26). Text columns go A→Z first,
+    // counts and Last scan go biggest / newest first; a second click reverses,
+    // a third goes back to the default (most open rows first).
+    const ovs = rqOvSort();
+    const cnt = (c, k) => (tally[c.id] || {})[k] || 0;
+    const scanT = c => { const r = latest[c.id]; return r ? Date.parse(r.completed_at || r.started_at || 0) || 0 : 0; };
+    const byName = (a, b) => a.name.localeCompare(b.name);
+    const cmp = (a, b) => {
+      const k = ovs.key, d = ovs.dir;
+      if (k === 'client') return byName(a, b) * d;
+      if (k === 'preparer') {
+        const pa = a.preparer || '', pb = b.preparer || '';
+        if (!pa !== !pb) return pa ? -1 : 1;            // no preparer always last
+        return (pa.localeCompare(pb) * d) || byName(a, b);
+      }
+      if (k === 'scan') return ((scanT(a) - scanT(b)) * d) || byName(a, b);
+      if (k) return ((cnt(a, k) - cnt(b, k)) * d) || byName(a, b);
+      return (cnt(b, 'total') - cnt(a, 'total')) || byName(a, b);
+    };
     const list = clientsList().filter(c => tally[c.id] || latest[c.id])
       .filter(c => S.showAll || !mine || mine.has(c.id))
-      .sort((a, b) => ((tally[b.id] || {}).total || 0) - ((tally[a.id] || {}).total || 0) || a.name.localeCompare(b.name));
+      .sort(cmp);
+    const sth = (key, label, cls) => {
+      const on = ovs.key === key;
+      return '<th' + (cls ? ' class="' + cls + '"' : '') + '><button type="button" class="rq-sort' + (on ? ' on' : '') +
+        '" onclick="RQ.sortOverview(\'' + key + '\')" title="Sort by ' + esc(label.toLowerCase()) + '">' + esc(label) +
+        (on ? (ovs.dir === 1 ? ' ▲' : ' ▼') : '') + '</button></th>';
+    };
 
     const toggle = mine
       ? '<label class="rq-toggle"><input type="checkbox" ' + (S.showAll ? 'checked' : '') + ' onchange="RQ.toggleAll(this.checked)"> Show every client, not just mine</label>'
@@ -18088,9 +18128,9 @@ init();
       return;
     }
     body.innerHTML = toggle +
-      '<table class="rq-table"><thead><tr><th>Client</th><th>Preparer</th>' +
-      CHECKS.map(c => '<th class="num">' + esc(c.label) + '</th>').join('') +
-      '<th class="num">Total</th><th>Last scan</th></tr></thead><tbody>' +
+      '<table class="rq-table"><thead><tr>' + sth('client', 'Client') + sth('preparer', 'Preparer') +
+      CHECKS.map(c => sth(c.key, c.label, 'num')).join('') +
+      sth('total', 'Total', 'num') + sth('scan', 'Last scan') + '</tr></thead><tbody>' +
       list.map(c => {
         const t = tally[c.id] || { total: 0 };
         const r = latest[c.id];
@@ -18364,6 +18404,14 @@ init();
     setCheck(c) { S.check = c; render(); },
     setMode(m) { S.mode = m; S.staged = {}; reload(); },
     toggleAll(on) { S.showAll = !!on; render(); },
+    sortOverview(key) {
+      rqOvSort();
+      if (S.ovSort.key !== key) S.ovSort = { key, dir: 1 };
+      else if (S.ovSort.dir === 1) S.ovSort.dir = -1;
+      else S.ovSort = { key: '', dir: 1 };
+      try { localStorage.setItem('bg_rq_ovsort', JSON.stringify(S.ovSort)); } catch (e) {}
+      render();
+    },
     pick(id) { S.clientId = id; S.view = 'queue'; S.check = 'all'; S.staged = {}; S.result = null; const sel = $('rqClient'); if (sel) sel.value = id; RQ._clientChanged(); },
     async _clientChanged() {
       setStatus('');
