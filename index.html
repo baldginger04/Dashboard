@@ -1431,9 +1431,11 @@
             <div style="font-family:'Hanken Grotesk',serif;font-size:26px;color:var(--navy)" id="detailName"></div>
             <div style="font-size:13px;color:var(--text3);margin-top:4px" id="detailMeta"></div>
           </div>
-          <div style="display:flex;align-items:center;gap:10px">
+          <div style="display:flex;align-items:center;gap:14px">
             <div id="detailBadge"></div>
             <div id="detailArchive"></div>
+            <!-- Client logo (same file the Client Portal shows; set in the portal). -->
+            <div id="detailLogo" style="display:none"></div>
           </div>
         </div>
         <div id="detailArchivedBanner" class="arch-banner" style="display:none"></div>
@@ -5243,6 +5245,7 @@ async function openClient(id) {
     document.getElementById('detailBadge').onclick = null;
   }
   renderArchiveControls(c);
+  renderDetailLogo(c);
   populateClientSwitcher(id);
   // Reset content panels so we don't show stale data from previous client while loading
   document.getElementById('taskContent').innerHTML = '<div class="empty"><span class="spinner"></span></div>';
@@ -10355,6 +10358,67 @@ function fmtCloseDue(v) {
   if (!v) return '—';
   if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return v;
   return tzFormatDate(v, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Client logo in the detail header — the same clients.logo_url the Client
+// Portal uses (logos are added/changed from the portal's header). Wide blank
+// margins in a logo file make it render tiny, so once the image loads we swap
+// in a copy with the empty border trimmed; if that can't be done (e.g. the
+// browser blocks reading the pixels) the original simply stays.
+function renderDetailLogo(c) {
+  const host = document.getElementById('detailLogo');
+  if (!host) return;
+  const url = c && !c.is_firm ? c.logo_url : null;
+  if (!url) { host.innerHTML = ''; host.style.display = 'none'; return; }
+  host.style.display = '';
+  host.innerHTML = '';
+  const img = document.createElement('img');
+  img.alt = (c.name || '') + ' logo';
+  img.style.cssText = 'display:block;max-height:56px;max-width:200px;width:auto;height:auto;object-fit:contain';
+  img.onerror = () => { host.style.display = 'none'; };
+  host.appendChild(img);
+  const forId = c.id;
+  trimLogo(url).then((dataUrl) => {
+    if (currentClientId !== forId || !img.isConnected) return;
+    img.src = dataUrl || url;
+  });
+}
+const _logoTrimCache = {};
+function trimLogo(url) {
+  if (_logoTrimCache[url]) return _logoTrimCache[url];
+  _logoTrimCache[url] = new Promise((resolve) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    const t = setTimeout(() => resolve(null), 8000);
+    im.onload = () => {
+      clearTimeout(t);
+      try {
+        const w0 = im.naturalWidth, h0 = im.naturalHeight;
+        if (!w0 || !h0) return resolve(null);
+        const k0 = Math.min(1, 800 / Math.max(w0, h0));
+        const W = Math.round(w0 * k0), H = Math.round(h0 * k0);
+        const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+        const g = cv.getContext('2d'); g.drawImage(im, 0, 0, W, H);
+        const px = g.getImageData(0, 0, W, H).data;
+        let x0 = W, y0 = H, x1 = -1, y1 = -1;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          if (px[i + 3] < 16 || (px[i] > 245 && px[i + 1] > 245 && px[i + 2] > 245)) continue;
+          if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+        if (x1 < 0) return resolve(null);
+        const px2 = Math.round((x1 - x0 + 1) * 0.02), py2 = Math.round((y1 - y0 + 1) * 0.02);
+        const sx = Math.max(0, x0 - px2), sy = Math.max(0, y0 - py2);
+        const sw = Math.min(W, x1 + px2 + 1) - sx, sh = Math.min(H, y1 + py2 + 1) - sy;
+        const out = document.createElement('canvas'); out.width = sw; out.height = sh;
+        out.getContext('2d').drawImage(cv, sx, sy, sw, sh, 0, 0, sw, sh);
+        resolve(out.toDataURL('image/png'));
+      } catch (e) { resolve(null); }
+    };
+    im.onerror = () => { clearTimeout(t); resolve(null); };
+    im.src = url;
+  });
+  return _logoTrimCache[url];
 }
 
 // Click-to-edit on the client's NAME, matching how the close period and due
