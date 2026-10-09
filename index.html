@@ -18512,8 +18512,13 @@ init();
     const el = $('rqBadge'); if (!el || typeof sb === 'undefined') return;
     try {
       const rows = await fetchAllRows(() => sb.from('review_items').select('id,client_id').eq('status', 'open'));
-      const mine = mineSet();
-      const n = rows.filter(r => !mine || mine.has(r.client_id)).length;
+      // Bubble = open rows for the clients YOU prepare — Ed included (10/9/26).
+      // Viewing as Jen or Jennifer shows theirs. The page itself still opens on
+      // "my clients" as before.
+      const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : '';
+      const mine = new Set((typeof allClients !== 'undefined' ? allClients || [] : [])
+        .filter(c => c && c.preparer === me).map(c => c.id));
+      const n = rows.filter(r => mine.has(r.client_id)).length;
       el.textContent = n > 999 ? '999+' : String(n);
       el.style.display = n ? '' : 'none';
     } catch (e) { /* badge is best-effort */ }
