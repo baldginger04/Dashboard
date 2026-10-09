@@ -16135,6 +16135,8 @@ init();
       if (error) throw error;
       const res = (data && data.results && data.results[0]) || {};
       await loadMonth();
+      // A day that now posts clears the ⚡ bubble right away, not on the next page change.
+      if (window.DsrBadgeBoot) window.DsrBadgeBoot();
       closeModal('smModal');
       const ok = res.status === 'posted';
       let msg = ok
@@ -19168,7 +19170,9 @@ init();
   window.DsrBadgeBoot = refresh;
   const _sp = window.showPage;
   window.showPage = function (n) { _sp.apply(this, arguments); setTimeout(refresh, 400); };
-  setInterval(refresh, 5 * 60 * 1000);
+  // Every 2 minutes as well, so a day fixed by the morning look-back or by
+  // someone else clears without a page change.
+  setInterval(refresh, 2 * 60 * 1000);
 })();
 </script>
 </body>
