@@ -1110,6 +1110,21 @@
     #page-rq .rq-act{font:inherit;font-size:11.5px;font-weight:600;background:var(--bg);border:1px solid var(--border2);border-radius:5px;padding:.28rem .6rem;cursor:pointer;color:var(--text2);text-decoration:none}
     #page-rq .rq-act:hover{border-color:var(--accent);color:var(--accent)}
     #page-rq .rq-act.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+    /* ── Review Queue → Receipts (10/11/26) ── */
+    #page-rq .t-rcpt{background:var(--blue-bg);color:var(--blue)}
+    #page-rq .rqr-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+    #page-rq .rqr-scroll .rq-act{white-space:nowrap}
+    #page-rq .rqr-bar{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.6rem;font-size:13px}
+    #page-rq .rqr-sec{margin:1rem 0 1.25rem}
+    #page-rq .rqr-sec-h{font-size:13px;font-weight:700;color:var(--text);margin-bottom:.5rem}
+    #page-rq .rqr-count{display:inline-block;min-width:1.4em;text-align:center;font-size:11px;font-weight:700;background:var(--bg3);color:var(--text2);border-radius:999px;padding:.05rem .45rem;margin-left:.2rem}
+    #page-rq .rqr-cands{display:flex;flex-direction:column;gap:.35rem;margin-top:.5rem}
+    #page-rq .rqr-cand{display:flex;gap:.6rem;align-items:center;justify-content:space-between;flex-wrap:wrap;font-size:12.5px;padding:.4rem .55rem;background:var(--bg);border:1px solid var(--border);border-radius:7px}
+    #page-rq .rqr-mode{display:inline-flex;gap:.3rem;margin:.2rem 0 .4rem}
+    #page-rq .rqr-modetag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.12rem .5rem;background:var(--bg3);color:var(--text2)}
+    #page-rq .rqr-modetag.m-dry_run{background:var(--yellow-bg);color:var(--yellow)}
+    #page-rq .rqr-modetag.m-live{background:var(--green-bg);color:var(--green)}
+    #page-rq .rqr-settings select{font:inherit;font-size:12.5px;padding:.3rem .45rem;border:1px solid var(--border);border-radius:6px;background:var(--bg)}
     #page-rq .rq-form{margin-top:.55rem;padding:.6rem;background:var(--bg3);border-radius:7px;display:flex;flex-direction:column;gap:.4rem}
     #page-rq .rq-bulk{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:0 0 .9rem;padding:.6rem .75rem;background:var(--bg3);border-radius:9px;position:sticky;top:0;z-index:5}
     #page-rq .rq-res{font-size:12.5px;padding:.6rem .75rem;border-radius:9px;margin-bottom:.75rem}
@@ -1666,6 +1681,7 @@
           <button class="rq-chip" id="rqView_queue" aria-pressed="true" onclick="RQ.setView('queue')">Queue</button>
           <button class="rq-chip" id="rqView_mutes" aria-pressed="false" onclick="RQ.setView('mutes')">Mutes &amp; exceptions</button>
           <button class="rq-chip" id="rqView_log" aria-pressed="false" onclick="RQ.setView('log')">Changes written</button>
+          <button class="rq-chip" id="rqView_receipts" aria-pressed="false" onclick="RQ.setView('receipts')">Receipts</button>
         </div>
         <div class="rq-panel">
           <div class="rq-controls">
@@ -18079,7 +18095,7 @@ init();
   }
 
   function renderChips() {
-    ['queue', 'mutes', 'log'].forEach(v => {
+    ['queue', 'mutes', 'log', 'receipts'].forEach(v => {
       const b = $('rqView_' + v); if (b) b.setAttribute('aria-pressed', S.view === v ? 'true' : 'false');
     });
     const f = $('rqFilters'); if (!f) return;
@@ -18382,11 +18398,12 @@ init();
 
   async function render() {
     renderChips(); renderBulk(); renderResult();
-    const scanBtn = $('rqScanBtn'); if (scanBtn) scanBtn.disabled = !S.clientId || S.busy;
+    const scanBtn = $('rqScanBtn'); if (scanBtn) { scanBtn.disabled = !S.clientId || S.busy || S.view === 'receipts'; scanBtn.style.display = S.view === 'receipts' ? 'none' : ''; }
     const meta = $('rqRunMeta'); if (meta && (!S.clientId || S.view !== 'queue')) meta.innerHTML = '';
     try {
       if (S.view === 'mutes') return await renderMutes();
       if (S.view === 'log') return await renderLog();
+      if (S.view === 'receipts') return window.RQR ? await window.RQR.render(S.clientId) : undefined;
       if (!S.clientId) return await renderOverview();
       return await renderQueue();
     } catch (e) {
@@ -18431,6 +18448,10 @@ init();
     setMode(m) { S.mode = m; S.staged = {}; reload(); },
     toggleAll(on) { S.showAll = !!on; render(); },
     pick(id) { S.clientId = id; S.view = 'queue'; S.check = 'all'; S.staged = {}; S.result = null; const sel = $('rqClient'); if (sel) sel.value = id; RQ._clientChanged(); },
+    // Receipts tab (10/11/26): open a client without leaving the tab, and
+    // share this page's cached account list.
+    pickReceipts(id) { S.clientId = id; S.view = 'receipts'; S.staged = {}; S.result = null; const sel = $('rqClient'); if (sel) sel.value = id; RQ._clientChanged(); },
+    listsFor(id) { return loadLists(id); },
     async _clientChanged() {
       setStatus('');
       if (S.clientId) loadLists(S.clientId).then(() => { renderLists(); if (S.view === 'queue') render(); });
@@ -18578,6 +18599,8 @@ init();
     const el = $('rqBadge'); if (!el || typeof sb === 'undefined') return;
     try {
       const rows = await fetchAllRows(() => sb.from('review_items').select('id,client_id').eq('status', 'open'));
+      // Receipts waiting on a person count too (10/11/26).
+      if (window.RQR_badgeRows) { try { rows.push(...await window.RQR_badgeRows()); } catch (e) { /* best-effort */ } }
       // Bubble = open rows for the clients YOU prepare — Ed included (10/9/26).
       // Viewing as Jen or Jennifer shows theirs. The page itself still opens on
       // "my clients" as before.
@@ -18602,6 +18625,597 @@ init();
     await reload();
   };
   window.RqBadgeBoot = refreshBadge;
+})();
+</script>
+<script>
+/* ============================================================
+   REVIEW QUEUE → RECEIPTS — added 2026-10-11
+
+   The Gmail receipts pipeline's to-do list, as a tab inside the Review
+   Queue (Ed, 10/11/26: option A). Rows come from receipt_queue, which
+   Receipt Intake (Apps Script), receipt-read (receipts-read) and
+   receipt-match fill in:
+
+     Pick the match        status match_review — several transactions fit,
+                           or a charge a bit higher (tip). "Attach to this
+                           one" → receipt-match {action:'attach_to'}.
+     Suggested recodes     recode_status 'suggested'. Accept writes through
+                           qbo-txn-write (kind 'account'), the same path as
+                           the rest of the Review Queue.
+     Possibly misfiled     status misfiled. Move sets move_pending and the
+                           target label; Receipt Intake moves the Gmail
+                           label on its next run (≤15 min).
+     Paid personally       flag only (Ed, 10/10/26) — Mark handled.
+     Needs a look          needs_review, no_match, read_error, match_error,
+                           error. ('duplicate' — the same receipt sent twice —
+                           is listed under Done, not here.)
+     Dry run preview       while a client is on Dry run, what Live would do
+                           (match_plan) — nothing was written.
+
+   Settings (per client): the matching switch (Off / Dry run / Live,
+   receipt_gmail_labels.match_mode) and the card list (client_cards).
+   Nothing on this tab writes to QuickBooks except Accept on a recode and
+   Attach to this one — and Attach only works for clients on Live.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => n == null || n === '' ? '' : (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n) || 0)
+    .toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDate = d => d ? new Date(d + (String(d).length === 10 ? 'T12:00:00' : '')).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const fmtWhen = d => d ? new Date(d).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  const meName = () => (($('sidebarName') || {}).textContent || '').trim() || 'team';
+  const clients = () => (typeof allClients !== 'undefined' ? allClients || [] : []).filter(c => c && !c.is_firm);
+  const clientName = id => ((clients().find(c => c.id === id) || {}).name) || 'Unknown client';
+  const mineSet = () => (typeof myClientIdSet === 'function' ? myClientIdSet() : null);
+
+  const MODE_LABEL = { off: 'Off', dry_run: 'Dry run', live: 'Live' };
+  const NEEDS_LOOK = ['needs_review', 'no_match', 'read_error', 'match_error', 'error'];
+  // 'duplicate' = the same receipt arrived twice (e.g. Amazon's order email AND
+  // its invoice) and the first copy is already attached — nothing to do.
+  const DONE = ['attached', 'already_documented', 'created', 'handled', 'duplicate'];
+  // Statuses that put a receipt on someone's to-do list (also the nav badge).
+  const ACTION = ['match_review', 'misfiled', 'paid_personally', ...NEEDS_LOOK];
+  const STATUS_LABEL = {
+    new: 'Waiting to be read', reading: 'Being read', read: 'Read — waiting for matching', dismissed: 'Not a receipt',
+    misfiled: 'Possibly misfiled', move_pending: 'Moving to the right client', paid_personally: 'Paid personally',
+    needs_review: 'Needs a look', read_error: 'Couldn’t be read', error: 'Couldn’t be copied from Gmail',
+    attached: 'Attached in QuickBooks', already_documented: 'Already had a document', duplicate: 'Same receipt sent twice — skipped',
+    match_review: 'Pick the match', waiting: 'Waiting for the charge to post', created: 'Expense created',
+    no_match: 'No match found', match_error: 'Matching failed', handled: 'Handled',
+  };
+  const PLAN_LABEL = {
+    attached: 'Would attach', already_documented: 'Already has a document — would skip', duplicate: 'Would flag as duplicate',
+    match_review: 'Would ask you to pick', waiting: 'Would wait for the charge', created: 'Would create the expense',
+    no_match: 'Would flag: no match', needs_review: 'Would flag for a look', match_error: 'Would fail',
+  };
+
+  const S = {
+    clientId: '', settings: false, showAll: false, showDone: false,
+    rows: [], labels: [], cards: [], accounts: null, busy: {}, msg: '', msgErr: false,
+  };
+
+  function note(msg, isErr) { S.msg = msg || ''; S.msgErr = !!isErr; const el = $('rqrMsg'); if (el) { el.textContent = S.msg; el.className = 'rq-status' + (isErr ? ' err' : ''); } }
+
+  // ------------------------------------------------------------ data
+
+  async function loadLabels() {
+    const { data, error } = await sb.from('receipt_gmail_labels').select('*').order('gmail_label_name');
+    if (error) throw error;
+    S.labels = data || [];
+  }
+  const labelOf = id => S.labels.find(l => l.client_id === id && l.active) || S.labels.find(l => l.client_id === id) || null;
+
+  async function loadClientRows(id) {
+    const open = await fetchAllRows(() => sb.from('receipt_queue').select('*').eq('client_id', id)
+      .not('status', 'in', '(' + DONE.concat(['dismissed']).join(',') + ')'));
+    const { data: recodes } = await sb.from('receipt_queue').select('*').eq('client_id', id)
+      .eq('recode_status', 'suggested').in('status', DONE);
+    let done = [];
+    if (S.showDone) {
+      const { data } = await sb.from('receipt_queue').select('*').eq('client_id', id).in('status', DONE.concat(['dismissed']))
+        .order('updated_at', { ascending: false }).limit(100);
+      done = data || [];
+    }
+    const seen = new Set();
+    S.rows = [...open, ...(recodes || []), ...done].filter(r => !seen.has(r.id) && seen.add(r.id));
+    const { data: cards } = await sb.from('client_cards').select('*').eq('client_id', id).order('last_digits');
+    S.cards = cards || [];
+  }
+
+  async function accountsFor(id) {
+    try {
+      if (window.RQ && RQ.listsFor) { const L = await RQ.listsFor(id); return L && !L.error ? L.accounts : []; }
+    } catch (e) { /* fall through */ }
+    return [];
+  }
+
+  // ------------------------------------------------------------ bits
+
+  function fileLink(r) {
+    if (!r.storage_path) return '';
+    return '<button class="rq-act" onclick="RQR.open(\'' + r.id + '\')">Open receipt</button>';
+  }
+
+  function receiptLine(r) {
+    const card = r.card_last_digits ? ' · card ••' + esc(String(r.card_last_digits).slice(-4)) +
+      (r.card_match === 'personal' ? ' (personal)' : r.card_match === 'this_client' ? '' : r.card_match === 'other_client' ? ' (another client’s)' : r.card_match === 'unknown' ? ' (not on file)' : '') : '';
+    return '<div class="rq-head">' +
+      '<span class="rq-tag t-rcpt">' + esc(r.pass === 'backfill' ? 'Backfill' : 'Receipt') + '</span>' +
+      '<span class="rq-line1">' + esc(fmtDate(r.receipt_date) || 'no date') + ' · <b>' + esc(r.vendor || r.subject || r.file_name || '(unknown vendor)') + '</b>' + card + '</span>' +
+      '<span class="rq-amt">' + (r.total != null ? money(r.total) : '<span class="rq-dim">no total</span>') + '</span>' +
+      '</div>' +
+      (r.purchase_summary ? '<div class="rq-memo">' + esc(r.purchase_summary) + '</div>' : '') +
+      '<div class="rq-memo">From ' + esc(r.from_address || '?') + (r.subject ? ' — “' + esc(r.subject) + '”' : '') +
+        (r.received_at ? ' · ' + esc(fmtWhen(r.received_at)) : '') + '</div>';
+  }
+
+  function txnText(c) {
+    if (!c) return '';
+    const kind = c.entity_type === 'Bill' ? 'Bill' : 'Expense';
+    const accts = (c.lines || []).map(l => l.account_name).filter(Boolean);
+    return kind + ' ' + esc(fmtDate(c.txn_date)) + ' · ' + esc(c.payee || '(no payee)') + ' · <b>' + money(c.total) + '</b>' +
+      (accts.length ? ' <span class="rq-dim">→ ' + esc([...new Set(accts)].join(', ')) + '</span>' : '');
+  }
+
+  const busyAttr = id => S.busy[id] ? ' disabled' : '';
+
+  // ------------------------------------------------------------ sections
+
+  function secPick(list) {
+    return list.map(r => '<div class="rq-item sev-medium">' + receiptLine(r) +
+      '<div class="rq-reason">' + esc(r.review_reason || 'Several transactions fit — pick the right one.') + '</div>' +
+      '<div class="rqr-cands">' + (r.match_candidates || []).map((c, k) =>
+        '<div class="rqr-cand"><span>' + txnText(c) + '</span>' +
+        '<button class="rq-act primary" onclick="RQR.attachTo(\'' + r.id + '\',' + k + ')"' + busyAttr(r.id) + '>Attach to this one</button></div>').join('') +
+      '</div>' +
+      '<div class="rq-acts">' + fileLink(r) +
+        '<button class="rq-act" onclick="RQR.handled(\'' + r.id + '\', \'None of the candidates\')"' + busyAttr(r.id) + '>None of these — I’ll handle it</button></div>' +
+      '</div>').join('');
+  }
+
+  function secRecode(list) {
+    return list.map(r => '<div class="rq-item sev-medium">' + receiptLine(r) +
+      '<div class="rq-reason">Attached to ' + (r.qbo_entity_type === 'Bill' ? 'bill' : 'expense') + ' ' + esc(fmtDate(r.qbo_txn_date)) + ' · ' +
+        esc(r.qbo_payee || '') + ' · ' + money(r.qbo_txn_total) + '. Coded to <b>' + esc(r.current_account_name || '?') + '</b>.</div>' +
+      '<div class="rq-memo">' + esc(r.suggestion_reason || '') + '</div>' +
+      '<div class="rq-fix"><label>Recode to</label>' +
+        '<input type="text" list="rqAcctList" id="rqrAcct_' + r.id + '" value="' + esc(r.suggested_account_name || '') + '">' +
+        '<button class="rq-act primary" onclick="RQR.acceptRecode(\'' + r.id + '\')"' + busyAttr(r.id) + '>Write to QuickBooks</button>' +
+        '<button class="rq-act" onclick="RQR.declineRecode(\'' + r.id + '\')"' + busyAttr(r.id) + '>Keep it as is</button>' +
+        fileLink(r) + '</div>' +
+      '</div>').join('');
+  }
+
+  function moveTargets(r) {
+    const opts = S.labels.filter(l => l.active && l.client_id && l.client_id !== r.client_id)
+      .map(l => ({ id: l.id, client: l.client_id, name: clientName(l.client_id) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const pick = r.suggested_client_id || '';
+    return '<select id="rqrMove_' + r.id + '"><option value="">Move to…</option>' +
+      opts.map(o => '<option value="' + o.id + '"' + (o.client === pick ? ' selected' : '') + '>' + esc(o.name) + '</option>').join('') + '</select>';
+  }
+
+  function secMisfiled(list) {
+    return list.map(r => {
+      if (r.status === 'move_pending') {
+        const to = S.labels.find(l => l.id === r.move_to_label_id);
+        return '<div class="rq-item">' + receiptLine(r) +
+          '<div class="rq-reason">Moving to <b>' + esc(to ? clientName(to.client_id) : 'another client') + '</b> on the next Receipt Intake run (within 15 minutes)' +
+          (r.move_requested_by_name ? ' — ' + esc(r.move_requested_by_name === 'automatic' ? 'the card is that client’s, so it’s moving automatically.' : 'requested by ' + r.move_requested_by_name + '.') : '.') + '</div>' +
+          (r.review_reason ? '<div class="rq-memo">' + esc(r.review_reason) + '</div>' : '') +
+          '<div class="rq-acts">' + fileLink(r) + '<button class="rq-act" onclick="RQR.cancelMove(\'' + r.id + '\')"' + busyAttr(r.id) + '>Cancel the move</button></div></div>';
+      }
+      return '<div class="rq-item sev-medium">' + receiptLine(r) +
+        '<div class="rq-reason">' + esc(r.review_reason || 'Looks like another client’s receipt.') + '</div>' +
+        '<div class="rq-fix">' + moveTargets(r) +
+          '<button class="rq-act primary" onclick="RQR.move(\'' + r.id + '\')"' + busyAttr(r.id) + '>Move</button>' +
+          '<button class="rq-act" onclick="RQR.notMisfiled(\'' + r.id + '\')"' + busyAttr(r.id) + '>It’s this client’s — match it</button>' +
+          '<button class="rq-act" onclick="RQR.handled(\'' + r.id + '\')"' + busyAttr(r.id) + '>Mark handled</button>' +
+          fileLink(r) + '</div></div>';
+    }).join('');
+  }
+
+  function secPersonal(list) {
+    return list.map(r => '<div class="rq-item">' + receiptLine(r) +
+      '<div class="rq-reason">' + esc(r.review_reason || 'Paid on a personal card.') + '</div>' +
+      '<div class="rq-acts">' + fileLink(r) +
+        '<button class="rq-act" onclick="RQR.handled(\'' + r.id + '\', \'Handled as owner reimbursement / contribution\')"' + busyAttr(r.id) + '>Mark handled</button>' +
+        '<button class="rq-act" onclick="RQR.handled(\'' + r.id + '\', \'Nothing to book\')"' + busyAttr(r.id) + '>Nothing to book</button>' +
+      '</div></div>').join('');
+  }
+
+  function secLook(list) {
+    return list.map(r => {
+      const why = r.status === 'read_error' || r.status === 'error' || r.status === 'match_error' ? (r.error_message || '') : (r.review_reason || '');
+      const retry = r.status === 'read_error'
+        ? '<button class="rq-act" onclick="RQR.reread(\'' + r.id + '\')"' + busyAttr(r.id) + '>Read again</button>'
+        : ['no_match', 'match_error'].includes(r.status)
+          ? '<button class="rq-act" onclick="RQR.rematch(\'' + r.id + '\')"' + busyAttr(r.id) + '>Look for the match again</button>' : '';
+      return '<div class="rq-item' + (r.status.includes('error') ? ' sev-high' : '') + '">' + receiptLine(r) +
+        '<div class="rq-reason"><b>' + esc(STATUS_LABEL[r.status] || r.status) + '.</b> ' + esc(why) + '</div>' +
+        '<div class="rq-acts">' + fileLink(r) + retry +
+          '<button class="rq-act" onclick="RQR.handled(\'' + r.id + '\')"' + busyAttr(r.id) + '>Mark handled</button></div></div>';
+    }).join('');
+  }
+
+  function secPlan(list) {
+    if (!list.length) return '<div class="empty">The matcher hasn’t looked at any of this client’s receipts yet — it runs every 15 minutes, 25 receipts at a time.</div>';
+    const counts = {};
+    list.forEach(r => { const k = r.match_plan.status || '?'; counts[k] = (counts[k] || 0) + 1; });
+    return '<div class="rq-memo" style="margin-bottom:.5rem">' + Object.entries(counts).map(([k, v]) => v + ' ' + esc((PLAN_LABEL[k] || k).toLowerCase())).join(' · ') + '</div>' +
+      '<div class="rqr-scroll"><table class="rq-table"><thead><tr><th>Receipt</th><th class="num">Total</th><th>Would do</th><th>Transaction</th><th>Recode?</th><th></th></tr></thead><tbody>' +
+      list.map(r => {
+        const p = r.match_plan || {};
+        const txn = p.qbo_entity_id ? (p.qbo_entity_type === 'Bill' ? 'Bill ' : 'Expense ') + esc(fmtDate(p.qbo_txn_date)) + ' · ' + esc(p.qbo_payee || '') + ' · ' + money(p.qbo_txn_total) +
+            (p.match_reason ? '<div class="rq-dim">' + esc(p.match_reason) + '</div>' : '')
+          : p.status === 'created' ? 'New expense → ' + esc(p.suggested_account_name || '?') + '<div class="rq-dim">' + esc(p.suggestion_reason || '') + '</div>'
+          : (p.match_candidates || []).length ? (p.match_candidates.length + ' candidates') : '';
+        const rec = p.recode_status === 'suggested' ? esc(p.current_account_name || '') + ' → <b>' + esc(p.suggested_account_name || '') + '</b><div class="rq-dim">' + esc(p.suggestion_reason || '') + '</div>' : '';
+        return '<tr><td>' + esc(fmtDate(r.receipt_date)) + ' · <b>' + esc(r.vendor || '') + '</b>' + (r.pass === 'backfill' ? ' <span class="rq-dim">backfill</span>' : '') + '</td>' +
+          '<td class="num">' + money(r.total) + '</td>' +
+          '<td>' + esc(PLAN_LABEL[p.status] || p.status || '') + (p.review_reason && !p.qbo_entity_id ? '<div class="rq-dim">' + esc(p.review_reason) + '</div>' : '') + '</td>' +
+          '<td>' + txn + '</td><td>' + rec + '</td><td>' + fileLink(r) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function secDone(list) {
+    if (!list.length) return '<div class="empty">Nothing yet.</div>';
+    return '<div class="rqr-scroll"><table class="rq-table"><thead><tr><th>Receipt</th><th class="num">Total</th><th>Result</th><th>When</th><th></th></tr></thead><tbody>' +
+      list.map(r => '<tr><td>' + esc(fmtDate(r.receipt_date)) + ' · <b>' + esc(r.vendor || r.subject || '') + '</b></td>' +
+        '<td class="num">' + money(r.total) + '</td>' +
+        '<td>' + esc(STATUS_LABEL[r.status] || r.status) +
+          (r.status === 'handled' && r.handled_note ? ' — ' + esc(r.handled_note) : '') +
+          (r.status === 'handled' && r.handled_by_name ? ' · ' + esc(r.handled_by_name) : '') +
+          (r.status === 'dismissed' && r.dismiss_reason ? '<div class="rq-dim">' + esc(r.dismiss_reason) + '</div>' : '') +
+          (r.qbo_entity_id && r.status !== 'handled' ? '<div class="rq-dim">' + (r.qbo_entity_type === 'Bill' ? 'Bill ' : 'Expense ') + esc(fmtDate(r.qbo_txn_date)) + ' · ' + esc(r.qbo_payee || '') + ' · ' + money(r.qbo_txn_total) + '</div>' : '') +
+          (r.recode_status && r.recode_status !== 'suggested' ? '<div class="rq-dim">Recode ' + esc(r.recode_status) + (r.recode_by_name ? ' by ' + esc(r.recode_by_name) : '') + '</div>' : '') + '</td>' +
+        '<td>' + esc(fmtWhen(r.handled_at || r.matched_at || r.updated_at)) + '</td>' +
+        '<td>' + fileLink(r) + ((r.status === 'handled' || r.status === 'dismissed') ? ' <button class="rq-act" onclick="RQR.reopen(\'' + r.id + '\')">Reopen</button>' : '') + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+
+  function section(title, count, html, hint) {
+    if (!count) return '';
+    return '<div class="rqr-sec"><div class="rqr-sec-h">' + esc(title) + ' <span class="rqr-count">' + count + '</span>' +
+      (hint ? '<span class="rq-dim"> — ' + esc(hint) + '</span>' : '') + '</div>' + html + '</div>';
+  }
+
+  // ------------------------------------------------------------ settings
+
+  function modeControl(lab) {
+    if (!lab) return '';
+    return '<span class="rqr-mode">' + ['off', 'dry_run', 'live'].map(m =>
+      '<button class="rq-chip" aria-pressed="' + (lab.match_mode === m) + '" onclick="RQR.setMode(\'' + lab.id + '\',\'' + m + '\')">' + MODE_LABEL[m] + '</button>').join('') + '</span>';
+  }
+
+  function settingsHtml(lab) {
+    const acctOpts = (S.accounts || []).filter(a => /credit card/i.test(a.type || '')).map(a => '<option value="' + esc(a.name) + '"></option>').join('');
+    const cardRows = S.cards.map(c => '<tr' + (c.active ? '' : ' style="opacity:.5"') + '>' +
+      '<td><b>••' + esc(c.last_digits) + '</b>' + (c.source ? '<div class="rq-dim">' + esc(c.source === 'qbo_name' ? 'from QuickBooks' : c.source) + '</div>' : '') + '</td>' +
+      '<td><select onchange="RQR.cardKind(\'' + c.id + '\', this.value)">' +
+        '<option value="business"' + (c.card_kind !== 'personal' ? ' selected' : '') + '>Business</option>' +
+        '<option value="personal"' + (c.card_kind === 'personal' ? ' selected' : '') + '>Personal (flag only)</option></select></td>' +
+      '<td><input type="text" list="rqrCardAccts" id="rqrCardAcct_' + c.id + '" value="' + esc(c.qbo_account_name || '') + '" placeholder="QuickBooks card account" style="min-width:220px">' +
+        ' <button class="rq-act" onclick="RQR.cardAccount(\'' + c.id + '\')">Save</button></td>' +
+      '<td>' + esc(c.notes || '') + '</td>' +
+      '<td><button class="rq-act" onclick="RQR.cardActive(\'' + c.id + '\',' + (!c.active) + ')">' + (c.active ? 'Turn off' : 'Turn on') + '</button></td></tr>').join('');
+    return '<div class="rq-panel rqr-settings">' +
+      '<div class="rqr-sec-h">Matching for this client</div>' +
+      '<div class="rq-memo" style="margin-bottom:.5rem"><b>Off</b>: receipts are read and flagged, never matched. <b>Dry run</b>: the matcher shows below what it would do and writes nothing. <b>Live</b>: attaches receipts, creates expenses for receipts with no charge after 10 days, and suggests recodes.</div>' +
+      modeControl(lab) +
+      '<div class="rq-runmeta">Gmail label: ' + esc(lab.gmail_label_name) + (lab.active ? '' : ' (inactive)') +
+        ' · backfill ' + (lab.backfill_enabled ? (lab.backfill_done ? 'done' : 'running') + (lab.backfill_since ? ' from ' + esc(fmtDate(lab.backfill_since)) : '') : 'off') +
+        (lab.last_scan_at ? ' · last Gmail check ' + esc(fmtWhen(lab.last_scan_at)) : '') +
+        (lab.cards_synced_at ? ' · cards checked against QuickBooks ' + esc(fmtWhen(lab.cards_synced_at)) : '') + '</div>' +
+      (lab.match_error ? '<div class="rq-res warn">Matcher problem ' + esc(fmtWhen(lab.match_error_at)) + ': ' + esc(lab.match_error) + '</div>' : '') +
+      (lab.cards_sync_error ? '<div class="rq-res warn">Card list sync problem: ' + esc(lab.cards_sync_error) + '</div>' : '') +
+      (lab.last_error ? '<div class="rq-res warn">Gmail problem: ' + esc(lab.last_error) + '</div>' : '') +
+      '<div class="rqr-sec-h" style="margin-top:1rem">Cards</div>' +
+      '<div class="rq-memo" style="margin-bottom:.5rem">Business cards are matched and can be booked to. Personal cards are flagged as “paid personally” and never booked. A business card needs its QuickBooks card account before an expense can be created on it.</div>' +
+      '<div class="rqr-scroll"><table class="rq-table"><thead><tr><th>Card</th><th>Kind</th><th>QuickBooks account</th><th>Holder / note</th><th></th></tr></thead><tbody>' +
+        (cardRows || '<tr><td colspan="5" class="rq-dim">No cards on file yet.</td></tr>') + '</tbody></table></div>' +
+      '<div class="rq-fix" style="margin-top:.6rem"><label>Add a card</label>' +
+        '<input type="text" id="rqrNewDigits" placeholder="last 4 or 5 digits" style="min-width:140px;flex:0 0 140px">' +
+        '<select id="rqrNewKind"><option value="business">Business</option><option value="personal">Personal (flag only)</option></select>' +
+        '<input type="text" list="rqrCardAccts" id="rqrNewAcct" placeholder="QuickBooks card account (business)">' +
+        '<input type="text" id="rqrNewNote" placeholder="holder / note" style="min-width:160px;flex:0 1 200px">' +
+        '<button class="rq-act primary" onclick="RQR.addCard()">Add</button></div>' +
+      '<datalist id="rqrCardAccts">' + acctOpts + '</datalist>' +
+      '</div>';
+  }
+
+  // ------------------------------------------------------------ render
+
+  async function renderOverview(body) {
+    const rows = await fetchAllRows(() => sb.from('receipt_queue').select('id,client_id,status,recode_status,match_plan')
+      .not('status', 'in', '(' + DONE.concat(['dismissed']).join(',') + ')'));
+    const { data: rec } = await sb.from('receipt_queue').select('id,client_id').eq('recode_status', 'suggested').in('status', DONE);
+    const t = {};
+    const bump = (id, k) => { const x = t[id] = t[id] || {}; x[k] = (x[k] || 0) + 1; };
+    rows.forEach(r => {
+      const k = r.status === 'match_review' ? 'pick' : r.status === 'misfiled' || r.status === 'move_pending' ? 'mis'
+        : r.status === 'paid_personally' ? 'pers' : NEEDS_LOOK.includes(r.status) ? 'look'
+        : r.status === 'waiting' ? 'wait' : r.status === 'new' || r.status === 'reading' || r.status === 'read' ? 'pipe' : null;
+      if (k) bump(r.client_id, k);
+      if (r.match_plan) bump(r.client_id, 'plan');
+    });
+    (rec || []).forEach(r => bump(r.client_id, 'rec'));
+    const mine = mineSet();
+    const list = S.labels.filter(l => l.client_id && (S.showAll || !mine || mine.has(l.client_id)))
+      .map(l => ({ l, name: clientName(l.client_id), t: t[l.client_id] || {} }))
+      .sort((a, b) => {
+        const n = x => (x.t.pick || 0) + (x.t.rec || 0) + (x.t.mis || 0) + (x.t.pers || 0) + (x.t.look || 0);
+        return n(b) - n(a) || a.name.localeCompare(b.name);
+      });
+    const cell = n => '<td class="num">' + (n ? n : '<span class="rq-dim">–</span>') + '</td>';
+    body.innerHTML =
+      (mine ? '<label class="rq-toggle"><input type="checkbox" ' + (S.showAll ? 'checked' : '') + ' onchange="RQR.toggleAll(this.checked)"> Show every client, not just mine</label>' : '') +
+      '<div class="rq-memo" style="margin-bottom:.6rem">Receipts from each client’s Gmail “Receipts” label. Pick a client to work its list or change its settings. The switch decides what the matcher may do in QuickBooks.</div>' +
+      '<div class="rqr-scroll"><table class="rq-table"><thead><tr><th>Client</th><th>Matching</th><th class="num">Pick match</th><th class="num">Recodes</th><th class="num">Misfiled</th>' +
+      '<th class="num">Paid personally</th><th class="num">Needs a look</th><th class="num">Waiting</th><th class="num">In progress</th><th>Problems</th></tr></thead><tbody>' +
+      list.map(x => '<tr class="rq-click" onclick="RQ.pickReceipts(\'' + x.l.client_id + '\')"><td><b>' + esc(x.name) + '</b>' + (x.l.active ? '' : ' <span class="rq-dim">(label off)</span>') + '</td>' +
+        '<td><span class="rqr-modetag m-' + esc(x.l.match_mode || 'off') + '">' + esc(MODE_LABEL[x.l.match_mode] || 'Off') + '</span></td>' +
+        cell(x.t.pick) + cell(x.t.rec) + cell(x.t.mis) + cell(x.t.pers) + cell(x.t.look) + cell(x.t.wait) + cell(x.t.pipe) +
+        '<td>' + [x.l.match_error && 'matcher', x.l.cards_sync_error && 'cards', x.l.last_error && 'Gmail'].filter(Boolean)
+          .map(p => '<span class="rq-err">' + p + '</span>').join(', ') + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  }
+
+  async function renderClient(body) {
+    const lab = labelOf(S.clientId);
+    if (!lab) { body.innerHTML = '<div class="empty">This client has no Gmail receipts label set up.</div>'; return; }
+    await loadClientRows(S.clientId);
+    if (S.settings && !S.accounts) { S.accounts = await accountsFor(S.clientId); }
+    const by = st => S.rows.filter(r => r.status === st);
+    const pick = by('match_review');
+    const rec = S.rows.filter(r => r.recode_status === 'suggested');
+    const mis = S.rows.filter(r => r.status === 'misfiled' || r.status === 'move_pending');
+    const pers = by('paid_personally');
+    const look = S.rows.filter(r => NEEDS_LOOK.includes(r.status));
+    const wait = by('waiting').length, pipe = S.rows.filter(r => ['new', 'reading', 'read'].includes(r.status)).length;
+    const plan = lab.match_mode === 'dry_run' ? S.rows.filter(r => r.match_plan && r.status === 'read') : [];
+    const done = S.rows.filter(r => DONE.includes(r.status) || r.status === 'dismissed');
+    const todo = pick.length + rec.length + mis.length + pers.length + look.length;
+
+    body.innerHTML =
+      '<div class="rqr-bar">' +
+        '<span>Matching: <span class="rqr-modetag m-' + esc(lab.match_mode) + '">' + esc(MODE_LABEL[lab.match_mode] || 'Off') + '</span></span>' +
+        '<span class="rq-dim">' + (pipe ? pipe + ' being read or matched · ' : '') + (wait ? wait + ' waiting for the charge to post · ' : '') + todo + ' to do</span>' +
+        '<span style="flex:1"></span>' +
+        '<button class="rq-act" onclick="RQR.toggleDone()">' + (S.showDone ? 'Hide' : 'Show') + ' done</button>' +
+        '<button class="rq-act' + (S.settings ? ' primary' : '') + '" onclick="RQR.toggleSettings()">⚙ Settings</button>' +
+      '</div>' +
+      '<div class="rq-status" id="rqrMsg"></div>' +
+      (lab.match_error ? '<div class="rq-res warn">Matcher problem ' + esc(fmtWhen(lab.match_error_at)) + ': ' + esc(lab.match_error) + '</div>' : '') +
+      (S.settings ? settingsHtml(lab) : '') +
+      (!todo && !plan.length && !S.showDone ? '<div class="empty">Nothing to do for this client’s receipts.</div>' : '') +
+      section('Pick the match', pick.length, secPick(pick), 'more than one transaction fits') +
+      section('Suggested recodes', rec.length, secRecode(rec), 'the receipt says the transaction is on the wrong account') +
+      section('Possibly misfiled', mis.length, secMisfiled(mis), 'looks like another client’s receipt') +
+      section('Paid personally', pers.length, secPersonal(pers), 'personal card — nothing was booked') +
+      section('Needs a look', look.length, secLook(look)) +
+      (lab.match_mode === 'dry_run' ? '<div class="rqr-sec"><div class="rqr-sec-h">Dry run — what Live would do <span class="rqr-count">' + plan.length + '</span><span class="rq-dim"> — nothing below was written to QuickBooks</span></div>' + secPlan(plan) + '</div>' : '') +
+      (S.showDone ? '<div class="rqr-sec"><div class="rqr-sec-h">Done (last 100)</div>' + secDone(done) + '</div>' : '');
+    note(S.msg, S.msgErr);
+  }
+
+  async function render() {
+    const body = $('rqBody'); if (!body) return;
+    try {
+      if (!S.labels.length) await loadLabels();
+      if (!S.clientId) return await renderOverview(body);
+      return await renderClient(body);
+    } catch (e) {
+      body.innerHTML = '<div class="rq-res warn">' + esc(e.message || String(e)) + '</div>';
+    }
+  }
+
+  // ------------------------------------------------------------ actions
+
+  async function patchRow(id, fields) {
+    const { error } = await sb.from('receipt_queue').update({ ...fields, updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) throw error;
+  }
+  async function act(id, fn) {
+    if (S.busy[id]) return;
+    S.busy[id] = true;
+    try { await fn(); } catch (e) { note(e.message || String(e), true); }
+    delete S.busy[id];
+    await render();
+    if (window.RqBadgeBoot) window.RqBadgeBoot();
+  }
+  const row = id => S.rows.find(r => r.id === id);
+
+  window.RQR = {
+    render(clientId) { if (clientId !== S.clientId) { S.clientId = clientId || ''; S.accounts = null; S.msg = ''; } return render(); },
+    refresh() { S.labels = []; return render(); },
+    toggleAll(on) { S.showAll = !!on; render(); },
+    toggleDone() { S.showDone = !S.showDone; render(); },
+    toggleSettings() { S.settings = !S.settings; render(); },
+
+    async open(id) {
+      const r = row(id); if (!r) return;
+      const w = window.open('', '_blank');
+      const { data, error } = await sb.storage.from(r.storage_bucket || 'receipts').createSignedUrl(r.storage_path, 600);
+      if (error || !data) { if (w) w.close(); note('Couldn’t open the file: ' + (error ? error.message : 'not found'), true); return; }
+      if (w) w.location = data.signedUrl; else window.location.href = data.signedUrl;
+    },
+
+    attachTo(id, k) {
+      return act(id, async () => {
+        const r = row(id); const c = r && (r.match_candidates || [])[k]; if (!c) return;
+        if (!confirm('Attach this receipt to the ' + (c.entity_type === 'Bill' ? 'bill' : 'expense') + ' from ' + fmtDate(c.txn_date) + ' for ' + money(c.total) + ' in ' + clientName(r.client_id) + '’s QuickBooks?')) return;
+        note('Attaching in QuickBooks…');
+        const { data, error } = await sb.functions.invoke('receipt-match', { body: { action: 'attach_to', receipt_id: id, entity_type: c.entity_type, entity_id: c.id } });
+        if (error) throw new Error(error.message || String(error));
+        if (!data || data.error) throw new Error((data && (data.message || data.error)) || 'attach failed');
+        note(data.status === 'attached' ? 'Attached.' : 'Result: ' + (STATUS_LABEL[data.status] || data.status) + '.', data.status === 'match_error');
+      });
+    },
+
+    acceptRecode(id) {
+      return act(id, async () => {
+        const r = row(id); if (!r) return;
+        const name = String(($('rqrAcct_' + id) || {}).value || '').trim();
+        let acct = { id: r.suggested_account_id, name: r.suggested_account_name };
+        if (name && name.toLowerCase() !== String(r.suggested_account_name || '').toLowerCase()) {
+          const list = await accountsFor(r.client_id);
+          const hit = list.find(a => a.name.toLowerCase() === name.toLowerCase());
+          if (!hit) throw new Error('"' + name + '" isn’t one of this client’s accounts — pick one from the list.');
+          acct = { id: hit.id, name: hit.name };
+        }
+        if (!acct.id) throw new Error('No account to recode to.');
+        if (String(acct.id) === String(r.current_account_id)) throw new Error('That’s the account it’s already on — use Keep it as is.');
+        if (!confirm('Recode this ' + money(r.qbo_txn_total) + ' ' + (r.qbo_payee || '') + ' transaction from ' + (r.current_account_name || '?') + ' to ' + acct.name + ' in QuickBooks?')) return;
+        note('Writing to QuickBooks…');
+        // No sync_token on purpose: attaching the receipt may have bumped it.
+        // qbo-txn-write still refuses if the date, total, or the line's
+        // current account changed.
+        const change = { kind: 'account', entity_type: r.qbo_entity_type, id: r.qbo_entity_id, txn_date: r.qbo_txn_date,
+          amount: r.qbo_txn_total, line_id: r.qbo_line_id, old_account_id: r.current_account_id,
+          account_id: acct.id, account_name: acct.name };
+        const { data, error } = await sb.functions.invoke('qbo-txn-write', { body: { client_id: r.client_id, changes: [change] } });
+        if (error) throw new Error(error.message || String(error));
+        if (!data || data.ok === false) throw new Error((data && data.error) || 'write failed');
+        const res = (data.results || [])[0] || {};
+        if (res.status !== 'ok') throw new Error('Not written: ' + (res.message || res.status));
+        await patchRow(id, { recode_status: 'accepted', suggested_account_id: acct.id, suggested_account_name: acct.name,
+          recode_by_name: meName(), recode_at: new Date().toISOString() });
+        note('Recoded to ' + acct.name + '.');
+      });
+    },
+
+    declineRecode(id) {
+      return act(id, async () => {
+        await patchRow(id, { recode_status: 'declined', recode_by_name: meName(), recode_at: new Date().toISOString() });
+        note('Kept as is.');
+      });
+    },
+
+    move(id) {
+      return act(id, async () => {
+        const r = row(id); const to = ($('rqrMove_' + id) || {}).value;
+        if (!to) throw new Error('Pick the client to move it to.');
+        const lab = S.labels.find(l => l.id === to);
+        await patchRow(id, { status: 'move_pending', move_to_label_id: to, move_requested_by_name: meName() });
+        // Every file from the same email moves together.
+        if (r && r.gmail_message_id) {
+          await sb.from('receipt_queue').update({ status: 'move_pending', move_to_label_id: to, move_requested_by_name: meName(), updated_at: new Date().toISOString() })
+            .eq('gmail_message_id', r.gmail_message_id).in('status', ['new', 'read', 'misfiled', 'needs_review', 'paid_personally', 'waiting', 'no_match', 'match_review', 'read_error', 'dismissed']);
+        }
+        note('Will move to ' + (lab ? clientName(lab.client_id) : 'that client') + ' on the next Receipt Intake run (within 15 minutes).');
+      });
+    },
+    cancelMove(id) {
+      return act(id, async () => {
+        const r = row(id);
+        await sb.from('receipt_queue').update({ status: 'misfiled', move_to_label_id: null, move_requested_by_name: null, updated_at: new Date().toISOString() })
+          .eq('gmail_message_id', r.gmail_message_id).eq('status', 'move_pending');
+      });
+    },
+    notMisfiled(id) {
+      return act(id, async () => {
+        await patchRow(id, { status: 'read', review_reason: null, suggested_client_id: null, match_attempts: 0, last_match_at: null });
+        note('Back in line for matching as this client’s receipt.');
+      });
+    },
+
+    handled(id, preset) {
+      return act(id, async () => {
+        const r = row(id); if (!r) return;
+        const n = preset != null ? preset : prompt('Note (optional) — what did you do with it?', '');
+        if (n === null) return;
+        await patchRow(id, { status: 'handled', handled_from_status: r.status, handled_at: new Date().toISOString(),
+          handled_by_name: meName(), handled_note: n || null });
+      });
+    },
+    reopen(id) {
+      return act(id, async () => {
+        const r = row(id); if (!r) return;
+        const back = r.status === 'dismissed' ? 'read' : (r.handled_from_status || 'needs_review');
+        await patchRow(id, { status: back, handled_at: null, handled_by_name: null, handled_note: null, handled_from_status: null,
+          ...(r.status === 'dismissed' ? { dismiss_reason: null, match_attempts: 0, last_match_at: null } : {}) });
+      });
+    },
+
+    reread(id) {
+      return act(id, async () => {
+        note('Reading…');
+        const { data, error } = await sb.functions.invoke('receipts-read', { body: { receipt_id: id } });
+        if (error) throw new Error(error.message || String(error));
+        if (data && data.error) throw new Error(data.message || data.error);
+        note('Read again: ' + (STATUS_LABEL[(data && data.status) || ''] || (data && data.status) || 'done') + '.');
+      });
+    },
+    rematch(id) {
+      return act(id, async () => {
+        note('Looking in QuickBooks…');
+        const { data, error } = await sb.functions.invoke('receipt-match', { body: { receipt_id: id, force: true } });
+        if (error) throw new Error(error.message || String(error));
+        if (data && data.error) throw new Error(data.message || data.error);
+        note((data.mode === 'dry_run' ? 'Dry run: ' : '') + (STATUS_LABEL[data.status] || data.status) + '.');
+      });
+    },
+
+    async setMode(labelId, mode) {
+      const lab = S.labels.find(l => l.id === labelId); if (!lab || lab.match_mode === mode) return;
+      if (mode === 'live' && !confirm('Switch ' + clientName(lab.client_id) + ' to Live?\n\nThe matcher will attach receipts in QuickBooks, create expenses for live receipts on a known business card that still have no charge after 10 days, and suggest recodes.')) return;
+      const { error } = await sb.from('receipt_gmail_labels').update({ match_mode: mode }).eq('id', labelId);
+      if (error) { note(error.message, true); return; }
+      if (mode === 'live') {
+        // Receipts the dry run already looked at would otherwise wait 20 hours
+        // for their retry. Put them back at the front of the line.
+        await sb.from('receipt_queue').update({ last_match_at: null, match_plan: null, updated_at: new Date().toISOString() })
+          .eq('client_id', lab.client_id).in('status', ['read', 'waiting']);
+      }
+      lab.match_mode = mode;
+      note('Matching for ' + clientName(lab.client_id) + ' is now ' + MODE_LABEL[mode] + '.');
+      render();
+    },
+
+    async cardKind(cardId, kind) {
+      const { error } = await sb.from('client_cards').update({ card_kind: kind, updated_at: new Date().toISOString() }).eq('id', cardId);
+      if (error) note(error.message, true); else note('Saved. Receipts already read keep their old flag until read again.');
+      render();
+    },
+    async cardActive(cardId, on) {
+      const { error } = await sb.from('client_cards').update({ active: !!on, updated_at: new Date().toISOString() }).eq('id', cardId);
+      if (error) note(error.message, true);
+      render();
+    },
+    async cardAccount(cardId) {
+      const name = String(($('rqrCardAcct_' + cardId) || {}).value || '').trim();
+      const hit = name ? (S.accounts || []).find(a => a.name.toLowerCase() === name.toLowerCase()) : null;
+      if (name && !hit && S.accounts && S.accounts.length) { note('"' + name + '" isn’t one of this client’s QuickBooks accounts.', true); return; }
+      const { error } = await sb.from('client_cards').update({ qbo_account_name: name || null, qbo_account_id: hit ? String(hit.id) : null, updated_at: new Date().toISOString() }).eq('id', cardId);
+      if (error) note(error.message, true); else note('Saved.');
+      render();
+    },
+    async addCard() {
+      const digits = String(($('rqrNewDigits') || {}).value || '').replace(/\D/g, '');
+      if (digits.length < 4 || digits.length > 5) { note('Enter the last 4 or 5 digits of the card.', true); return; }
+      const kind = ($('rqrNewKind') || {}).value || 'business';
+      const name = String(($('rqrNewAcct') || {}).value || '').trim();
+      const hit = name ? (S.accounts || []).find(a => a.name.toLowerCase() === name.toLowerCase()) : null;
+      if (name && !hit && S.accounts && S.accounts.length) { note('"' + name + '" isn’t one of this client’s QuickBooks accounts.', true); return; }
+      const { error } = await sb.from('client_cards').insert({
+        client_id: S.clientId, last_digits: digits, card_kind: kind, active: true, source: 'manual',
+        qbo_account_name: name || null, qbo_account_id: hit ? String(hit.id) : null,
+        notes: String(($('rqrNewNote') || {}).value || '').trim() || null,
+      });
+      if (error) { note(/duplicate|unique/i.test(error.message) ? 'That card is already on this client’s list.' : error.message, true); return; }
+      note('Card ••' + digits + ' added.');
+      render();
+    },
+  };
+
+  /** Count for the Review Queue nav badge: receipts on the to-do list. */
+  window.RQR_badgeRows = async function () {
+    const rows = await fetchAllRows(() => sb.from('receipt_queue').select('id,client_id').in('status', ACTION));
+    const { data: rec } = await sb.from('receipt_queue').select('id,client_id').eq('recode_status', 'suggested').in('status', DONE);
+    return rows.concat(rec || []);
+  };
 })();
 </script>
 <script>
