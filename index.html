@@ -2258,6 +2258,26 @@
           #page-invoices .inv-was{display:block;font-size:11px;color:var(--text3);font-weight:400}
           #page-invoices .inv-checks .ok{color:var(--green)}
           #page-invoices .inv-checks .bad{color:var(--red)}
+          /* 2026-10-12: type-to-filter account picker + recode past purchases */
+          #page-invoices .inv-combo{position:relative;display:inline-block;vertical-align:middle}
+          #page-invoices .inv-combo-in{padding:6px 26px 6px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;min-width:230px;max-width:290px;width:100%;box-sizing:border-box;font-size:13px;font-family:inherit}
+          #page-invoices .inv-split .inv-combo-in{min-width:170px}
+          #page-invoices .inv-combo::after{content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;pointer-events:none}
+          #page-invoices .inv-combo-in:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(217,119,6,.12)}
+          #page-invoices .inv-combo-list{position:absolute;z-index:60;left:0;top:calc(100% + 3px);min-width:100%;width:max-content;max-width:420px;max-height:280px;overflow:auto;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 8px 24px rgba(20,30,60,.14);padding:4px 0;display:none}
+          #page-invoices .inv-combo-list.open{display:block}
+          #page-invoices .inv-combo-opt{padding:6px 11px;font-size:13px;cursor:pointer;white-space:nowrap}
+          #page-invoices .inv-combo-opt.on,#page-invoices .inv-combo-opt:hover{background:#fbf3ea}
+          #page-invoices .inv-combo-opt.cur{font-weight:700}
+          #page-invoices .inv-combo-none{padding:8px 11px;font-size:12px;color:var(--text3)}
+          #page-invoices .inv-retro{display:flex;gap:6px;align-items:center;margin-top:7px;font-size:12px;color:var(--text2)}
+          #page-invoices .inv-retro input[type=date]{padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px}
+          #page-invoices .inv-recode{border:1px solid var(--accent);border-radius:12px;background:#fffdf9;padding:14px 16px;margin:0 0 16px}
+          #page-invoices .inv-recode h4{margin:0 0 4px;font-family:'Hanken Grotesk',sans-serif;font-size:15px;color:var(--navy)}
+          #page-invoices .inv-recode .inv-tbl td,#page-invoices .inv-recode .inv-tbl th{padding:7px 9px;vertical-align:top}
+          #page-invoices .inv-rc-ok{color:var(--green);font-weight:600}
+          #page-invoices .inv-rc-skip{color:var(--red);font-weight:600}
+          #page-invoices .inv-rc-sub{display:block;font-size:11px;color:var(--text3);font-weight:400;margin-top:2px}
         </style>
         <div class="page-header">
           <div><div class="page-title">Expo</div><div class="page-sub">Code and approve vendor invoices before they post to QuickBooks</div></div>
@@ -9232,6 +9252,62 @@ async function InvGetAccounts(clientId){
 }
 function InvAcctLabel(acct, code){ if(!code) return '—'; if(acct.byId&&acct.byId[code]) return acct.byId[code].label; return acct.nameByCode[code]?(code+' · '+acct.nameByCode[code]):code; }
 
+// ── TYPE-TO-FILTER ACCOUNT PICKER (2026-10-12) ──────────────────────────
+// Every account dropdown in Expo (line pickers, "Code several at once", the
+// Item Library) gets a text box in front of it: type any part of the number OR
+// the name ("beer", "5410", "liq cost") and pick from the matches. The real
+// <select> stays in the page, hidden, and still holds the value — so Save
+// coding, Code selected lines and the library Save read it exactly as before.
+// New dropdowns are picked up automatically whenever Expo redraws.
+const INV_COMBO_SEL = '#page-invoices select.inv-acctsel:not([size]):not([data-plain])';
+function invComboText(sel){ const o=sel.options[sel.selectedIndex]; return o&&o.value?o.text:''; }
+function invComboSync(sel){ if(sel&&sel._comboIn) sel._comboIn.value=invComboText(sel); }
+function invComboSyncAll(){ document.querySelectorAll(INV_COMBO_SEL).forEach(invComboSync); }
+function invComboScan(){ document.querySelectorAll(INV_COMBO_SEL).forEach(invComboEnhance); }
+function invComboEnhance(sel){
+  if(sel._comboIn) return;
+  const wrap=document.createElement('span'); wrap.className='inv-combo';
+  const inp=document.createElement('input'); inp.type='text'; inp.className='inv-combo-in'; inp.autocomplete='off'; inp.spellcheck=false;
+  inp.placeholder='Type account # or name…'; inp.value=invComboText(sel);
+  const list=document.createElement('div'); list.className='inv-combo-list';
+  wrap.appendChild(inp); wrap.appendChild(list);
+  sel.parentNode.insertBefore(wrap, sel); sel.style.display='none'; sel._comboIn=inp;
+  let hits=[], at=-1;
+  const draw=()=>{
+    const toks=inp.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const cur=sel.value; const showAll=!toks.length||inp.value===invComboText(sel);
+    hits=[...sel.options].filter(o=>o.value&&(showAll||toks.every(t=>o.text.toLowerCase().includes(t)))).slice(0,120);
+    if(at>=hits.length) at=hits.length-1;
+    list.innerHTML=hits.length?hits.map((o,i)=>'<div class="inv-combo-opt'+(i===at?' on':'')+(o.value===cur?' cur':'')+'" data-i="'+i+'">'+invEsc(o.text)+'</div>').join('')
+      :'<div class="inv-combo-none">No account matches “'+invEsc(inp.value)+'”.</div>';
+    list.classList.add('open');
+    const on=list.querySelector('.on'); if(on) on.scrollIntoView({block:'nearest'});
+  };
+  const close=()=>{ list.classList.remove('open'); at=-1; };
+  const pick=o=>{ if(!o) return; sel.value=o.value; inp.value=o.text; close(); sel.dispatchEvent(new Event('change',{bubbles:true})); };
+  inp.addEventListener('focus',()=>{ inp.select(); at=-1; draw(); });
+  inp.addEventListener('click',e=>e.stopPropagation());
+  inp.addEventListener('input',()=>{ at=0; draw(); });
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='ArrowDown'){ e.preventDefault(); if(!list.classList.contains('open')) draw(); at=Math.min(hits.length-1,at+1); draw(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); at=Math.max(0,at-1); draw(); }
+    else if(e.key==='Enter'){ e.preventDefault(); e.stopPropagation(); if(list.classList.contains('open')&&hits.length) pick(hits[Math.max(0,at)]); }
+    else if(e.key==='Escape'){ inp.value=invComboText(sel); close(); }
+  });
+  list.addEventListener('mousedown',e=>{ const d=e.target.closest('.inv-combo-opt'); if(!d) return; e.preventDefault(); e.stopPropagation(); pick(hits[Number(d.dataset.i)]); });
+  list.addEventListener('click',e=>e.stopPropagation());
+  // Leaving the box without picking puts back what was chosen before.
+  inp.addEventListener('blur',()=>setTimeout(()=>{ if(document.activeElement!==inp){ inp.value=invComboText(sel); close(); } },120));
+}
+(function invComboInit(){
+  const root=document.getElementById('page-invoices');
+  if(!root){ setTimeout(invComboInit,400); return; }
+  let queued=false;
+  new MutationObserver(()=>{ if(queued) return; queued=true; queueMicrotask(()=>{ queued=false; invComboScan(); }); })
+    .observe(root,{ childList:true, subtree:true });
+  invComboScan();
+})();
+
 async function InvOpenInvoice(id){
   // Re-opening the invoice already on screen (after Save coding, Approve…)
   // keeps the file viewer as it is instead of reloading it.
@@ -9577,14 +9653,16 @@ async function InvShowLibrary(keep){
     return;
   }
   body.innerHTML='<div class="inv-search">'
-    +'<input id="invLibQ" class="inv-qin" type="search" placeholder="Search item, code, vendor or GL" value="'+invEsc(L.text)+'" oninput="InvLibQueue()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();InvLibSearch()}">'
+    +'<input id="invLibQ" class="inv-qin" type="search" placeholder="Search item, code, vendor, GL # or account name" value="'+invEsc(L.text)+'" oninput="InvLibQueue()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();InvLibSearch()}">'
     +'<select id="invLibFilter" onchange="InvLibSearch()">'
     +[['all','All items'],['bought','Bought through Expo'],['uncoded','Not coded yet'],['never','Never bought through Expo']].map(o=>'<option value="'+o[0]+'" '+(L.filter===o[0]?'selected':'')+'>'+o[1]+'</option>').join('')+'</select>'
     +'<select id="invLibSort" onchange="InvLibSearch()">'
     +[['bought','Sort: last bought'],['desc','Sort: item'],['code','Sort: item code'],['vendor','Sort: vendor'],['gl','Sort: GL account']].map(o=>'<option value="'+o[0]+'" '+(L.sort===o[0]?'selected':'')+'>'+o[1]+'</option>').join('')+'</select>'
     +'<span class="inv-search-gap"></span><span class="inv-note" id="invLibCount"></span></div>'
+    +'<div id="invLibRecode"></div>'
     +'<div id="invLibTable"><div class="empty"><span class="spinner"></span> Loading items…</div></div>';
   try{ L.acct=await InvGetAccounts(Inv.client); }catch(e){ L.acct={options:[],byId:{},nameByCode:{}}; }
+  InvLibRcRender();
   if(keep && L.rows.length) InvLibRender(); else await InvLibLoad();
 }
 let invLibTimer=null;
@@ -9603,7 +9681,16 @@ async function InvLibLoad(){
   const tbl=document.getElementById('invLibTable'); if(tbl) tbl.innerHTML='<div class="empty"><span class="spinner"></span> Loading items…</div>';
   let q=sb.from('expo_item_library').select('*',{count:'exact'}).eq('client_id',client);
   const t=(L.text||'').trim();
-  if(t) q=q.or(['description','match_key','vendor_item_code','vendor','last_vendor','gl_account'].map(c=>c+'.ilike.'+invOrVal(t)).join(','));
+  if(t){
+    const ors=['description','match_key','vendor_item_code','vendor','last_vendor','gl_account'].map(c=>c+'.ilike.'+invOrVal(t));
+    // Account NAME search (2026-10-12): items store the GL code ("5400"), so
+    // find the accounts whose label matches every word typed ("beer cost") and
+    // include items coded to any of them.
+    const toks=t.toLowerCase().split(/\s+/).filter(Boolean);
+    const codes=((L.acct&&L.acct.options)||[]).filter(o=>toks.every(w=>String(o.label||'').toLowerCase().includes(w))).map(o=>String(o.value)).slice(0,60);
+    if(codes.length) ors.push('gl_account.in.('+codes.map(c=>'"'+c.replace(/["\\]/g,'')+'"').join(',')+')');
+    q=q.or(ors.join(','));
+  }
   if(L.filter==='bought') q=q.gt('times_bought',0);
   else if(L.filter==='never') q=q.eq('times_bought',0);
   else if(L.filter==='uncoded') q=q.or('in_library.eq.false,gl_account.is.null');
@@ -9632,9 +9719,11 @@ function InvLibRender(){
     const coded=r.in_library&&r.gl_account;
     let gl;
     if(L.edit===i){
-      gl='<span class="inv-amtedit" onclick="event.stopPropagation()"><select class="inv-acctsel" id="invLibSel">'
+      gl='<div onclick="event.stopPropagation()"><span class="inv-amtedit"><select class="inv-acctsel" id="invLibSel">'
         +'<option value="">Select account…</option>'+opts.map(o=>'<option value="'+invEsc(o.value)+'" '+(o.value===r.gl_account?'selected':'')+'>'+invEsc(o.label)+'</option>').join('')+'</select>'
-        +'<button class="btn btn-primary btn-sm" onclick="InvLibSaveGl('+i+')">Save</button><button class="btn btn-secondary btn-sm" onclick="InvLibEdit(null)">Cancel</button></span>';
+        +'<button class="btn btn-primary btn-sm" onclick="InvLibSaveGl('+i+')">Save</button><button class="btn btn-secondary btn-sm" onclick="InvLibEdit(null)">Cancel</button></span>'
+        +(r.times_bought>0?'<label class="inv-retro"><input type="checkbox" id="invLibRetro"> Also recode past purchases since <input type="date" id="invLibSince" value="'+invLibDefaultSince()+'"></label>':'')
+        +'</div>';
     } else {
       gl='<button class="inv-amtbtn inv-glbtn" title="Change the account for this item" onclick="event.stopPropagation();InvLibEdit('+i+')">'
         +(coded?'<span class="inv-coded">'+invEsc(invLibAcctLabel(r.gl_account))+'</span>':'<span class="inv-badge inv-b-review">Not coded yet</span>')+'</button>';
@@ -9656,7 +9745,7 @@ function InvLibRender(){
   tbl.innerHTML='<table class="inv-tbl"><thead><tr><th>Item</th><th>Item code</th><th>Vendor</th><th class="inv-r">Last price</th><th>Last bought</th><th>GL account</th></tr></thead><tbody>'+rows+'</tbody></table>'+pager;
   if(L.open!=null) InvLibLoadHist(L.open);
 }
-function InvLibEdit(i){ const L=invLibState(); L.edit=i; InvLibRender(); const s=document.getElementById('invLibSel'); if(s) s.focus(); }
+function InvLibEdit(i){ const L=invLibState(); L.edit=i; InvLibRender(); invComboScan(); const s=document.getElementById('invLibSel'); if(s) (s._comboIn||s).focus(); }
 function InvLibToggle(i){ const L=invLibState(); if(L.edit!=null) return; L.open=(L.open===i?null:i); InvLibRender(); }
 async function InvLibLoadHist(i){
   const L=invLibState(); const r=L.rows[i]; const cell=document.getElementById('invLibHist'); if(!r||!cell) return;
@@ -9678,22 +9767,208 @@ async function InvLibLoadHist(i){
 async function InvLibSaveGl(i){
   const L=invLibState(); const r=L.rows[i]; if(!r) return;
   const sel=document.getElementById('invLibSel'); const code=sel?sel.value:'';
+  const retroBox=document.getElementById('invLibRetro'); const retro=!!(retroBox&&retroBox.checked);
+  const since=(document.getElementById('invLibSince')||{}).value||'';
   if(!code){ invToast('Pick an account first.'); return; }
-  if(r.in_library && code===r.gl_account){ InvLibEdit(null); return; }
+  if(retro && !/^\d{4}-\d{2}-\d{2}$/.test(since)){ invToast('Pick the date to recode from.'); return; }
   const a=L.acct||{}; const qid=a.byId&&a.byId[code]?a.byId[code].id:null;
-  const now=new Date().toISOString();
-  try{
-    if(r.in_library){
-      await writeOrThrow(sb.from('item_map').update({gl_account:code,qbo_account_id:qid,updated_at:now}).eq('id',r.item_id),'Change item account');
-    } else {
-      await writeOrThrow(sb.from('item_map').insert({client_id:Inv.client,vendor:r.vendor||r.last_vendor||'',match_key:r.match_key,gl_account:code,qbo_account_id:qid,updated_at:now}),'Add item to library');
-    }
-  }catch(e){ invToast(e.message||'Couldn’t save.'); return; }
+  const before={ code:r.gl_account||null, qid:r.qbo_account_id||null };
+  const sameCode = r.in_library && code===r.gl_account;
+  if(sameCode && !retro){ InvLibEdit(null); return; }
   let spread=null;
-  try{ spread=await InvLibSpread(Inv.client, r.match_key, code, qid); }catch(e){ console.warn('[expo] library spread', e); }
-  invToast((r.in_library?'Account changed':'Added to the library')+' — Expo will code this item to '+invLibAcctLabel(code)+' from now on.'+invSpreadCodeNote(spread),'ok');
+  if(!sameCode){
+    const now=new Date().toISOString();
+    try{
+      if(r.in_library){
+        await writeOrThrow(sb.from('item_map').update({gl_account:code,qbo_account_id:qid,updated_at:now}).eq('id',r.item_id),'Change item account');
+      } else {
+        await writeOrThrow(sb.from('item_map').insert({client_id:Inv.client,vendor:r.vendor||r.last_vendor||'',match_key:r.match_key,gl_account:code,qbo_account_id:qid,updated_at:now}),'Add item to library');
+      }
+    }catch(e){ invToast(e.message||'Couldn’t save.'); return; }
+    try{ spread=await InvLibSpread(Inv.client, r.match_key, code, qid); }catch(e){ console.warn('[expo] library spread', e); }
+    invToast((r.in_library?'Account changed':'Added to the library')+' — Expo will code this item to '+invLibAcctLabel(code)+' from now on.'+invSpreadCodeNote(spread)+(retro?' Checking past purchases…':''),'ok');
+  }
   L.edit=null;
   await InvLibLoad();
+  if(retro) await InvLibRecodeStart({ ...r }, code, qid, since, before);
+}
+function invLibDefaultSince(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-01'; }
+
+// ── RECODE PAST PURCHASES (2026-10-12) ──────────────────────────────────
+// After an item's account changes, every purchase of it since a chosen date
+// can be moved to the new account too:
+//   • not yet in QuickBooks (Needs review / Ready / Approved): the Expo lines
+//     are recoded, and the invoice posts with the new account later;
+//   • already in QuickBooks: qbo-push's recode_bill rewrites the bill's lines
+//     the same way it first posted them (same total, vendor, date, PDF).
+// Nothing changes until "Apply". Before that every posted bill is checked with
+// QuickBooks (a dry run), and bills that can't be safely rewritten are listed
+// as SKIPPED with the reason — dated in a closed period, edited by hand in
+// QuickBooks since Expo posted them, or no longer in QuickBooks. Those are
+// left exactly as they are for you to fix by hand. Each run is logged to
+// recode_log.
+const INV_RC_SKIP = {
+  closed_period:'Closed period', changed_in_qbo:'Changed in QuickBooks', not_in_qbo:'Not found in QuickBooks',
+  total_mismatch:'Total would change', reauth_needed:'QuickBooks needs re-linking', not_connected:'Not linked to QuickBooks',
+  unresolved_accounts:'Account not in QuickBooks', not_pushed:'No longer posted', server_error:'QuickBooks error',
+};
+async function InvCallRecode(invoiceId, lineIds, code, qid, dryRun){
+  const r=await sb.functions.invoke('qbo-push',{ body:{ action:'recode_bill', invoice_id:invoiceId, line_ids:lineIds, new_account:code, new_qbo_account_id:qid||undefined, dry_run:dryRun } });
+  if(r.error){
+    let d=null; try{ d=await r.error.context?.json?.(); }catch(e){}
+    return d||{ error:'server_error', message:r.error.message||String(r.error) };
+  }
+  return r.data||{ error:'server_error', message:'No response' };
+}
+async function InvLibRecodeStart(item, code, qid, since, before){
+  const L=invLibState(); const client=Inv.client;
+  L.rc={ client, item, code, qid, since, before, rows:[], phase:'loading', note:'' };
+  InvLibRcRender();
+  const { data, error }=await sb.from('invoice_lines')
+    .select('id,amount,final_account,raw_description,invoice_id,invoice_queue!inner(id,client_id,vendor,invoice_number,invoice_date,status,qbo_bill_id,total)')
+    .eq('match_key',item.match_key).eq('is_charge',false)
+    .eq('invoice_queue.client_id',client)
+    .in('invoice_queue.status',['needs_review','pending','approved','pushed'])
+    .gte('invoice_queue.invoice_date',since)
+    .limit(3000);
+  if(!L.rc||L.rc.client!==client) return;
+  if(error){ L.rc.phase='error'; L.rc.note='Couldn’t load past purchases: '+error.message; InvLibRcRender(); return; }
+  const byInv={};
+  (data||[]).filter(l=>String(l.final_account||'')!==String(code)).forEach(l=>{
+    const iq=l.invoice_queue; (byInv[iq.id]=byInv[iq.id]||{ inv:iq, lines:[] }).lines.push(l);
+  });
+  L.rc.rows=Object.values(byInv).sort((a,b)=>String(a.inv.invoice_date).localeCompare(String(b.inv.invoice_date)))
+    .map(g=>({ ...g, posted:g.inv.status==='pushed', check:true, state:g.inv.status==='pushed'?'checking':'ready', msg:'', res:null }));
+  if(!L.rc.rows.length){ L.rc.phase='empty'; InvLibRcRender(); return; }
+  L.rc.phase='checking'; InvLibRcRender();
+  // Ask QuickBooks about each posted bill (dry run — nothing is written).
+  const posted=L.rc.rows.filter(x=>x.posted);
+  for(let k=0;k<posted.length;k++){
+    if(!L.rc||L.rc.client!==client) return;
+    const row=posted[k]; L.rc.note='Checking QuickBooks '+(k+1)+' of '+posted.length+'…'; InvLibRcRender();
+    let res; try{ res=await InvCallRecode(row.inv.id, row.lines.map(l=>l.id), code, qid, true); }catch(e){ res={ error:'server_error', message:e.message||String(e) }; }
+    invLibRcApplyResult(row, res, true);
+  }
+  if(!L.rc||L.rc.client!==client) return;
+  L.rc.phase='ready'; L.rc.note=''; InvLibRcRender();
+}
+function invLibRcLinesText(ls){ return (ls||[]).map(x=>invEsc(x.account)+' '+invMoney(x.amount)).join(', '); }
+function invLibRcApplyResult(row, res, preview){
+  row.res=res;
+  if(res && (res.mode==='preview' || res.mode==='recoded')){
+    row.state = res.mode==='recoded' ? 'done' : 'ok';
+    const what = res.unchanged ? 'QuickBooks already splits it this way — Expo lines only'
+      : (res.mode==='recoded'?'Rewrote ':'Will rewrite ')+(res.txn_type==='vendor_credit'?'vendor credit':'bill')+' #'+invEsc(res.bill_id);
+    row.msg = what + (res.unchanged?'':'<span class="inv-rc-sub">'+invLibRcLinesText(res.old_lines)+' → '+invLibRcLinesText(res.new_lines)+'</span>');
+  } else if(res && res.mode==='skip'){
+    row.state='skip'; row.check=false;
+    row.msg='Skipped — '+(INV_RC_SKIP[res.reason]||res.reason)+'<span class="inv-rc-sub">'+invEsc(res.detail||'')
+      +(res.qbo_lines?' QuickBooks has: '+invLibRcLinesText(res.qbo_lines)+'; Expo expected: '+invLibRcLinesText(res.expected_lines)+'.':'')+'</span>';
+  } else {
+    row.state='skip'; row.check=false;
+    const e=res&&res.error||'server_error';
+    row.msg='Skipped — '+(INV_RC_SKIP[e]||invEsc(e))+'<span class="inv-rc-sub">'+invEsc((res&&(res.detail||res.message))||'')+'</span>';
+  }
+}
+function InvLibRcToggle(k, on){ const rc=invLibState().rc; if(!rc||!rc.rows[k]||rc.rows[k].state==='skip') return; rc.rows[k].check=!!on; InvLibRcRender(); }
+function InvLibRcClose(){ const L=invLibState(); L.rc=null; InvLibRcRender(); }
+function InvLibRcOpen(k){ const rc=invLibState().rc; const row=rc&&rc.rows[k]; if(!row) return; Inv.returnTo='library'; InvOpenInvoice(row.inv.id); }
+function InvLibRcRender(){
+  const box=document.getElementById('invLibRecode'); if(!box) return;
+  const L=invLibState(); const rc=L.rc;
+  if(!rc || rc.client!==Inv.client){ box.innerHTML=''; return; }
+  const item=rc.item; const newLbl=invLibAcctLabel(rc.code);
+  const head='<h4>Recode past purchases — '+invEsc(item.description||item.match_key)+'</h4>'
+    +'<div class="inv-note" style="margin-bottom:10px">Moving purchases dated '+invEsc(rc.since)+' or later to <b>'+invEsc(newLbl)+'</b>. Nothing changes until you click Apply.</div>';
+  if(rc.phase==='loading'){ box.innerHTML='<div class="inv-recode">'+head+'<span class="spinner"></span> Finding purchases…</div>'; return; }
+  if(rc.phase==='error'){ box.innerHTML='<div class="inv-recode">'+head+'<div class="inv-warnbar">'+invEsc(rc.note)+'</div><button class="btn btn-secondary btn-sm" onclick="InvLibRcClose()">Close</button></div>'; return; }
+  if(rc.phase==='empty'){ box.innerHTML='<div class="inv-recode">'+head+'<div class="inv-note">No purchases since '+invEsc(rc.since)+' are coded to anything else — nothing to recode.</div><div class="inv-bar" style="margin-top:10px"><button class="btn btn-secondary btn-sm" onclick="InvLibRcClose()">Close</button></div></div>'; return; }
+  const busy = rc.phase==='checking' || rc.phase==='applying';
+  const rows=rc.rows.map((x,k)=>{
+    const b=INV_BADGE[x.inv.status]||['inv-b-ready',x.inv.status];
+    const amt=x.lines.reduce((s,l)=>s+(Number(l.amount)||0),0);
+    const cur=[...new Set(x.lines.map(l=>l.final_account?invLibAcctLabel(l.final_account):'Not coded'))].join(', ');
+    let what;
+    if(x.state==='checking') what='<span class="inv-dim"><span class="spinner"></span> Checking QuickBooks…</span>';
+    else if(x.state==='ready') what='Recode in Expo — posts with the new account';
+    else if(x.state==='done' && !x.posted) what='<span class="inv-rc-ok">✓ Recoded in Expo</span>';
+    else if(x.state==='done') what='<span class="inv-rc-ok">✓ '+x.msg+'</span>';
+    else if(x.state==='ok') what=x.msg;
+    else what='<span class="inv-rc-skip">'+x.msg+'</span>';
+    const canTick = !busy && rc.phase!=='done' && x.state!=='skip' && x.state!=='checking';
+    return '<tr><td><input type="checkbox" '+(x.check&&x.state!=='skip'?'checked':'')+' '+(canTick?'':'disabled')+' onchange="InvLibRcToggle('+k+',this.checked)"></td>'
+      +'<td class="inv-dim">'+invEsc(x.inv.invoice_date||'—')+'</td>'
+      +'<td>'+invEsc(x.inv.vendor||'—')+'</td>'
+      +'<td class="inv-mono"><button class="inv-linkbtn" onclick="InvLibRcOpen('+k+')">'+invEsc(x.inv.invoice_number||'—')+'</button></td>'
+      +'<td class="inv-r inv-mono">'+invMoney(amt)+(x.lines.length>1?'<span class="inv-rc-sub">'+x.lines.length+' lines</span>':'')+'</td>'
+      +'<td>'+invEsc(cur)+'</td>'
+      +'<td><span class="inv-badge '+b[0]+'">'+b[1]+'</span></td>'
+      +'<td>'+what+'</td></tr>';
+  }).join('');
+  const picked=rc.rows.filter(x=>x.check&&x.state!=='skip'&&x.state!=='done');
+  const skipped=rc.rows.filter(x=>x.state==='skip').length;
+  let foot;
+  if(rc.phase==='done') foot='<div class="inv-bar" style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="InvLibRcClose()">Done</button><span class="inv-note">'+invEsc(rc.note)+'</span></div>';
+  else foot='<div class="inv-bar" style="margin-top:12px">'
+    +'<button class="btn btn-primary btn-sm" '+(busy||!picked.length?'disabled':'')+' onclick="InvLibRcApply()">'+(rc.phase==='applying'?'Applying…':'Apply to '+picked.length+' invoice'+(picked.length===1?'':'s'))+'</button>'
+    +'<button class="btn btn-secondary btn-sm" '+(rc.phase==='applying'?'disabled':'')+' onclick="InvLibRcClose()">Not now</button>'
+    +'<span class="inv-note">'+(rc.note?invEsc(rc.note):(skipped?skipped+' skipped — fix those in QuickBooks by hand.':''))+'</span></div>';
+  box.innerHTML='<div class="inv-recode">'+head
+    +'<table class="inv-tbl"><thead><tr><th style="width:26px"></th><th>Date</th><th>Vendor</th><th>Invoice #</th><th class="inv-r">Amount</th><th>Was coded</th><th>Status</th><th>What happens</th></tr></thead><tbody>'+rows+'</tbody></table>'
+    +foot+'</div>';
+}
+async function InvLibRcApply(){
+  const L=invLibState(); const rc=L.rc; if(!rc||rc.phase!=='ready') return;
+  const todo=rc.rows.filter(x=>x.check&&x.state!=='skip'&&x.state!=='done');
+  if(!todo.length) return;
+  rc.phase='applying'; InvLibRcRender();
+  let expoDone=0, billsDone=0;
+  // 1. Not in QuickBooks yet — recode the Expo lines.
+  const open=todo.filter(x=>!x.posted);
+  if(open.length){
+    try{
+      const ids=open.flatMap(x=>x.lines.map(l=>l.id));
+      for(let k=0;k<ids.length;k+=200)
+        await writeOrThrow(sb.from('invoice_lines').update({ final_account:rc.code, qbo_account_id:rc.qid, needs_review:false }).in('id',ids.slice(k,k+200)),'Recode lines');
+      // A Needs-review invoice with nothing left to code goes back for its automatic check.
+      const nr=open.filter(x=>x.inv.status==='needs_review').map(x=>x.inv.id);
+      if(nr.length){
+        const { data:still }=await sb.from('invoice_lines').select('invoice_id').in('invoice_id',nr).eq('needs_review',true).limit(5000);
+        const stillSet=new Set((still||[]).map(z=>z.invoice_id));
+        const ready=nr.filter(id=>!stillSet.has(id));
+        if(ready.length) await sb.from('invoice_queue').update({ status:'pending', auto_checked_at:null, review_reason:null }).in('id',ready);
+      }
+      open.forEach(x=>{ x.state='done'; }); expoDone=open.length;
+    }catch(e){
+      open.forEach(x=>{ x.state='skip'; x.check=false; x.msg='Not recoded — '+invEsc(e.message||String(e)); });
+    }
+    InvLibRcRender();
+  }
+  // 2. Already in QuickBooks — rewrite each bill, one at a time.
+  const posted=todo.filter(x=>x.posted);
+  for(let k=0;k<posted.length;k++){
+    const row=posted[k]; rc.note='Updating QuickBooks '+(k+1)+' of '+posted.length+'…'; InvLibRcRender();
+    let res; try{ res=await InvCallRecode(row.inv.id, row.lines.map(l=>l.id), rc.code, rc.qid, false); }catch(e){ res={ error:'server_error', message:e.message||String(e) }; }
+    invLibRcApplyResult(row, res, false);
+    if(res && res.mode==='recoded' && !res.unchanged) billsDone++;
+  }
+  const skipped=rc.rows.filter(x=>x.state==='skip');
+  const done=rc.rows.filter(x=>x.state==='done').length;
+  rc.phase='done';
+  rc.note=done+' invoice'+(done===1?'':'s')+' recoded ('+billsDone+' QuickBooks bill'+(billsDone===1?'':'s')+' rewritten)'+(skipped.length?'; '+skipped.length+' skipped — listed above, fix those by hand.':'.');
+  InvLibRcRender();
+  // Log it.
+  try{
+    await sb.from('recode_log').insert({
+      client_id:rc.client, vendor:rc.item.vendor||rc.item.last_vendor||null, match_key:rc.item.match_key,
+      old_account:rc.before.code, new_account:rc.code, old_qbo_account_id:rc.before.qid, new_qbo_account_id:rc.qid,
+      date_from:rc.since, date_to:null, bills_updated:billsDone,
+      performed_by:(typeof currentUser!=='undefined'&&currentUser)?currentUser.id:null,
+      notes:(rc.item.description||rc.item.match_key)+' — '+done+' invoice(s) recoded in Expo ('+expoDone+' not yet posted, '+billsDone+' QBO bills rewritten). '
+        +(skipped.length?'Skipped: '+skipped.map(x=>(x.inv.invoice_number||x.inv.id)+' ('+((x.res&&(INV_RC_SKIP[x.res.reason]||INV_RC_SKIP[x.res.error]))||'error')+')').join('; ')+'.':'None skipped.'),
+    });
+  }catch(e){ console.warn('[expo] recode_log', e); }
+  try{ await InvLoadCounts(); InvRenderTabs(); }catch(_){}
 }
 // Codes this item on open invoices where it is still waiting for an account —
 // the same thing saving a line on an invoice does. Lines already coded are
@@ -10037,7 +10312,7 @@ async function InvPushSelected(){
   await InvRefresh();
 }
 
-function InvBulkApply(){ const v=document.getElementById('invBulkSel').value; if(!v)return; document.querySelectorAll('#invBody select[data-line]').forEach(s=>{ if(!s.value) s.value=v; }); }
+function InvBulkApply(){ const v=document.getElementById('invBulkSel').value; if(!v)return; document.querySelectorAll('#invBody select[data-line]').forEach(s=>{ if(!s.value) s.value=v; }); invComboSyncAll(); }
 
 async function InvSaveCoding(){
   const { inv, acct }=Inv.current;
