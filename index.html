@@ -8466,6 +8466,7 @@ async function runTax(clientId) {
       adjusted_at: prev.adjusted_at || null,
       adjusted_by: prev.adjusted_by || null,
       filed_tasks: prev.filed_tasks || [],
+      bills: prev.bills || null,
     });
     renderTaxList();
   } catch (e) {
@@ -8629,6 +8630,164 @@ async function taxSetFiled(clientId, filed, tasks) {
   renderTaxList();
 }
 
+// ── Post the month's tax bills to QuickBooks ──────────────────────────
+// After a month is filed, the tax-bills Edge Function posts up to three
+// Bills to the client's QBO: "MB Gross Receipts" (MB GR tax expense),
+// "MB Sales Tax" (liability) and "Sales Tax" (liability for collected less
+// MB, plus the over/under on the account the client's own prior Sales Tax
+// bill used). Dated the last day of the filing month, due the 20th of the
+// next. Always previewed first; the post re-checks the amounts server-side
+// and refuses if they moved. The QBO ids live in tax_filings.bills — its
+// own column, so a Re-run can't wipe them — and Undo deletes only bills
+// Triple posted, never a hand-entered one.
+const TAX_BILL_KEYS = ['mb_gr', 'mb_st', 'st'];
+const TAX_BILL_DOCS = { mb_gr: 'MB Gross Receipts', mb_st: 'MB Sales Tax', st: 'Sales Tax' };
+Tax.billPreview = {};
+function taxBillsLogged(filing) {
+  const it = filing && filing.bills && filing.bills.items;
+  return !!(it && Object.keys(it).some(k => it[k] && it[k].qbo_id));
+}
+// The figure each bill should carry right now — the card's own adjusted numbers.
+function taxBillTargets(cfg, r, filing) {
+  const adj = taxApply(cfg, r, taxAdjOf(filing));
+  const t = { st: adj.stPayable };
+  if (cfg.mb_enabled) { t.mb_gr = adj.mbGrTax; t.mb_st = adj.mbStTax; }
+  return t;
+}
+function taxBillsSummary(cfg, r, filing) {
+  if (!taxBillsLogged(filing)) {
+    const st = filing && filing.bills && filing.bills.status;
+    return (st === 'failed' && filing.bills.error)
+      ? '<div style="font-size:.75rem;color:#b93232;margin-top:.4rem">QBO bill post failed: ' + taxEsc(filing.bills.error) + '</div>' : '';
+  }
+  const items = filing.bills.items, tgt = taxBillTargets(cfg, r, filing);
+  const moved = [];
+  const rows = TAX_BILL_KEYS.filter(k => items[k] && items[k].qbo_id).map(k => {
+    const it = items[k];
+    if (tgt[k] != null && Math.abs(Number(it.total) - tgt[k]) >= 0.005) moved.push(TAX_BILL_DOCS[k] + ' posted ' + taxFmt(Number(it.total)) + ', card now ' + taxFmt(tgt[k]));
+    return taxEsc(it.doc || TAX_BILL_DOCS[k]) + ' ' + taxFmt(Number(it.total)) + ' <span style="color:var(--muted,#888)">#' + taxEsc(it.qbo_id) + '</span>';
+  });
+  const b = filing.bills, d = s => s ? new Date(s).toLocaleDateString() : '';
+  const partial = b.status === 'partial' || b.status === 'posting';
+  return '<div style="font-size:.75rem;margin-top:.45rem;padding:.35rem .6rem;border-radius:6px;background:' + (partial || moved.length ? '#fbf0dd;color:#8a5a00' : '#e8f4ec;color:#1e5a36') + '">'
+    + (partial ? '⚠️ Bills partly posted' : '✓ Bills in QBO') + ': ' + rows.join(' · ')
+    + (b.posted_by ? ' · by ' + taxEsc(b.posted_by) : '') + (b.posted_at ? ' ' + d(b.posted_at) : '')
+    + (b.error ? '<div>Last error: ' + taxEsc(b.error) + '</div>' : '')
+    + (moved.length ? '<div>⚠️ The figures changed after posting — ' + taxEsc(moved.join('; ')) + '. Undo and post again, or fix the bill in QuickBooks.</div>' : '')
+    + '</div>';
+}
+async function taxBillsCall(body) {
+  const { data, error } = await sb.functions.invoke('tax-bills', { body });
+  if (error) {
+    let detail = error.message || 'request failed';
+    try { const j = await error.context.json(); detail = j.detail || j.error || detail; } catch (_) {}
+    throw new Error(detail);
+  }
+  if (!data || !data.ok) throw new Error((data && (data.detail || data.error)) || 'no result');
+  return data;
+}
+function taxBillsBusy(clientId, msg) {
+  const box = document.getElementById('taxBills_' + clientId);
+  if (box) box.innerHTML = '<div style="font-size:.78rem;color:var(--muted,#888);padding:.45rem 0">' + taxEsc(msg) + '</div>';
+  return box;
+}
+async function previewTaxBills(clientId) {
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const period = taxPeriodKey(cfg);
+  const box = taxBillsBusy(clientId, 'Reading this client’s QuickBooks — prior tax bills, vendor and accounts…');
+  if (!box) return;
+  try {
+    const p = await taxBillsCall({ action: 'preview', client_id: clientId, period });
+    Tax.billPreview[clientId] = p;
+    box.innerHTML = renderTaxBillsPreview(clientId, p);
+  } catch (e) {
+    box.innerHTML = '<div style="font-size:.8rem;color:#b93232;padding:.45rem 0">Couldn’t preview the bills: ' + taxEsc(e.message || e) + '</div>';
+  }
+}
+function renderTaxBillsPreview(clientId, p) {
+  const TH = 'style="text-align:left;padding:3px 8px;font-size:.7rem;color:#666;border-bottom:1px solid #ddd"';
+  const md = s => { const [y, m, d] = String(s || '').split('-'); return m ? m + '/' + d + '/' + y : ''; };
+  const src = p.source || {};
+  const srcOf = kind => kind === 'liability' ? src.liability : kind === 'over_under' ? src.over_under : kind === 'mb_gr' ? src.mb_gr : '';
+  const stat = b => b.status === 'posted' ? '<span style="color:#1e7a45;font-weight:700">posted #' + taxEsc(b.qbo_id) + '</span>'
+    : b.status === 'exists' ? '<span style="color:#8a5a00;font-weight:700">already in QBO #' + taxEsc(b.qbo_id) + (b.qbo_total != null ? ' (' + taxFmt(b.qbo_total) + ')' : '') + ' — skipped</span>'
+    : '<span style="color:#1B2A4B;font-weight:700">to post</span>';
+  const rows = (p.bills || []).map(b => {
+    const lines = b.lines.map((l, i) => '<tr' + (i ? '' : ' style="border-top:1px solid #eee"') + '>'
+      + '<td style="padding:3px 8px;font-weight:700">' + (i ? '' : taxEsc(b.doc)) + '</td>'
+      + '<td style="padding:3px 8px">' + taxEsc(l.account.label) + (srcOf(l.kind) ? '<div style="font-size:.68rem;color:#888">from ' + taxEsc(srcOf(l.kind)) + '</div>' : '') + '</td>'
+      + '<td style="padding:3px 8px;text-align:right">' + taxFmt(l.amount) + '</td>'
+      + '<td style="padding:3px 8px;text-align:right;font-weight:700">' + (i ? '' : taxFmt(b.total)) + '</td>'
+      + '<td style="padding:3px 8px;font-size:.72rem">' + (i ? '' : stat(b)) + '</td></tr>').join('');
+    return lines;
+  }).join('');
+  const toPost = (p.bills || []).filter(b => b.status === 'to_post');
+  const errs = (p.errors || []).map(e => '<div style="color:#b93232">❌ ' + taxEsc(e.message) + '</div>').join('');
+  const warns = (p.warnings || []).map(w => '<div style="color:#8a5a00">⚠️ ' + taxEsc(w) + '</div>').join('');
+  const can = !p.blocked && toPost.length > 0;
+  return '<div style="border:1px solid var(--border);border-radius:8px;padding:.6rem .8rem;margin-top:.5rem;background:#fafbfc;font-size:.8rem">'
+    + '<div style="font-weight:700;margin-bottom:.3rem">QuickBooks bills · dated ' + md(p.dates && p.dates.txn) + ', due ' + md(p.dates && p.dates.due) + '</div>'
+    + '<div style="margin-bottom:.35rem">Vendor: <b>' + taxEsc(p.vendor ? p.vendor.name : '—') + '</b>' + (src.vendor ? ' <span style="color:#888;font-size:.72rem">from ' + taxEsc(src.vendor) + '</span>' : '') + '</div>'
+    + (rows ? '<table style="border-collapse:collapse;width:100%;font-size:.78rem"><tr><th ' + TH + '>Bill no.</th><th ' + TH + '>Account</th><th ' + TH + ' style="text-align:right">Line</th><th ' + TH + ' style="text-align:right">Bill total</th><th ' + TH + '></th></tr>' + rows + '</table>'
+      : '<div style="color:#888">No bills to post for this month.</div>')
+    + (errs || warns ? '<div style="margin-top:.4rem;font-size:.76rem;line-height:1.5">' + errs + warns + '</div>' : '')
+    + (p.blocked ? '<div style="font-size:.72rem;color:#888;margin-top:.3rem">Overrides go in this client’s tax_client_config.rules.bills (vendor, liability_account, over_under_account, mb_gr_account).</div>' : '')
+    + '<div style="display:flex;gap:.5rem;margin-top:.6rem;flex-wrap:wrap">'
+    + (can ? '<button onclick="postTaxBills(\'' + clientId + '\')" style="border:0;background:#1B2A4B;color:#fff;border-radius:7px;padding:.35rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer">Post ' + toPost.length + ' bill' + (toPost.length === 1 ? '' : 's') + ' to QBO</button>' : '')
+    + (p.logged && p.logged.items && Object.keys(p.logged.items).length ? '<button onclick="undoTaxBills(\'' + clientId + '\')" style="border:1px solid #b93232;color:#b93232;background:#fff;border-radius:7px;padding:.35rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer">Undo — delete Triple’s bills</button>' : '')
+    + '<button onclick="previewTaxBills(\'' + clientId + '\')" style="border:1px solid var(--border);background:#fff;border-radius:7px;padding:.35rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer">Refresh</button>'
+    + '<button onclick="closeTaxBills(\'' + clientId + '\')" style="border:0;background:none;color:#888;font-size:.78rem;cursor:pointer">Close</button>'
+    + '</div></div>';
+}
+function closeTaxBills(clientId) {
+  const box = document.getElementById('taxBills_' + clientId); if (box) box.innerHTML = '';
+  delete Tax.billPreview[clientId];
+}
+async function taxReloadBills(clientId, period) {
+  const f = Tax.saved[clientId + '|' + period]; if (!f) return;
+  const { data } = await sb.from('tax_filings').select('bills').eq('client_id', clientId).eq('period', period).maybeSingle();
+  f.bills = data ? data.bills : f.bills;
+}
+async function postTaxBills(clientId) {
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const period = taxPeriodKey(cfg);
+  const p = Tax.billPreview[clientId]; if (!p) return previewTaxBills(clientId);
+  const expected = {};
+  (p.bills || []).forEach(b => { expected[b.key] = b.total; });
+  taxBillsBusy(clientId, 'Posting to QuickBooks…');
+  let msg = '';
+  try {
+    const res = await taxBillsCall({ action: 'post', client_id: clientId, period, expected, by: getViewingUserName() });
+    msg = 'Posted ' + (res.posted || []).map(x => x.doc + ' #' + x.qbo_id).join(', ');
+  } catch (e) {
+    msg = 'ERROR: ' + (e.message || e);
+  }
+  await taxReloadBills(clientId, period);
+  delete Tax.billPreview[clientId];
+  renderTaxList();
+  const box = document.getElementById('taxBills_' + clientId);
+  if (box) box.innerHTML = '<div style="font-size:.8rem;padding:.45rem 0;color:' + (msg.indexOf('ERROR') === 0 ? '#b93232' : '#1e7a45') + '">' + taxEsc(msg) + '</div>';
+}
+async function undoTaxBills(clientId) {
+  const cfg = Tax.cfgs.find(c => c.client_id === clientId); if (!cfg) return;
+  const period = taxPeriodKey(cfg);
+  if (!confirm('Delete the bills Triple posted to QuickBooks for this month? Bills entered by hand are never touched, and a bill with a payment applied is left alone.')) return;
+  taxBillsBusy(clientId, 'Deleting from QuickBooks…');
+  let msg = '';
+  try {
+    const res = await taxBillsCall({ action: 'unpost', client_id: clientId, period, by: getViewingUserName() });
+    msg = (res.deleted && res.deleted.length ? 'Deleted ' + res.deleted.join(', ') : 'Nothing deleted')
+      + (res.kept && res.kept.length ? ' · Kept: ' + res.kept.join('; ') : '');
+  } catch (e) {
+    msg = 'ERROR: ' + (e.message || e);
+  }
+  await taxReloadBills(clientId, period);
+  delete Tax.billPreview[clientId];
+  renderTaxList();
+  const box = document.getElementById('taxBills_' + clientId);
+  if (box) box.innerHTML = '<div style="font-size:.8rem;padding:.45rem 0;color:' + (msg.indexOf('ERROR') === 0 ? '#b93232' : '#555') + '">' + taxEsc(msg) + '</div>';
+}
+
 // ── WebFile-replica rendering ──────────────────────────────────────────
 const WF_TH = 'style="background:#b8c8da;border:1px solid #8ba2ba;padding:6px 10px;font-size:.72rem;font-weight:700;color:#1a2b3c;text-align:center;vertical-align:bottom"';
 const WF_TD = 'style="border:1px solid #8ba2ba;padding:6px 10px;text-align:right;font-size:.85rem;background:#f4f7fa"';
@@ -8772,8 +8931,13 @@ function renderTaxCard(cfg, r, filing) {
       + '<div style="flex:1"></div>'
       + '<button id="taxRecompute_' + cid + '" onclick="recomputeTax(\'' + cid + '\')" title="Recompute from the QuickBooks data already saved with this filing \u2014 no new pull" style="border:1px solid var(--border);background:#fff;color:#555;border-radius:7px;padding:.35rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">Recompute</button>'
       + '<button onclick="markTaxFiled(\'' + cid + '\')" style="border:1px solid ' + (filing.status === 'filed' ? 'var(--border);color:#555;background:white' : '#1e7a45;color:#1e7a45;background:white') + ';border-radius:7px;padding:.35rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">' + (filing.status === 'filed' ? 'Unmark filed' : 'Mark filed \u2713') + '</button>'
+      + ((filing.status === 'filed' || taxBillsLogged(filing))
+          ? '<button id="taxBillsBtn_' + cid + '" onclick="previewTaxBills(\'' + cid + '\')" title="Post the MB Gross Receipts, MB Sales Tax and Sales Tax bills to QuickBooks \u2014 shows them first" style="border:1px solid #1B2A4B;color:#1B2A4B;background:#fff;border-radius:7px;padding:.35rem .8rem;font-size:.78rem;font-weight:700;cursor:pointer">' + (taxBillsLogged(filing) ? 'QBO bills\u2026' : 'Post bills to QBO') + '</button>'
+          : '')
       + '</div>'
-      + '<div id="taxFileConfirm_' + cid + '"></div>';
+      + '<div id="taxFileConfirm_' + cid + '"></div>'
+      + taxBillsSummary(cfg, r, filing)
+      + '<div id="taxBills_' + cid + '"></div>';
   }
   const note = cfg.notes ? '<div style="font-size:.75rem;color:#8a5a00;background:#fbf0dd;border-radius:6px;padding:.35rem .6rem;margin-top:.5rem">\u26a0\ufe0f ' + taxEsc(cfg.notes) + '</div>' : '';
   const checks = renderTaxChecks(cfg, taxActiveChecks(cfg, r, taxPrevResults(cfg)), taxDismissedNow(cfg, r, taxPrevResults(cfg)))
@@ -8785,6 +8949,7 @@ function renderTaxCard(cfg, r, filing) {
 window.runTax = runTax; window.runAllTax = runAllTax; window.taxShiftMonth = taxShiftMonth; window.markTaxFiled = markTaxFiled;
 window.saveTaxAdjustment = saveTaxAdjustment; window.confirmTaxFiled = confirmTaxFiled; window.taxSetFiled = taxSetFiled; window.cancelTaxFileConfirm = cancelTaxFileConfirm;
 window.recomputeTax = recomputeTax;
+window.previewTaxBills = previewTaxBills; window.postTaxBills = postTaxBills; window.undoTaxBills = undoTaxBills; window.closeTaxBills = closeTaxBills;
 window.dismissTaxCheck = dismissTaxCheck; window.undismissTaxCheck = undismissTaxCheck;
 window.toggleTaxCard = toggleTaxCard; window.taxExpandAll = taxExpandAll; window.taxCollapseDone = taxCollapseDone;
 
