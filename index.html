@@ -9843,8 +9843,17 @@ function InvLibSearch(){
   InvLibLoad();
 }
 function InvLibPage(d){ const L=invLibState(); L.page=Math.max(0,L.page+d); L.open=null; L.edit=null; InvLibLoad(); }
+// 2026-10-19: one item-library request at a time. Typing used to start a new
+// search every pause while the previous ones were still running; they piled
+// up past the 8-second database timeout, and a late (failed) answer could
+// overwrite the newer results. Now each new search cancels the one before
+// it, and only the newest search may draw the table.
+let invLibSeq=0, invLibAbort=null;
 async function InvLibLoad(){
   const L=invLibState(); const client=Inv.client; if(!client) return;
+  const seq=++invLibSeq;
+  if(invLibAbort){ try{ invLibAbort.abort(); }catch(_){} }
+  const ctl=(typeof AbortController==='function')?new AbortController():null; invLibAbort=ctl;
   const tbl=document.getElementById('invLibTable'); if(tbl) tbl.innerHTML='<div class="empty"><span class="spinner"></span> Loading items…</div>';
   let q=sb.from('expo_item_library').select('*',{count:'exact'}).eq('client_id',client);
   const t=(L.text||'').trim();
@@ -9863,7 +9872,12 @@ async function InvLibLoad(){
   else if(L.filter==='uncoded') q=q.or('in_library.eq.false,gl_account.is.null');
   (INV_LIB_SORT[L.sort]||INV_LIB_SORT.bought).forEach(([c,o])=>{ q=q.order(c,o); });
   q=q.range(L.page*INV_LIB_PAGE, L.page*INV_LIB_PAGE+INV_LIB_PAGE-1);
-  const { data, error, count }=await q;
+  if(ctl && typeof q.abortSignal==='function') q=q.abortSignal(ctl.signal);
+  let res;
+  try{ res=await q; }catch(e){ res={ data:null, error:e, count:null }; }
+  if(seq!==invLibSeq) return;            // a newer search has started — drop this answer
+  if(invLibAbort===ctl) invLibAbort=null;
+  const { data, error, count }=res;
   if(Inv.screen!=='library'||Inv.client!==client) return;
   if(error){
     const missing=/expo_item_library/.test(error.message||'')&&/(does not exist|schema cache|Could not find)/i.test(error.message||'');
