@@ -2249,6 +2249,10 @@
           #page-invoices .inv-search input,#page-invoices .inv-search select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;background:#fff}
           #page-invoices .inv-qin{min-width:260px;flex:0 1 320px}
           #page-invoices .inv-search-gap{flex:1}
+          #page-invoices .inv-tbl th.inv-sortable{cursor:pointer;user-select:none;white-space:nowrap}
+          #page-invoices .inv-tbl th.inv-sortable:hover{color:var(--text)}
+          #page-invoices .inv-tbl th.inv-sortable.on{color:var(--accent)}
+          #page-invoices .inv-sort-ar{font-size:9px;margin-left:2px}
           #page-invoices .inv-checkbox{border:1px solid var(--border);border-radius:12px;background:#fff;padding:14px 16px}
           #page-invoices .inv-checkbox h4{margin:0 0 6px;font-family:'Hanken Grotesk',sans-serif;font-size:15px;color:var(--navy)}
           #page-invoices .inv-checkbox textarea{width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;resize:vertical}
@@ -9240,7 +9244,60 @@ function resubmitAnalysis(id) {
 // ══════════════════════════════════════════════════════════
 // INVOICES (AP queue) — extract-code-approve, native Triple tab
 // ══════════════════════════════════════════════════════════
-const Inv = { screen:'list', returnTo:null, q:{text:'',from:'',to:''}, check:null, lib:null, tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null, push:{}, pushGlobal:null };
+// ── QUEUE SORT (2026-10-20) ─────────────────────────────────────────────
+// Sort the invoice list by vendor, invoice #, invoice date, total or when it
+// arrived. Sorting happens in the database, so with 300+ invoices in a tab the
+// list shows the first 300 in the chosen order (not just the newest 300
+// re-shuffled). Blank values always go last. Ties fall back to newest
+// received. The choice is remembered per browser.
+const INV_SORT_COLS = {
+  received:{ col:'created_at',     label:'Received',  firstAsc:false },
+  vendor:  { col:'vendor',         label:'Vendor',    firstAsc:true  },
+  number:  { col:'invoice_number', label:'Invoice #', firstAsc:true  },
+  date:    { col:'invoice_date',   label:'Date',      firstAsc:false },
+  total:   { col:'total',          label:'Total',     firstAsc:false },
+};
+const INV_SORT_OPTS = [
+  ['received:0','Newest received'],['received:1','Oldest received'],
+  ['date:0','Invoice date — newest'],['date:1','Invoice date — oldest'],
+  ['vendor:1','Vendor A–Z'],['vendor:0','Vendor Z–A'],
+  ['total:0','Total — high to low'],['total:1','Total — low to high'],
+  ['number:1','Invoice # A–Z'],['number:0','Invoice # Z–A'],
+];
+function invLoadSort(){
+  try{ const v=JSON.parse(localStorage.getItem('bg_inv_sort')||'null'); if(v&&INV_SORT_COLS[v.key]) return { key:v.key, asc:!!v.asc }; }catch(_){}
+  return { key:'received', asc:false };
+}
+function invSaveSort(){ try{ localStorage.setItem('bg_inv_sort', JSON.stringify(Inv.sort)); }catch(_){} }
+function invApplySort(q){
+  const s=Inv.sort||{key:'received',asc:false}, c=INV_SORT_COLS[s.key]||INV_SORT_COLS.received;
+  q=q.order(c.col,{ ascending:s.asc, nullsFirst:false });
+  if(c.col!=='created_at') q=q.order('created_at',{ ascending:false });
+  return q;
+}
+// Clicking a column header: same column flips direction; a new column starts
+// in its natural direction (A–Z for text, newest/biggest first for dates and money).
+function InvSortBy(key){
+  if(!INV_SORT_COLS[key]) return;
+  Inv.sort = (Inv.sort&&Inv.sort.key===key) ? { key, asc:!Inv.sort.asc } : { key, asc:INV_SORT_COLS[key].firstAsc };
+  invSaveSort(); InvRenderList();
+}
+function InvSortPick(v){
+  const [key,a]=String(v||'').split(':'); if(!INV_SORT_COLS[key]) return;
+  Inv.sort={ key, asc:a==='1' }; invSaveSort(); InvRenderList();
+}
+function invSortTh(key, extra){
+  const s=Inv.sort||{}, on=s.key===key;
+  const arrow = on ? (s.asc?' ▲':' ▼') : '';
+  return '<th class="inv-sortable'+(on?' on':'')+(extra?' '+extra:'')+'" onclick="InvSortBy(\''+key+'\')" title="Sort by '+INV_SORT_COLS[key].label.toLowerCase()+'">'+INV_SORT_COLS[key].label+'<span class="inv-sort-ar">'+arrow+'</span></th>';
+}
+function invSortSelectHtml(){
+  const s=Inv.sort||{key:'received',asc:false}, cur=s.key+':'+(s.asc?1:0);
+  return '<select id="invSort" title="Sort the list" onchange="InvSortPick(this.value)">'
+    +INV_SORT_OPTS.map(o=>'<option value="'+o[0]+'"'+(o[0]===cur?' selected':'')+'>Sort: '+o[1]+'</option>').join('')+'</select>';
+}
+
+const Inv = { screen:'list', returnTo:null, q:{text:'',from:'',to:''}, sort:invLoadSort(), check:null, lib:null, tab:'needs_review', client: localStorage.getItem('bg_inv_client')||'', clients:{}, counts:{}, acctCache:{}, swOpen:false, loaded:false, current:null, push:{}, pushGlobal:null };
 const INV_TABS = [
   { key:'processing',   label:'Processing',   where:['processing'] },
   { key:'needs_review', label:'Needs Review', where:['needs_review'] },
@@ -9350,7 +9407,8 @@ async function InvRenderList(){
   Inv.screen='list'; Inv.returnTo=null;
   const tab=INV_TABS.find(t=>t.key===Inv.tab);
   const searching=invSearchOn(), LIMIT=searching?500:300;
-  let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status,source,qbo_bill_id,created_at,review_reason').order('created_at',{ascending:false}).limit(LIMIT);
+  let q=sb.from('invoice_queue').select('id,client_id,vendor,invoice_number,invoice_date,total,status,source,qbo_bill_id,created_at,review_reason').limit(LIMIT);
+  q=invApplySort(q);
   if(tab.where) q=q.in('status',tab.where);
   if(Inv.client) q=q.eq('client_id',Inv.client);
   q=invApplySearch(q);
@@ -9363,9 +9421,9 @@ async function InvRenderList(){
   if(!rows.length){ body.innerHTML=bar+(searching?'<div class="empty">No invoices match'+(tab.where?' in '+tab.label+' — try the All tab':'')+'.'+((Inv.q.from||Inv.q.to)?' Invoices with no date read are left out when a date range is set.':'')+'</div>':InvEmptyFor(Inv.tab)); return; }
   const pick = Inv.tab==='approved';
   Inv.picked = new Set();
-  const found = searching ? '<div class="inv-note" style="margin:-4px 0 10px">'+(rows.length>=LIMIT?'Showing the newest '+LIMIT+' matches — narrow the search to see the rest.':rows.length+' match'+(rows.length===1?'':'es'))+' in '+tab.label+(tab.where?' (use All to search every status)':'')+'.</div>' : '';
+  const found = searching ? '<div class="inv-note" style="margin:-4px 0 10px">'+(rows.length>=LIMIT?'Showing the first '+LIMIT+' matches in this sort order — narrow the search to see the rest.':rows.length+' match'+(rows.length===1?'':'es'))+' in '+tab.label+(tab.where?' (use All to search every status)':'')+'.</div>' : '';
   body.innerHTML=bar+found+(pick?'<div class="inv-bar"><button class="btn btn-primary" id="invPushSelBtn" onclick="InvPushSelected()" disabled>Push selected to QuickBooks</button><span class="inv-note" id="invPickNote">Tick invoices to push several at once. Each is checked first; only ones that are ready post.</span></div>':'')
-    +'<table class="inv-tbl"><thead><tr>'+(pick?'<th style="width:28px"><input type="checkbox" title="Select all" onclick="InvPickAll(this.checked)"></th>':'')+'<th>Vendor</th><th>Invoice #</th><th>Date</th><th class="inv-r">Total</th>'+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th><th></th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
+    +'<table class="inv-tbl"><thead><tr>'+(pick?'<th style="width:28px"><input type="checkbox" title="Select all" onclick="InvPickAll(this.checked)"></th>':'')+invSortTh('vendor')+invSortTh('number')+invSortTh('date')+invSortTh('total','inv-r')+(Inv.client?'':'<th>Client</th>')+'<th>Coded</th><th>Status</th><th></th></tr></thead><tbody>'+rows.map(InvRowHtml).join('')+'</tbody></table>';
   InvFillCoded(rows.map(r=>r.id));
 }
 function InvRowHtml(r){
@@ -9686,7 +9744,7 @@ function InvSearchBarHtml(){
     +'<span class="inv-note">Invoice date</span><input type="date" id="invQFrom" value="'+invEsc(s.from||'')+'"><span class="inv-note">to</span><input type="date" id="invQTo" value="'+invEsc(s.to||'')+'">'
     +'<button class="btn btn-primary btn-sm" onclick="InvRunSearch()">Search</button>'
     +(invSearchOn()?'<button class="btn btn-secondary btn-sm" onclick="InvClearSearch()">Clear</button>':'')
-    +'<span class="inv-search-gap"></span><button class="btn btn-secondary btn-sm" onclick="InvOpenCheck()">Check a list of invoice #s</button></div>';
+    +'<span class="inv-search-gap"></span>'+invSortSelectHtml()+'<button class="btn btn-secondary btn-sm" onclick="InvOpenCheck()">Check a list of invoice #s</button></div>';
 }
 function InvRunSearch(){
   Inv.q={ text:(document.getElementById('invQ')||{}).value||'', from:(document.getElementById('invQFrom')||{}).value||'', to:(document.getElementById('invQTo')||{}).value||'' };
