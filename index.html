@@ -1356,6 +1356,7 @@
           <button class="sort-btn active" onclick="setSort('due')" id="sort-due">Due date</button>
           <button class="sort-btn" onclick="setSort('client')" id="sort-client">Client</button>
           <button class="sort-btn" onclick="setSort('task')" id="sort-task">Task name</button>
+          <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="openQuickTaskModal()" title="Create a task for any client without leaving My Day">+ New Task</button>
         </div>
         <div id="mydayContent"><div class="empty"><span class="spinner"></span></div></div>
       </div>
@@ -1375,6 +1376,9 @@
         <div class="view-as-banner" id="viewAsBannerWeek" style="display:none">
           Viewing as <strong id="viewAsBannerNameWeek"></strong> — read-only
           <button class="view-as-return" onclick="clearViewingAs()">Return to my view</button>
+        </div>
+        <div class="myday-sort" style="justify-content:flex-end">
+          <button class="btn btn-primary btn-sm" onclick="openQuickTaskModal()" title="Create a task for any client without leaving My Week">+ New Task</button>
         </div>
         <div id="myweekContent"><div class="empty"><span class="spinner"></span></div></div>
       </div>
@@ -2541,6 +2545,13 @@
     <div class="modal-body">
       <input type="hidden" id="tmClientId" />
       <input type="hidden" id="tmTaskId" />
+      <!-- Client picker: shown ONLY when the modal is opened from My Day / My
+           Week via openQuickTaskModal(). Opened from a client page, the client
+           is already known and this row stays hidden. -->
+      <div class="form-row" id="tmClientRow" style="display:none">
+        <label class="form-label">Client</label>
+        <select class="form-select" id="tmClientPick" onchange="onTmClientPick()"></select>
+      </div>
       <div class="form-row">
         <label class="form-label">Task Title</label>
         <input type="text" class="form-input" id="tmTitle" placeholder="e.g. Process Payroll" />
@@ -5984,8 +5995,51 @@ async function deleteTaskFromModal() {
 // edit preserve the schedule unless the user actually changes Starts on.
 let tmOrigStartsOn = null;
 let tmOrigNextDue  = null;
+// True only while the modal was opened from My Day / My Week ("+ New Task").
+// In that mode there is no client context, so the user picks one, and saveTask
+// must NOT reload the client-detail task list (it belongs to whatever client
+// was last opened, not necessarily the one picked here).
+let tmQuickAdd = false;
 
-function openTaskModal(clientId, category, taskId) {
+// Fills the Category select for a given client: the firm space gets only the
+// non-close categories (same rule openTaskModal has always applied); a regular
+// client — or no client picked yet — gets the full set. Keeps the current
+// choice when it is still valid.
+function fillTmCategories(clientId) {
+  const sel = document.getElementById('tmCategory');
+  const keep = sel.value;
+  const isFirm = (allClients.find(c => c.id === clientId) || {}).is_firm;
+  const cats = isFirm ? CATS.filter(c => !CLOSE_CATS.includes(c)) : CATS;
+  sel.innerHTML = cats.map(c => `<option>${c}</option>`).join('');
+  if (cats.includes(keep)) sel.value = keep;
+}
+
+// "+ New Task" on My Day / My Week. Opens the normal Add Task modal with a
+// Client picker on top and the task pre-assigned to the person using it.
+function openQuickTaskModal() {
+  if (isViewingAs()) {
+    alert("You're viewing someone else's list (read-only). Return to your own view to add a task.");
+    return;
+  }
+  openTaskModal('', null, null, true);
+}
+
+function escapeHtmlTm(v) {
+  return String(v).replace(/[&<>"']/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch]));
+}
+
+function onTmClientPick() {
+  const id = document.getElementById('tmClientPick').value;
+  document.getElementById('tmClientId').value = id;
+  fillTmCategories(id);
+}
+
+function openTaskModal(clientId, category, taskId, quickAdd) {
+  // Quick-add mode comes only from openQuickTaskModal's 4th argument. Every
+  // other open resets it, so a quick-add modal dismissed with × or Cancel
+  // can't leak the picker into the next Add Task opened from a client page.
+  const quick = !!quickAdd && !taskId;
+  tmQuickAdd = quick;
   tmOrigStartsOn = null;
   tmOrigNextDue  = null;
   subRows = [];
@@ -5995,14 +6049,28 @@ function openTaskModal(clientId, category, taskId) {
   document.getElementById('tmAssigned').value = '';
   document.getElementById('tmStartsOn').value = tzToday();
   document.getElementById('tmNextDue').value = tzToday();
-  document.getElementById('tmClientId').value = clientId || currentClientId || '';
+  // In quick-add mode there is deliberately NO fallback to currentClientId —
+  // that is whichever client page was opened last, and silently filing the
+  // task there is exactly the mistake the picker exists to prevent.
+  const _fcid = quick ? '' : (clientId || currentClientId || '');
+  document.getElementById('tmClientId').value = _fcid;
   document.getElementById('tmTaskId').value = taskId || '';
+  const _pickRow = document.getElementById('tmClientRow');
+  if (quick) {
+    // Firm space first (it's pinned elsewhere in the app too), then A–Z.
+    const opts = allClients.slice().sort((a, b) =>
+      (b.is_firm ? 1 : 0) - (a.is_firm ? 1 : 0) || String(a.name || '').localeCompare(String(b.name || '')));
+    document.getElementById('tmClientPick').innerHTML =
+      '<option value="">Choose a client…</option>' +
+      opts.map(c => `<option value="${c.id}">${escapeHtmlTm(c.name || '(unnamed)')}${c.is_firm ? ' (firm)' : ''}</option>`).join('');
+    _pickRow.style.display = '';
+  } else {
+    _pickRow.style.display = 'none';
+  }
   // Firm space uses only non-close categories (close-lifecycle categories don't
   // apply and would get gated out of My Day). Regular clients get the full set.
-  const _fcid = clientId || currentClientId || '';
-  const _isFirm = (allClients.find(c => c.id === _fcid) || {}).is_firm;
-  const _cats = _isFirm ? CATS.filter(c => !CLOSE_CATS.includes(c)) : CATS;
-  document.getElementById('tmCategory').innerHTML = _cats.map(c => `<option>${c}</option>`).join('');
+  document.getElementById('tmCategory').innerHTML = '';
+  fillTmCategories(_fcid);
   // Default the Sequential toggle ON for new tasks. In edit mode this is
   // overridden below to reflect the task's REAL chain. Previously it was never
   // set here, so the checkbox kept its state from the prior modal open —
@@ -6061,6 +6129,13 @@ function openTaskModal(clientId, category, taskId) {
     }
   } else {
     document.getElementById('taskModalTitle').textContent = 'Add Task';
+    if (quick) {
+      // It's going on the creator's own list, so default the assignee to them.
+      // Only set it if the name is one of the dropdown's options.
+      const me = document.getElementById('sidebarName').textContent.trim();
+      const asg = document.getElementById('tmAssigned');
+      if ([...asg.options].some(o => o.value === me || o.text === me)) asg.value = me;
+    }
   }
   onFreqTypeChange(); // Show/hide the right inline controls and render preview.
   document.getElementById('taskModal').classList.add('open');
@@ -6177,6 +6252,7 @@ async function saveTask() {
   const freqMonth= parseInt(document.getElementById('freqMonth').value) || null;
   const seq      = document.getElementById('tmSeq').checked;
 
+  if (!clientId) { alert('Please choose a client for this task'); document.getElementById('tmClientPick')?.focus(); return; }
   if (!title) { alert('Please enter a task title'); return; }
 
   // Guard: saving 2+ steps with Sequential OFF makes every step appear at once
@@ -6285,7 +6361,12 @@ async function saveTask() {
   }
 
   closeModal('taskModal');
-  await loadTasks(clientId);
+  const _wasQuick = tmQuickAdd;
+  tmQuickAdd = false;
+  // From My Day / My Week, only refresh the client-detail list if it is the
+  // same client that's loaded there; loading another client's tasks into it
+  // would leave the detail page showing the wrong client's tasks.
+  if (!_wasQuick || clientId === currentClientId) await loadTasks(clientId);
   // Also refresh the cross-cutting views so a due date change shows up immediately
   reloadActiveView();
 }
