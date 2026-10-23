@@ -14279,11 +14279,54 @@ init();
           '<td class="flbz-note">' + esc(e.error_message || (t.warnings && t.warnings.length ? t.warnings.length + ' warning(s)' : '')) + '</td>' +
           '<td>' + (e.status === 'posted' && e.qbo_je_id
             ? '<button class="flbz-unpost" data-unpost="' + esc(e.sales_date) + '">Unpost</button>'
-            : '') + '</td>' +
+            : ((e.status === 'pending' || e.status === 'error') && t.journal_no && Number(t.debits) > 0
+              ? '<button class="flbz-btn" data-postsaved="' + esc(e.sales_date) + '">Post</button>'
+              : '')) + '</td>' +
           '</tr>';
       }).join('') + '</tbody></table>';
     host.querySelectorAll('[data-unpost]').forEach(b =>
       b.addEventListener('click', () => unpostOne(b.getAttribute('data-unpost'), b)));
+    host.querySelectorAll('[data-postsaved]').forEach(b =>
+      b.addEventListener('click', () => postSaved(b.getAttribute('data-postsaved'), b)));
+  }
+
+  // 10/23/26: a parsed day that was never posted (page reloaded, dialog
+  // dismissed) used to have no Post button once its parse card was gone.
+  // This posts the entry already stored in je_sync_log -- the same 'post'
+  // action the parse card uses, which re-checks balance and accounts and
+  // refuses a day that is already posted.
+  async function postSaved(date, btn) {
+    const e = S.entries.find(x => x.sales_date === date);
+    if (!e) return;
+    const t = e.totals || {};
+    if (!confirm('Post ' + date + ' to First Light Books\u2019 QuickBooks?\n\n' +
+      (t.journal_no || date) + ', Items in Transit ' + money(t.items_in_transit) +
+      ', total ' + money(t.debits) + '.\n\n' +
+      'This creates a real journal entry.')) {
+      setStatus('Not posted \u2014 ' + date + ' is still pending.');
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Posting\u2026';
+    try {
+      const d = await invoke({ action: 'post', sales_date: date });
+      let msg = date + ' posted as journal entry ' + d.qbo_je_id + ' (' + d.doc_number + '), ' +
+        d.line_count + ' lines.';
+      const warn = [d.token_store_warning, d.log_write_warning].filter(Boolean);
+      if (warn.length) msg += ' ' + warn.join(' ');
+      setStatus(msg, !!d.log_write_warning);
+      const p = S.parsed.find(x => x.sales_date === date);
+      if (p) {
+        const idx = S.parsed.indexOf(p);
+        const state = $('flbzState' + idx);
+        if (state) { state.textContent = 'posted'; state.className = 'flbz-badge b-ok'; }
+      }
+    } catch (err) {
+      setStatus('Post failed for ' + date + ': ' + (err.message || String(err)), true);
+      btn.disabled = false;
+      btn.textContent = 'Post';
+    }
+    loadEntries().then(reconcileInbox);
   }
 
   // 10/19/26: Unpost deletes the day's journal entry from QuickBooks and
