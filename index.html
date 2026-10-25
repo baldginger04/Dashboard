@@ -1501,6 +1501,7 @@
             <div style="font-size:13px;color:var(--text3);margin-top:4px" id="detailMeta"></div>
           </div>
           <div style="display:flex;align-items:center;gap:14px">
+            <button class="btn btn-secondary" id="detailSetupBtn" style="display:none" onclick="ClientSetup.open(currentClientId)" title="What this client has in Drive, Gmail and Triple — and create what's missing">⚙ Setup</button>
             <div id="detailBadge"></div>
             <div id="detailArchive"></div>
             <!-- Client logo (same file the Client Portal shows; set in the portal). -->
@@ -1511,6 +1512,7 @@
         <div class="tabs">
           <div class="tab active" onclick="showTab('tasks')">Current Tasks</div>
           <div class="tab" onclick="showTab('messages')">Internal Client Specific Communication</div>
+          <div class="tab" onclick="showTab('howto')">How this client works</div>
         </div>
         <div class="tab-panel active" id="tab-tasks">
           <div class="sub-tabs">
@@ -1526,6 +1528,10 @@
             </div>
           </div>
           <div id="taskContent"><div class="empty"><span class="spinner"></span></div></div>
+        </div>
+        <!-- How this client works (10/25/26) — script: search "HOW THIS CLIENT WORKS" -->
+        <div class="tab-panel" id="tab-howto">
+          <div class="card" style="padding:1.25rem" id="cnBody"><div class="empty">Loading…</div></div>
         </div>
         <div class="tab-panel" id="tab-messages">
           <div class="card" style="padding:1.25rem">
@@ -14088,6 +14094,8 @@ init();
 
     closeModal('newClientModal');
     if (typeof openClient === 'function') openClient(newId);
+    // Offer the setup checklist straight away (Client Setup, 10/25/26).
+    if (window.ClientSetup) setTimeout(() => window.ClientSetup.open(newId), 400);
   };
 
   // Wire the name field's duplicate check and keep the preview honest when the
@@ -20666,6 +20674,365 @@ init();
   // Every 2 minutes as well, so a day fixed by the morning look-back or by
   // someone else clears without a page change.
   setInterval(refresh, 2 * 60 * 1000);
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   HOW THIS CLIENT WORKS — added 2026-10-25
+   A per-client notes page on the client's page (tab "How this client works"):
+   the things that live in someone's head — which account the delivery fees go
+   to, where cash goes, which location is which entity — so whoever picks the
+   client up can do it right. Team-only (client_notes; never in the Portal).
+
+   Every save keeps the version it replaced (client_note_versions, written by
+   a database trigger), and a save is refused if someone else saved since you
+   opened the editor, so two people can't overwrite each other.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const link = s => (typeof linkifyEscaped === 'function' ? linkifyEscaped(s) : s);
+  const TEMPLATE = [
+    '## POS and daily sales', '', '',
+    '## Bank and credit cards', '', '',
+    '## Payroll', '', '',
+    '## Vendors and invoices', '', '',
+    '## Coding rules (what goes where)', '', '',
+    '## Month-end close', '', '',
+    '## Contacts and logins (where to find them — no passwords here)', '', '',
+    '## Other', ''
+  ].join('\n');
+
+  const S = { clientId: null, row: null, editing: false, history: null, viewing: null };
+
+  function when(iso) {
+    return iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  }
+
+  /** Plain text → HTML: "## Heading", "- bullet", blank-line paragraphs, links. */
+  function toHtml(text) {
+    const lines = String(text || '').replace(/\r/g, '').split('\n');
+    let out = '', list = false, para = [];
+    const flushPara = () => { if (para.length) { out += '<p style="margin:.35rem 0">' + para.map(l => link(esc(l))).join('<br>') + '</p>'; para = []; } };
+    const closeList = () => { if (list) { out += '</ul>'; list = false; } };
+    lines.forEach(raw => {
+      const l = raw.trimEnd();
+      if (/^##\s+/.test(l)) { flushPara(); closeList(); out += '<h4 style="font-family:\'Hanken Grotesk\',sans-serif;font-size:14px;color:var(--navy);margin:1rem 0 .3rem">' + esc(l.replace(/^##\s+/, '')) + '</h4>'; }
+      else if (/^\s*[-*•]\s+/.test(l)) { flushPara(); if (!list) { out += '<ul style="margin:.2rem 0 .4rem 1.1rem;padding:0">'; list = true; } out += '<li style="margin:.15rem 0">' + link(esc(l.replace(/^\s*[-*•]\s+/, ''))) + '</li>'; }
+      else if (!l.trim()) { flushPara(); closeList(); }
+      else { closeList(); para.push(l); }
+    });
+    flushPara(); closeList();
+    return out;
+  }
+  /** Sections the template offers that nobody has filled in yet. */
+  function emptySections(text) {
+    const blocks = String(text || '').split(/^##\s+/m).slice(1);
+    return blocks.filter(b => !b.split('\n').slice(1).join('').trim()).map(b => b.split('\n')[0].trim());
+  }
+
+  /** The notes without template headings nobody has written under (view only). */
+  function stripEmpty(text) {
+    const parts = String(text || '').split(/^(?=##\s+)/m);
+    return parts.filter(p => !/^##\s+/.test(p) || p.split('\n').slice(1).join('').trim()).join('');
+  }
+
+  async function load(id) {
+    const { data, error } = await sb.from('client_notes').select('*').eq('client_id', id).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  function render(msg, bad) {
+    const el = $('cnBody'); if (!el) return;
+    const r = S.row;
+    const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : '';
+    const readOnly = typeof isViewingAs === 'function' && isViewingAs();
+    const note = msg ? '<div style="margin:0 0 10px;padding:9px 12px;border-radius:9px;font-size:13px;background:' + (bad ? 'var(--red-bg);color:var(--red)' : 'var(--green-bg);color:var(--green)') + '">' + esc(msg) + '</div>' : '';
+    const head = '<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:.6rem">' +
+      '<div style="font-size:12px;color:var(--text3)">' + (r && r.body ? 'Last edited ' + esc(when(r.updated_at)) + (r.updated_by ? ' by ' + esc(r.updated_by) : '') : 'Nothing written yet for this client.') + '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        (S.editing ? '' : '<button class="btn btn-secondary" onclick="ClientNotes.history()">History</button>') +
+        (S.editing || readOnly ? '' : '<button class="btn btn-primary" onclick="ClientNotes.edit()">' + (r && r.body ? 'Edit' : 'Start notes') + '</button>') +
+      '</div></div>';
+
+    if (S.editing) {
+      el.innerHTML = note + head +
+        '<div style="font-size:12px;color:var(--text3);margin-bottom:6px">Write it for a teammate covering this client for the first time. <b>## </b> starts a heading, <b>- </b> a bullet. Don’t put passwords here — say where they are.</div>' +
+        '<textarea id="cnText" spellcheck="true" autocorrect="on" autocapitalize="sentences" style="width:100%;min-height:420px;padding:12px;border:1px solid var(--border2);border-radius:10px;font:13px/1.5 Inter,sans-serif;box-sizing:border-box"></textarea>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button class="btn btn-secondary" onclick="ClientNotes.cancel()">Cancel</button><button class="btn btn-primary" id="cnSave" onclick="ClientNotes.save()">Save</button></div>';
+      const ta = $('cnText'); ta.value = S.draft != null ? S.draft : ((r && r.body) || TEMPLATE); ta.focus();
+      return;
+    }
+    if (S.history) {
+      el.innerHTML = note + head + '<div style="font-size:13px;margin:.4rem 0 .6rem"><b>Earlier versions</b> <span style="color:var(--text3)">(newest first)</span> · <a href="#" onclick="ClientNotes.closeHistory();return false">back to the notes</a></div>' +
+        (S.history.length ? S.history.map((v, i) => '<div style="border:1px solid var(--border);border-radius:10px;margin:0 0 8px;padding:10px 12px"><div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--text2)"><span>' +
+          esc(when(v.saved_at)) + (v.saved_by ? ' · ' + esc(v.saved_by) : '') + '</span><span><a href="#" onclick="ClientNotes.view(' + i + ');return false">' + (S.viewing === i ? 'hide' : 'show') + '</a>' +
+          (readOnly ? '' : ' · <a href="#" onclick="ClientNotes.restore(' + i + ');return false">restore</a>') + '</span></div>' +
+          (S.viewing === i ? '<div style="margin-top:6px">' + toHtml(v.body) + '</div>' : '') + '</div>').join('')
+          : '<div style="color:var(--text3);font-size:13px">No earlier versions yet.</div>');
+      return;
+    }
+    const empty = r && r.body ? emptySections(r.body) : [];
+    el.innerHTML = note + head + (r && r.body
+      ? toHtml(stripEmpty(r.body)) + (empty.length ? '<div style="margin-top:12px;font-size:12px;color:var(--text3)">Not filled in yet: ' + esc(empty.join(' · ')) + '</div>' : '')
+      : '<div style="color:var(--text3);font-size:13px;line-height:1.6">Use this for what a teammate covering ' + esc(((typeof findClientAny === 'function' && findClientAny(S.clientId)) || {}).name || 'this client') +
+        ' would need to know — the POS, where cash and card fees go, odd vendors, coding rules the client wants, close quirks, who to ask for what.</div>');
+  }
+
+  async function open(id) {
+    if (!id) return;
+    if (S.clientId !== id) { S.editing = false; S.history = null; S.viewing = null; S.draft = null; }
+    S.clientId = id;
+    const el = $('cnBody'); if (el && !S.row) el.innerHTML = '<div class="empty">Loading…</div>';
+    try { S.row = await load(id); if (S.clientId === id) render(); }
+    catch (e) { if (el) el.innerHTML = '<div style="color:var(--red);font-size:13px">Couldn’t load the notes: ' + esc((e && e.message) || e) + '</div>'; }
+  }
+
+  window.ClientNotes = {
+    open,
+    edit() { S.editing = true; S.history = null; S.draft = null; render(); },
+    cancel() { S.editing = false; S.draft = null; render(); },
+    async save() {
+      const id = S.clientId; const ta = $('cnText'); if (!id || !ta) return;
+      const body = ta.value.replace(/\s+$/, '');
+      S.draft = ta.value;
+      const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : null;
+      const b = $('cnSave'); if (b) b.disabled = true;
+      const now = new Date().toISOString();
+      let res;
+      if (S.row) {
+        // Only save over the version this editor was opened on.
+        res = await sb.from('client_notes').update({ body, updated_at: now, updated_by: me })
+          .eq('client_id', id).eq('updated_at', S.row.updated_at).select();
+      } else {
+        res = await sb.from('client_notes').insert({ client_id: id, body, updated_at: now, updated_by: me }).select();
+      }
+      if (res.error && !/duplicate|unique/i.test(res.error.message)) { if (b) b.disabled = false; render('Not saved: ' + res.error.message, true); return; }
+      if (res.error || !res.data || !res.data.length) {
+        if (b) b.disabled = false;
+        render('Not saved — someone else saved these notes after you opened the editor. Your text is still in the box: copy it, press Cancel to see theirs, then Edit and merge.', true);
+        return;
+      }
+      S.row = res.data[0]; S.editing = false; S.draft = null;
+      render('Saved.');
+    },
+    async history() {
+      const { data, error } = await sb.from('client_note_versions').select('body,saved_at,saved_by').eq('client_id', S.clientId).order('saved_at', { ascending: false }).limit(30);
+      if (error) { render('Couldn’t load history: ' + error.message, true); return; }
+      S.history = data || []; S.viewing = null; render();
+    },
+    closeHistory() { S.history = null; render(); },
+    view(i) { S.viewing = S.viewing === i ? null : i; render(); },
+    restore(i) {
+      const v = S.history && S.history[i]; if (!v) return;
+      if (!confirm('Put this ' + when(v.saved_at) + ' version back in the editor? Nothing is saved until you press Save — and the current version stays in History.')) return;
+      S.history = null; S.editing = true; S.draft = v.body; render();
+    },
+  };
+  window.__ClientNotesInternals = { toHtml, emptySections, stripEmpty, TEMPLATE };
+
+  // Load when the tab is opened, and again when you switch clients with it open.
+  const _st = window.showTab;
+  window.showTab = function (name) { _st.apply(this, arguments); if (name === 'howto' && typeof currentClientId !== 'undefined') open(currentClientId); };
+  const _oc = window.openClient;
+  if (typeof _oc === 'function') {
+    window.openClient = async function (id) {
+      S.row = null;
+      const r = await _oc.apply(this, arguments);
+      const p = $('tab-howto');
+      if (p && p.classList.contains('active')) open(id);
+      return r;
+    };
+  }
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   CLIENT SETUP CHECKLIST — added 2026-10-25
+   "⚙ Setup" on a client's page (Ed only, like Add Client), and offered right
+   after Add Client. Shows what this client has and what's missing:
+
+     created for you   Drive client folder + Statements folder, the Statement
+                       Reconciler watch, the Expo watch (only if ticked),
+                       Gmail labels <Root>/Accounting - XX/{Invoices,
+                       Statements, Receipts, Payroll} - XX, the statement-email
+                       mapping, and the receipts mapping (created OFF)
+     done by hand      QuickBooks connection, daily sales, Expo push,
+                       preparer / reviewer — each links to where it's done
+
+   "Create missing pieces" adds a client_setup_requests row; the Drive Watch
+   Apps Script (ClientSetup.gs, every 5 minutes) does the work and writes back
+   what it created. This page polls until it's done. Nothing existing is ever
+   renamed, moved or deleted.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  let cur = null, pollT = null;
+
+  function css() {
+    if (document.getElementById('csCss')) return;
+    const st = document.createElement('style'); st.id = 'csCss';
+    st.textContent = `
+      #csOverlay{position:fixed;inset:0;background:rgba(27,42,75,.35);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+      #csOverlay .cs-box{background:#fff;border-radius:14px;max-width:760px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:22px 24px}
+      #csOverlay .cs-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+      #csOverlay .cs-title{font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:18px;color:var(--navy)}
+      #csOverlay .cs-sub{font-size:12px;color:var(--text3);margin-top:3px}
+      #csOverlay .cs-x{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--text2)}
+      #csOverlay h4{font-family:'Hanken Grotesk',sans-serif;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin:18px 0 6px}
+      #csOverlay .cs-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+      #csOverlay .cs-row:last-child{border-bottom:0}
+      #csOverlay .cs-ic{width:20px;flex:none;text-align:center;font-weight:700}
+      #csOverlay .cs-ok{color:var(--green)} #csOverlay .cs-no{color:var(--red)} #csOverlay .cs-na{color:var(--text3)}
+      #csOverlay .cs-main{flex:1} #csOverlay .cs-det{font-size:12px;color:var(--text3);margin-top:2px}
+      #csOverlay .cs-link{color:var(--coral);font-weight:600;cursor:pointer;white-space:nowrap;font-size:12px}
+      #csOverlay .cs-form{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;background:var(--bg3);border-radius:10px;padding:12px;margin-top:14px}
+      #csOverlay .cs-form label{font-size:11px;color:var(--text2);display:block;margin-bottom:3px}
+      #csOverlay .cs-form input[type=text]{padding:7px 9px;border:1px solid var(--border2);border-radius:7px;font-size:13px}
+      #csOverlay .cs-chk{display:flex;gap:6px;align-items:center;font-size:13px}
+      #csOverlay .cs-msg{font-size:13px;border-radius:10px;padding:10px 12px;margin-top:12px}
+      #csOverlay .cs-msg.info{background:var(--blue-bg,#eef3fb);color:var(--navy)}
+      #csOverlay .cs-msg.bad{background:var(--red-bg);color:var(--red)}
+      #csOverlay .cs-msg.good{background:var(--green-bg);color:var(--green)}
+      #csOverlay .cs-log{font-size:12px;margin:6px 0 0;padding-left:18px}
+    `;
+    document.head.appendChild(st);
+  }
+
+  const clientOf = id => (typeof findClientAny === 'function' ? findClientAny(id) : null) ||
+    (typeof allClients !== 'undefined' ? (allClients || []).find(c => c && c.id === id) : null);
+
+  function initials(name) {
+    const words = String(name || '').replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(w => w && !/^(the|of|and|llc|inc|co)$/i.test(w));
+    return (words.map(w => w[0]).join('').toUpperCase() || 'X').slice(0, 4);
+  }
+  function parseLabel(name) {
+    const m = /^(.*?)\/Accounting - ([^\/]+?)(?:\/|$)/.exec(String(name || ''));
+    return m ? { root: m[1], abbr: m[2] } : null;
+  }
+
+  async function q(build) { const r = await build(); if (r.error) throw r.error; return r.data || []; }
+
+  async function load(id) {
+    const [watches, stMap, rcMap, conns, srcs, flags, reqs] = await Promise.all([
+      q(() => sb.from('drive_watches').select('id,kind,label,active,last_error').eq('client_id', id)),
+      q(() => sb.from('statement_email_labels').select('gmail_label_name').eq('client_id', id)),
+      q(() => sb.from('receipt_gmail_labels').select('gmail_label_name,active,match_mode').eq('client_id', id)),
+      q(() => sb.from('qbo_connections').select('client_id,company_name').eq('client_id', id)),
+      q(() => sb.from('sync_sources').select('source,enabled').eq('client_id', id)),
+      q(() => sb.from('expo_client_flags').select('push_enabled').eq('client_id', id)),
+      q(() => sb.from('client_setup_requests').select('*').eq('client_id', id).order('requested_at', { ascending: false }).limit(1)),
+    ]);
+    return { watches, stMap, rcMap, conns, srcs, flags, req: reqs[0] || null };
+  }
+
+  function row(state, title, detail, link) {
+    const ic = state === 'ok' ? '<span class="cs-ic cs-ok">✓</span>' : state === 'no' ? '<span class="cs-ic cs-no">✗</span>' : '<span class="cs-ic cs-na">–</span>';
+    return '<div class="cs-row">' + ic + '<div class="cs-main">' + esc(title) + (detail ? '<div class="cs-det">' + esc(detail) + '</div>' : '') + '</div>' +
+      (link ? '<span class="cs-link" onclick="' + link.on + '">' + esc(link.text) + '</span>' : '') + '</div>';
+  }
+
+  function render(c, D, msg) {
+    css();
+    let o = document.getElementById('csOverlay');
+    if (!o) {
+      o = document.createElement('div'); o.id = 'csOverlay';
+      o.addEventListener('click', e => { if (e.target === o) close(); });
+      document.body.appendChild(o);
+    }
+    if (!D) { o.innerHTML = '<div class="cs-box"><div class="cs-title">Setup — ' + esc(c ? c.name : '') + '</div><div class="cs-sub">' + esc(msg || 'Loading…') + '</div></div>'; return; }
+
+    const inv = D.watches.find(w => w.kind === 'invoice');
+    const st = D.watches.find(w => w.kind === 'statement');
+    const mapped = (D.stMap[0] && D.stMap[0].gmail_label_name) || (D.rcMap[0] && D.rcMap[0].gmail_label_name) || '';
+    const p = parseLabel(mapped);
+    const rootDefault = p ? p.root : c.name;
+    const abbrDefault = p ? p.abbr : initials(c.name);
+    const req = D.req;
+    const busy = req && (req.status === 'pending' || req.status === 'running');
+    const auto = !!(st && D.stMap.length && D.rcMap.length);
+
+    let html = '<div class="cs-box"><div class="cs-head"><div><div class="cs-title">Setup — ' + esc(c.name) + '</div>' +
+      '<div class="cs-sub">What this client has in Drive, Gmail and Triple. Anything missing in the first list can be created with one click; nothing existing is changed.</div></div>' +
+      '<button class="cs-x" onclick="ClientSetup.close()" title="Close">×</button></div>';
+
+    html += '<h4>Created for you</h4>' +
+      row(st ? 'ok' : 'no', 'Drive folder + Statements folder, watched by the Statement Reconciler', st ? st.label + (st.active ? '' : ' (watch is OFF)') : 'missing — will be created under Ed’s Clients') +
+      row(inv ? 'ok' : 'na', 'Expo watching the client’s Drive folder', inv ? inv.label + (inv.active ? '' : ' (watch is OFF)') : 'not on Expo — tick Expo below to add it') +
+      row(D.stMap.length ? 'ok' : 'no', 'Gmail labels + statement emails filed to Drive', D.stMap.length ? D.stMap[0].gmail_label_name : 'missing — Accounting labels and the Statements mapping will be created') +
+      row(D.rcMap.length ? (D.rcMap[0].active ? 'ok' : 'na') : 'no', 'Receipts label mapped', D.rcMap.length ? D.rcMap[0].gmail_label_name + (D.rcMap[0].active ? ' — receipts on' : ' — receipts OFF (turn on in Receipts when wanted)') : 'missing — will be created, switched off');
+
+    const live = D.srcs.filter(s => s.enabled);
+    const push = D.flags[0] && D.flags[0].push_enabled;
+    html += '<h4>Done by hand</h4>' +
+      row(D.conns.length ? 'ok' : 'no', 'QuickBooks connected', D.conns.length ? (D.conns[0].company_name || 'connected') : 'not connected',
+          D.conns.length ? null : { text: 'Connect →', on: "ClientSetup.close();showPage('reconciler');setTimeout(function(){if(window.ReconConnect)ReconConnect()},300)" }) +
+      row(live.length ? 'ok' : 'na', 'Daily sales posting', live.length ? live.map(s => s.source).join(', ') + ' — live' : (D.srcs.length ? 'set up but not live' : 'not set up (only for clients whose POS syncs)'),
+          { text: 'Sync Monitor →', on: "ClientSetup.close();showPage('syncmon')" }) +
+      row(inv ? (push ? 'ok' : 'no') : 'na', 'Expo posts bills to QuickBooks', !inv ? 'not on Expo' : push ? 'push on' : 'push OFF — invoices are coded but not posted',
+          inv ? { text: 'Expo →', on: "ClientSetup.close();showPage('invoices')" } : null) +
+      row(c.preparer && c.reviewer ? 'ok' : 'no', 'Preparer and reviewer', (c.preparer || 'no preparer') + ' / ' + (c.reviewer || 'no reviewer') + ' — click Prep or Review on the client page');
+
+    if (!auto || !inv) {
+      html += '<div class="cs-form">' +
+        '<div><label for="csRoot">Gmail label name</label><input type="text" id="csRoot" value="' + esc(rootDefault) + '" ' + (p ? 'disabled' : '') + ' size="24"></div>' +
+        '<div><label for="csAbbr">Abbreviation (Accounting - XX)</label><input type="text" id="csAbbr" value="' + esc(abbrDefault) + '" ' + (p ? 'disabled' : '') + ' size="6"></div>' +
+        '<label class="cs-chk"><input type="checkbox" id="csExpo" ' + (inv ? 'checked disabled' : '') + '> Expo (invoices in the Drive folder)</label>' +
+        '<button class="btn btn-primary" id="csGo" onclick="ClientSetup.create()" ' + (busy ? 'disabled' : '') + '>Create missing pieces</button></div>';
+    }
+
+    if (req) {
+      if (busy) html += '<div class="cs-msg info">Requested ' + esc(new Date(req.requested_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) +
+        ' — ' + (req.status === 'running' ? 'being set up now…' : 'waiting for the Drive Watch script (runs every 5 minutes)…') + '</div>';
+      else if (req.status === 'error') html += '<div class="cs-msg bad">The last setup failed: ' + esc(req.error || 'unknown error') + '</div>';
+      else if (req.status === 'done' && req.result && req.result.log) html += '<div class="cs-msg good">Last setup ' +
+        esc(new Date(req.finished_at || req.requested_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) + ':' +
+        '<ul class="cs-log">' + req.result.log.map(l => '<li><b>' + esc(l.item) + '</b> — ' + esc(l.status) + (l.detail ? ': ' + esc(l.detail) : '') + '</li>').join('') + '</ul></div>';
+    }
+    if (msg) html += '<div class="cs-msg bad">' + esc(msg) + '</div>';
+    o.innerHTML = html + '</div>';
+
+    clearTimeout(pollT);
+    if (busy) pollT = setTimeout(() => { if (cur === c.id) refresh(); }, 8000);
+  }
+
+  async function refresh(msg) {
+    const id = cur; const c = clientOf(id); if (!c) return;
+    try { const D = await load(id); if (cur === id) render(c, D, msg); }
+    catch (e) { if (cur === id) render(c, null, 'Couldn’t load: ' + ((e && e.message) || e)); }
+  }
+  function close() { clearTimeout(pollT); const o = document.getElementById('csOverlay'); if (o) o.remove(); cur = null; }
+
+  window.ClientSetup = {
+    open(id) { if (!id) return; cur = id; render(clientOf(id), null); refresh(); },
+    close,
+    async create() {
+      const id = cur; if (!id) return;
+      const root = (document.getElementById('csRoot') || {}).value || '';
+      const abbr = ((document.getElementById('csAbbr') || {}).value || '').trim();
+      const expo = !!(document.getElementById('csExpo') || {}).checked;
+      if (!abbr || /[\/]/.test(abbr)) { refresh('Enter the abbreviation used in “Accounting - XX” (no slashes).'); return; }
+      if (!root.trim() || /\//.test(root)) { refresh('Enter the Gmail label name for this client (no slashes).'); return; }
+      const b = document.getElementById('csGo'); if (b) b.disabled = true;
+      const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : null;
+      const { error } = await sb.from('client_setup_requests').insert({ client_id: id, options: { label_root: root.trim(), abbr, expo }, requested_by: me, status: 'pending' });
+      refresh(error ? 'Couldn’t request setup: ' + error.message : null);
+    },
+  };
+
+  // Show the button on a client's page for Ed only (it creates things in his
+  // Drive and Gmail), the same rule as Add Client.
+  function syncBtn() {
+    const b = document.getElementById('detailSetupBtn');
+    if (b) b.style.display = (typeof isAdmin === 'function' && isAdmin()) ? '' : 'none';
+  }
+  const _oc = window.openClient;
+  if (typeof _oc === 'function') {
+    window.openClient = async function () { const r = await _oc.apply(this, arguments); syncBtn(); return r; };
+  }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('csOverlay')) close(); });
+  window.__ClientSetupInternals = { initials, parseLabel };
 })();
 </script>
 <script>
