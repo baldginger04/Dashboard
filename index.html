@@ -1281,6 +1281,7 @@
       </div>
       <nav class="sidebar-nav">
         <div class="nav-section">Workspace</div>
+        <div class="nav-item" onclick="showPage('needsme')" id="nav-needsme"><span>⚑</span> Needs Me <span class="nav-badge" id="needsMeBadge" style="display:none" title="Things waiting on you across the clients you prepare">0</span></div>
         <div class="nav-item active" onclick="showPage('myday')" id="nav-myday">
           <span>☀</span> My Day <span class="nav-badge" id="mydayBadge" style="display:none">0</span>
         </div>
@@ -1333,6 +1334,52 @@
     <div class="main">
 
       <!-- MY DAY -->
+      <!-- NEEDS ME — added 2026-10-25. Everything waiting on one person across the
+           clients they prepare, one row per client per tool. Script at the end of
+           the file (search "NEEDS ME"). -->
+      <div class="page" id="page-needsme">
+        <style>
+          #page-needsme .nm-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+          #page-needsme .nm-who{font-size:13px;color:var(--text2)}
+          #page-needsme .nm-who select{margin-left:6px}
+          #page-needsme .nm-status{font-size:12px;color:var(--text3);margin:0 0 12px}
+          #page-needsme .nm-sum{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px}
+          #page-needsme .nm-chip{border:1px solid var(--border2);background:#fff;color:var(--navy);border-radius:20px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:'Hanken Grotesk',sans-serif}
+          #page-needsme .nm-chip:hover{border-color:var(--coral)}
+          #page-needsme .nm-chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+          #page-needsme .nm-chip .n{margin-left:6px;opacity:.75}
+          #page-needsme .nm-tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+          #page-needsme .nm-tbl th{text-align:left;font-family:'Hanken Grotesk',sans-serif;font-weight:600;font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;padding:11px 14px;border-bottom:1px solid var(--border);background:var(--bg3)}
+          #page-needsme .nm-tbl td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle;font-size:13px}
+          #page-needsme .nm-tbl tr:last-child td{border-bottom:0}
+          #page-needsme .nm-tbl tr.nm-row{cursor:pointer}
+          #page-needsme .nm-tbl tr.nm-row:hover td{background:#fbfaf8}
+          #page-needsme .nm-client{font-weight:600;color:var(--navy)}
+          #page-needsme .nm-tool{white-space:nowrap}
+          #page-needsme .nm-n{font-variant-numeric:tabular-nums;font-weight:700;text-align:right;white-space:nowrap}
+          #page-needsme .nm-what{color:var(--text2)}
+          #page-needsme .nm-old{color:var(--red);font-size:11px;font-weight:600;margin-left:6px;white-space:nowrap}
+          #page-needsme .nm-go{color:var(--coral);font-weight:600;white-space:nowrap;text-align:right}
+          #page-needsme .nm-warn{background:var(--yellow-bg);color:var(--yellow);border-radius:10px;padding:10px 14px;font-size:13px;margin:0 0 14px}
+          #page-needsme .nm-clear{background:var(--green-bg);color:var(--green);border-radius:12px;padding:2.2rem;text-align:center;font-size:14px;font-weight:600}
+          @media (max-width:700px){ #page-needsme .nm-what{display:none} }
+        </style>
+        <div class="page-header">
+          <div>
+            <div class="page-title">Needs Me</div>
+            <div class="page-sub">Everything waiting on you across the clients you prepare — one line per client per tool. Click a line to open that tool on that client.</div>
+          </div>
+          <div class="nm-bar">
+            <span class="nm-who" id="nmWhoWrap" style="display:none">Showing <select id="nmWho" class="view-as-select" onchange="NeedsMe.viewAs(this.value)"></select></span>
+            <button class="btn btn-secondary" onclick="NeedsMe.reload()">Refresh</button>
+          </div>
+        </div>
+        <div class="nm-status" id="nmStatus"></div>
+        <div id="nmWarn"></div>
+        <div class="nm-sum" id="nmSum"></div>
+        <div id="nmBody"><div class="empty">Loading…</div></div>
+      </div>
+
       <div class="page active" id="page-myday">
         <div class="page-header">
           <div>
@@ -3455,7 +3502,7 @@ async function showApp() {
   // Show the admin "view as" dropdown if this is Ed; safely no-ops otherwise.
   setupViewAs();
   // Owner-only: reveal the Admin (provisioning) tab.
-  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; const _nsm = document.getElementById('nav-section-marketing'); if (_nsm) _nsm.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.RqBadgeBoot) window.RqBadgeBoot(); if (window.RcptBadgeBoot) window.RcptBadgeBoot(); if (window.ExpoBadgeBoot) window.ExpoBadgeBoot(); if (window.DsrBadgeBoot) window.DsrBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot();
+  if (isAdmin()) { const _na = document.getElementById('nav-admin'); if (_na) _na.style.display = ''; } if (isAdmin()) { const _ac = document.getElementById('addClientBtn'); if (_ac) _ac.style.display = ''; } if (window.canSeeProspects && window.canSeeProspects()) { const _np = document.getElementById('nav-prospects'); if (_np) _np.style.display = ''; const _nsm = document.getElementById('nav-section-marketing'); if (_nsm) _nsm.style.display = ''; if (window.TxPermitsBootCheck) window.TxPermitsBootCheck(); } if (window.VendorAuditBadgeBoot) window.VendorAuditBadgeBoot(); if (window.RqBadgeBoot) window.RqBadgeBoot(); if (window.RcptBadgeBoot) window.RcptBadgeBoot(); if (window.ExpoBadgeBoot) window.ExpoBadgeBoot(); if (window.DsrBadgeBoot) window.DsrBadgeBoot(); if (window.FlbzInboxBadgeBoot) window.FlbzInboxBadgeBoot(); if (window.NeedsMeBadgeBoot) window.NeedsMeBadgeBoot();
   // Three independent loads in parallel — none depend on each other.
   // Previously serial, which cost ~300ms per login.
   await Promise.all([loadClients(), loadMyDay(), loadMyWeek(), loadAnalysesBadge()]);
@@ -20586,6 +20633,434 @@ init();
   // Every 2 minutes as well, so a day fixed by the morning look-back or by
   // someone else clears without a page change.
   setInterval(refresh, 2 * 60 * 1000);
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   NEEDS ME — added 2026-10-25
+   One page per person: everything waiting on them, across the clients they
+   PREPARE (the same rule as the Expo / Review Queue / Receipts / Daily Sales
+   badges), one row per client per tool, each row opening that tool on that
+   client. Ed's choices 10/25/26: clients I prepare; one row per client per
+   tool; its own nav item at the top of Workspace; tasks = overdue and Stuck
+   only (today's normal tasks stay on My Day).
+
+   Sources, all read-only:
+     Expo                invoice_queue status 'needs_review'
+     Review Queue        review_items status 'open'
+     Receipts            receipt_queue in the Receipts page's to-do statuses,
+                         plus suggested recodes (same as its badge)
+     Daily sales         je_sync_log last 60 days: 'error', or posted but
+                         changed in Toast since (same test as the Close Board)
+     Statements          drive_watch_items 'needs_vendor' or 'error' in the
+                         client's Statements folder
+     Client questions    portal threads waiting on you (same rule as the
+                         Client Portal badge, scoped to your clients)
+     Team notes          internal notes waiting on you (same rule as the
+                         Clients badge)
+     Tasks               your tasks that are Stuck, or overdue (close tasks
+                         only while that client's close is In Progress);
+                         your Stuck steps
+   Ed only (not when viewing as someone):
+     Statement emails    Gmail statements parked in "Statements/To file"
+     Held statements     reconciliations held and not yet sent or cleared
+
+   A source that fails to load shows a warning line naming it — it never
+   silently reads as "nothing to do".
+   The nav badge counts ROWS (things to look at), not individual items.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const S = { rows: [], warnings: [], filter: 'all', loading: false, loadedAt: null, seq: 0 };
+
+  const RECEIPT_ACTION = ['match_review', 'misfiled', 'paid_personally', 'needs_review', 'no_match', 'read_error', 'match_error', 'error'];
+  const RECEIPT_DONE = ['attached', 'already_documented', 'created', 'handled', 'duplicate'];
+
+  const TOOLS = {
+    expo:      { label: 'Expo',             icon: '📥', unit: ['invoice to code', 'invoices to code'] },
+    rq:        { label: 'Review Queue',     icon: '✅', unit: ['item to review', 'items to review'] },
+    receipts:  { label: 'Receipts',         icon: '📎', unit: ['receipt waiting', 'receipts waiting'] },
+    sales:     { label: 'Daily sales',      icon: '📆', unit: ['day to fix', 'days to fix'] },
+    stmts:     { label: 'Statements',       icon: '🧾', unit: ['statement stuck', 'statements stuck'] },
+    questions: { label: 'Client questions', icon: '🌐', unit: ['question waiting on you', 'questions waiting on you'] },
+    notes:     { label: 'Team notes',       icon: '💬', unit: ['note waiting on you', 'notes waiting on you'] },
+    tasks:     { label: 'Tasks',            icon: '☀', unit: ['task overdue or stuck', 'tasks overdue or stuck'] },
+    stmtmail:  { label: 'Statement emails', icon: '✉️', unit: ['email in To file', 'emails in To file'] },
+    held:      { label: 'Held statements',  icon: '⏸', unit: ['statement held', 'statements held'] },
+  };
+  const ORDER = ['tasks', 'questions', 'notes', 'sales', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
+
+  function me() { return (typeof getViewingUserName === 'function') ? getViewingUserName() : ''; }
+  function isOwnerSelf() { return typeof isAdmin === 'function' && isAdmin() && !(typeof viewingAsName !== 'undefined' && viewingAsName); }
+  function clientsAll() { return (typeof allClients !== 'undefined' ? allClients || [] : []).filter(c => c); }
+  function myClients(name) { return clientsAll().filter(c => !c.is_firm && c.preparer === name); }
+  function todayIso() {
+    if (typeof tzToday === 'function') { const t = tzToday(); if (typeof t === 'string') return t.slice(0, 10); }
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago' }).format(new Date());
+  }
+  function daysAgoIso(n) {
+    const d = new Date(todayIso() + 'T12:00:00'); d.setDate(d.getDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+  function plural(n, pair) { return n + ' ' + (n === 1 ? pair[0] : pair[1]); }
+  function chunk(a, n) { const out = []; for (let i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out; }
+  async function all(build) {
+    if (typeof fetchAllRows === 'function') return fetchAllRows(build);
+    const r = await build(); if (r.error) throw r.error; return r.data || [];
+  }
+  /** rows → { client_id: { n, oldest } } */
+  function tally(rows, dateKey) {
+    const out = {};
+    rows.forEach(r => {
+      if (!r || r.client_id == null) return;
+      const t = out[r.client_id] || (out[r.client_id] = { n: 0, oldest: null });
+      t.n++;
+      const d = dateKey ? r[dateKey] : null;
+      if (d && (!t.oldest || String(d) < String(t.oldest))) t.oldest = String(d);
+    });
+    return out;
+  }
+
+  // ─────────────────────────────────────────────────────────────── sources
+  // Each returns rows: { tool, client_id, client, n, detail, oldest, go }
+
+  async function srcExpo(mine) {
+    const rows = await all(() => sb.from('invoice_queue').select('id,client_id,created_at').eq('status', 'needs_review'));
+    const t = tally(rows.filter(r => mine.has(r.client_id)), 'created_at');
+    return Object.keys(t).map(id => ({ tool: 'expo', client_id: id, n: t[id].n, oldest: t[id].oldest }));
+  }
+  async function srcRq(mine) {
+    const rows = await all(() => sb.from('review_items').select('id,client_id').eq('status', 'open'));
+    const t = tally(rows.filter(r => mine.has(r.client_id)));
+    return Object.keys(t).map(id => ({ tool: 'rq', client_id: id, n: t[id].n }));
+  }
+  async function srcReceipts(mine) {
+    const a = await all(() => sb.from('receipt_queue').select('id,client_id,created_at').in('status', RECEIPT_ACTION));
+    const b = await all(() => sb.from('receipt_queue').select('id,client_id,created_at').eq('recode_status', 'suggested').in('status', RECEIPT_DONE));
+    const t = tally(a.concat(b).filter(r => mine.has(r.client_id)), 'created_at');
+    return Object.keys(t).map(id => ({ tool: 'receipts', client_id: id, n: t[id].n, oldest: t[id].oldest }));
+  }
+  async function srcSales(mine) {
+    const since = daysAgoIso(60);
+    const rows = await all(() => sb.from('je_sync_log')
+      .select('id,client_id,source,sales_date,status,rev:raw->revision,lock:raw->locked')
+      .gte('sales_date', since).in('status', ['error', 'posted']));
+    const bad = rows.filter(r => mine.has(r.client_id) && (
+      r.status === 'error' ||
+      (r.status === 'posted' && (r.rev || (r.lock && r.lock.matches_toast === false)))));
+    const by = {};
+    bad.forEach(r => {
+      const t = by[r.client_id] || (by[r.client_id] = { n: 0, err: 0, chg: 0, oldest: null, latest: null, source: r.source });
+      t.n++; if (r.status === 'error') t.err++; else t.chg++;
+      if (!t.oldest || r.sales_date < t.oldest) t.oldest = r.sales_date;
+      if (!t.latest || r.sales_date > t.latest) { t.latest = r.sales_date; t.source = r.source; }
+    });
+    return Object.keys(by).map(id => {
+      const t = by[id];
+      const parts = [];
+      if (t.err) parts.push(t.err + ' didn’t sync');
+      if (t.chg) parts.push(t.chg + ' changed in Toast — repost');
+      return { tool: 'sales', client_id: id, n: t.n, oldest: t.oldest, detail: parts.join(' · '),
+               go: { key: id + '|' + t.source, month: String(t.latest).slice(0, 7) } };
+    });
+  }
+  async function srcStatements(mine) {
+    const ws = await all(() => sb.from('drive_watches').select('id,client_id').eq('kind', 'statement').eq('active', true));
+    const watchClient = {};
+    ws.forEach(w => { if (mine.has(w.client_id)) watchClient[w.id] = w.client_id; });
+    const ids = Object.keys(watchClient);
+    if (!ids.length) return [];
+    let items = [];
+    for (const part of chunk(ids, 100)) {
+      items = items.concat(await all(() => sb.from('drive_watch_items').select('id,watch_id,status,detected_at')
+        .in('watch_id', part).in('status', ['needs_vendor', 'error'])));
+    }
+    const by = {};
+    items.forEach(i => {
+      const cid = watchClient[i.watch_id]; if (!cid) return;
+      const t = by[cid] || (by[cid] = { n: 0, nv: 0, err: 0, oldest: null });
+      t.n++; if (i.status === 'needs_vendor') t.nv++; else t.err++;
+      if (i.detected_at && (!t.oldest || i.detected_at < t.oldest)) t.oldest = i.detected_at;
+    });
+    return Object.keys(by).map(id => {
+      const t = by[id]; const parts = [];
+      if (t.nv) parts.push(t.nv + (t.nv === 1 ? ' needs' : ' need') + ' a vendor taught');
+      if (t.err) parts.push(t.err + ' errored');
+      return { tool: 'stmts', client_id: id, n: t.n, oldest: t.oldest, detail: parts.join(' · ') };
+    });
+  }
+  async function srcMessages(mine, name) {
+    // Same thread rule as the Client Portal and Clients badges: a thread is
+    // waiting on you while its latest message is someone else's. Scoped to the
+    // clients you prepare, plus threads you've posted in yourself.
+    const { data, error } = await sb.from('messages')
+      .select('id, parent_message_id, author, created_at, client_id, is_internal').eq('cleared', false);
+    if (error) throw error;
+    const rows = data || [];
+    const out = [];
+    [['questions', rows.filter(m => !m.is_internal)], ['notes', rows.filter(m => m.is_internal)]].forEach(([tool, set]) => {
+      const { threads } = bubbleCounts(set, name);
+      const by = {};
+      threads.forEach(t => {
+        const cid = t.client_id;
+        if (cid == null) return;
+        const c = clientsAll().find(x => x.id === cid);
+        if (!c || c.is_firm) return;
+        if (!threadVisibleToMe(t, mine, name)) return;
+        const b = by[cid] || (by[cid] = { n: 0, oldest: null });
+        b.n++;
+        if (t.latestAt && (!b.oldest || t.latestAt < b.oldest)) b.oldest = t.latestAt;
+      });
+      Object.keys(by).forEach(id => out.push({ tool, client_id: id, n: by[id].n, oldest: by[id].oldest }));
+    });
+    return out;
+  }
+  async function srcTasks(name) {
+    const today = todayIso();
+    const [tasks, subs] = await Promise.all([
+      all(() => sb.from('tasks').select('id,client_id,title,status,next_due,category').eq('assigned_to', name).neq('status', 'Done')),
+      all(() => sb.from('subtasks').select('id,task_id,client_id,title,status,tasks(client_id)').eq('assigned_to', name).eq('status', 'Stuck')),
+    ]);
+    const live = new Map(clientsAll().map(c => [c.id, c]));
+    const closeCats = (typeof CLOSE_CATS !== 'undefined') ? CLOSE_CATS : [];
+    const by = {};
+    const bump = (cid, kind, due) => {
+      const b = by[cid] || (by[cid] = { overdue: 0, stuck: 0, oldest: null });
+      b[kind]++;
+      if (due && (!b.oldest || due < b.oldest)) b.oldest = due;
+    };
+    tasks.forEach(t => {
+      const c = live.get(t.client_id); if (!c) return;               // archived client
+      if (t.status === 'Stuck') { bump(t.client_id, 'stuck', t.next_due); return; }
+      if (!t.next_due || t.next_due >= today) return;
+      // A close task only counts while that client's close is under way —
+      // the same gate My Day uses, so a parked close never reads as overdue.
+      if (closeCats.includes(t.category) && c.close_status !== 'In Progress') return;
+      bump(t.client_id, 'overdue', t.next_due);
+    });
+    subs.forEach(s => {
+      const cid = s.client_id != null ? s.client_id : (s.tasks && s.tasks.client_id);
+      if (!live.get(cid)) return;
+      bump(cid, 'stuck', null);
+    });
+    return Object.keys(by).map(id => {
+      const b = by[id]; const parts = [];
+      if (b.overdue) parts.push(b.overdue + ' overdue');
+      if (b.stuck) parts.push(b.stuck + ' stuck');
+      return { tool: 'tasks', client_id: id, n: b.overdue + b.stuck, oldest: b.oldest, detail: parts.join(' · ') };
+    });
+  }
+  async function srcStatementEmails() {
+    const rows = await all(() => sb.from('statement_email_log').select('gmail_message_id,created_at').eq('outcome', 'to_file'));
+    if (!rows.length) return [];
+    const oldest = rows.map(r => r.created_at).sort()[0];
+    return [{ tool: 'stmtmail', client_id: null, client: 'Your Gmail', n: rows.length, oldest,
+              detail: 'couldn’t tell whose — file each under the client’s Statements label' }];
+  }
+  async function srcHeld() {
+    const rows = await all(() => sb.from('reconciliations')
+      .select('id,client_id,statement_date,held,released_at,replaced_at,marked_ok_at').eq('held', true));
+    const open = rows.filter(r => !r.released_at && !r.replaced_at && !r.marked_ok_at);
+    const t = tally(open, 'statement_date');
+    return Object.keys(t).map(id => ({ tool: 'held', client_id: id, n: t[id].n, oldest: t[id].oldest,
+      detail: 'no line matched a bill — check the letterhead, then Send anyway' }));
+  }
+
+  // ─────────────────────────────────────────────────────────────── load
+
+  async function load() {
+    const seq = ++S.seq;
+    const name = me();
+    const mineList = myClients(name);
+    const mine = new Set(mineList.map(c => c.id));
+    const jobs = [
+      ['Tasks', () => srcTasks(name)],
+      ['Client questions and team notes', () => srcMessages(mine, name)],
+    ];
+    if (mine.size) {
+      jobs.push(['Expo', () => srcExpo(mine)], ['Review Queue', () => srcRq(mine)], ['Receipts', () => srcReceipts(mine)],
+                ['Daily sales', () => srcSales(mine)], ['Statements', () => srcStatements(mine)]);
+    }
+    if (isOwnerSelf()) jobs.push(['Statement emails', srcStatementEmails], ['Held statements', srcHeld]);
+
+    const results = await Promise.all(jobs.map(([label, fn]) =>
+      fn().then(v => ({ ok: true, v }), e => ({ ok: false, label, err: (e && e.message) || String(e) }))));
+    if (seq !== S.seq) return null;     // a newer load started (view-as switched)
+
+    const rows = [], warnings = [];
+    results.forEach(r => { if (r.ok) rows.push(...r.v); else warnings.push(r.label + ': ' + r.err); });
+    const byId = new Map(clientsAll().map(c => [c.id, c]));
+    rows.forEach(r => {
+      if (!r.client) {
+        const c = byId.get(r.client_id) || (typeof findClientAny === 'function' ? findClientAny(r.client_id) : null);
+        r.client = c ? c.name : 'Unknown client';
+        r.is_firm = !!(c && c.is_firm);
+      }
+    });
+    rows.sort((a, b) => (a.client || '').localeCompare(b.client || '') || ORDER.indexOf(a.tool) - ORDER.indexOf(b.tool));
+    return { rows, warnings, name, mineCount: mine.size };
+  }
+
+  // ─────────────────────────────────────────────────────────────── render
+
+  function ageText(iso) {
+    if (!iso) return '';
+    const d = String(iso).slice(0, 10);
+    const days = Math.round((new Date(todayIso() + 'T12:00:00') - new Date(d + 'T12:00:00')) / 86400000);
+    if (days < 2) return '';
+    return 'oldest ' + days + ' days';
+  }
+
+  function render(res) {
+    const body = $('nmBody'); if (!body) return;
+    const name = res ? res.name : me();
+    const st = $('nmStatus');
+    if (st) st.textContent = res ? ('Updated ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) +
+      ' · ' + res.mineCount + ' client' + (res.mineCount === 1 ? '' : 's') + ' where ' + name + ' is preparer') : '';
+    const warn = $('nmWarn');
+    if (warn) warn.innerHTML = (S.warnings || []).map(w => '<div class="nm-warn">⚠ Couldn’t check ' + esc(w) + ' — this list may be missing items.</div>').join('');
+
+    const counts = {};
+    S.rows.forEach(r => { counts[r.tool] = (counts[r.tool] || 0) + 1; });
+    const sum = $('nmSum');
+    if (sum) {
+      const chips = ['<button class="nm-chip ' + (S.filter === 'all' ? 'on' : '') + '" onclick="NeedsMe.setFilter(\'all\')">Everything<span class="n">' + S.rows.length + '</span></button>']
+        .concat(ORDER.filter(k => counts[k]).map(k =>
+          '<button class="nm-chip ' + (S.filter === k ? 'on' : '') + '" onclick="NeedsMe.setFilter(\'' + k + '\')">' +
+          TOOLS[k].icon + ' ' + esc(TOOLS[k].label) + '<span class="n">' + counts[k] + '</span></button>'));
+      sum.innerHTML = S.rows.length ? chips.join('') : '';
+    }
+
+    const list = S.filter === 'all' ? S.rows : S.rows.filter(r => r.tool === S.filter);
+    if (!S.rows.length) {
+      body.innerHTML = S.warnings.length ? '' : '<div class="nm-clear">✓ Nothing is waiting on ' + esc(name.split(' ')[0] || 'you') + ' right now.</div>';
+      return;
+    }
+    body.innerHTML = '<table class="nm-tbl"><thead><tr><th>Client</th><th>Tool</th><th style="text-align:right">How many</th><th class="nm-what">What</th><th></th></tr></thead><tbody>' +
+      list.map(r => {
+        const i = S.rows.indexOf(r);
+        const tool = TOOLS[r.tool];
+        const age = ageText(r.oldest);
+        return '<tr class="nm-row" onclick="NeedsMe.go(' + i + ')">' +
+          '<td class="nm-client">' + esc(r.client) + '</td>' +
+          '<td class="nm-tool">' + tool.icon + ' ' + esc(tool.label) + '</td>' +
+          '<td class="nm-n">' + r.n + '</td>' +
+          '<td class="nm-what">' + esc(r.detail || plural(r.n, tool.unit).replace(/^\d+ /, '')) +
+            (age ? '<span class="nm-old">' + esc(age) + '</span>' : '') + '</td>' +
+          '<td class="nm-go">Open →</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+
+  function setBadge(n) {
+    const el = $('needsMeBadge'); if (!el) return;
+    el.textContent = n > 99 ? '99+' : String(n);
+    el.style.display = n ? '' : 'none';
+  }
+
+  async function reload(opts) {
+    const quiet = opts && opts.quiet;
+    if (!quiet) { const b = $('nmBody'); if (b && !S.rows.length) b.innerHTML = '<div class="empty">Loading…</div>'; }
+    try {
+      const res = await load();
+      if (!res) return;
+      S.rows = res.rows; S.warnings = res.warnings; S.loadedAt = Date.now();
+      if (S.filter !== 'all' && !S.rows.some(r => r.tool === S.filter)) S.filter = 'all';
+      setBadge(S.rows.length);
+      if (!quiet || ($('page-needsme') && $('page-needsme').classList.contains('active'))) render(res);
+    } catch (e) {
+      const b = $('nmBody'); if (b && !quiet) b.innerHTML = '<div class="nm-warn">Couldn’t load: ' + esc((e && e.message) || e) + '</div>';
+    }
+  }
+
+  function fillWho() {
+    const wrap = $('nmWhoWrap'), sel = $('nmWho'), src = $('viewAsSelect');
+    if (!wrap || !sel) return;
+    if (!(typeof isAdmin === 'function' && isAdmin()) || !src) { wrap.style.display = 'none'; return; }
+    sel.innerHTML = src.innerHTML;
+    sel.value = (typeof viewingAsName !== 'undefined' && viewingAsName) || '';
+    wrap.style.display = '';
+  }
+
+  // ─────────────────────────────────────────────────────────────── navigation
+
+  const waitFor = async (test, ms = 6000) => {
+    const t0 = Date.now();
+    while (Date.now() - t0 < ms) { try { if (test()) return true; } catch (e) {} await new Promise(f => setTimeout(f, 120)); }
+    return false;
+  };
+
+  async function go(i) {
+    const r = S.rows[i]; if (!r) return;
+    const id = r.client_id;
+    try {
+      switch (r.tool) {
+        case 'expo':
+          if (typeof Inv !== 'undefined') {
+            Inv.client = id; Inv.tab = 'needs_review'; Inv.screen = 'list';
+            try { localStorage.setItem('bg_inv_client', id); } catch (e) {}
+          }
+          showPage('invoices');
+          break;
+        case 'rq':
+          showPage('rq');
+          if (window.RQ) setTimeout(() => window.RQ.pick(id), 50);
+          break;
+        case 'receipts':
+          // Choose the client first so the page opens straight onto it.
+          if (window.RQR) await window.RQR.pick(id);
+          showPage('receipts');
+          break;
+        case 'sales':
+          if (window.SyncMon && window.SyncMon.prime && r.go) window.SyncMon.prime(r.go.key, r.go.month);
+          showPage('syncmon');
+          break;
+        case 'stmts':
+          showPage('reconciler');
+          break;
+        case 'held':
+          showPage('reconciler');
+          if (window.RcLogView) {
+            window.RcLogView('log');
+            await waitFor(() => $('rcLogOutcome'));
+            const os = $('rcLogOutcome'); if (os) os.value = 'held';
+            if (window.RcLogRender) window.RcLogRender();
+          }
+          break;
+        case 'stmtmail':
+          window.open('https://mail.google.com/mail/u/0/#label/Statements%2FTo+file', '_blank', 'noopener');
+          break;
+        case 'questions':
+        case 'notes':
+        case 'tasks':
+          if (r.is_firm && typeof openFirmSpace === 'function') openFirmSpace();
+          else if (typeof openClient === 'function') openClient(id);
+          break;
+      }
+    } catch (e) { console.warn('[needs me] open failed', e); }
+  }
+
+  window.NeedsMe = {
+    reload: () => reload(),
+    go,
+    setFilter(k) { S.filter = k; render({ name: me(), mineCount: myClients(me()).length }); },
+    viewAs(v) {
+      if (typeof setViewingAs === 'function') setViewingAs(v);
+      S.rows = []; reload();
+    },
+  };
+  window.NeedsMeOpen = function () { fillWho(); reload(); };
+  window.NeedsMeBadgeBoot = function () { reload({ quiet: true }); };
+  // Exposed for tests.
+  window.__NeedsMeInternals = { tally, srcSales, srcTasks, srcMessages, load, S, TOOLS, ORDER };
+
+  const _sp = window.showPage;
+  window.showPage = function (n) {
+    _sp.apply(this, arguments);
+    if (n === 'needsme') window.NeedsMeOpen();
+  };
+  // Keep the badge current: every 5 minutes, quietly.
+  setInterval(() => { if (typeof sb !== 'undefined' && typeof currentUser !== 'undefined' && currentUser) reload({ quiet: true }); }, 5 * 60 * 1000);
 })();
 </script>
 </body>
