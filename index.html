@@ -20042,6 +20042,9 @@ init();
     { key: 'statements', label: 'Statements',      page: 'reconciler' },
     { key: 'accrual',    label: 'Payroll accrual', page: 'labor' },
     { key: 'w9',         label: 'W-9',             page: 'w9' },
+    // UF aging (10/25/26): what's sitting in Undeposited Funds TODAY, not for
+    // the board's month — red when anything is older than 5 days.
+    { key: 'uf',         label: 'Undeposited Funds', page: 'uf' },
   ];
 
   const S = { booted: false, period: '', preparer: '', hideDone: false, data: null, loading: false,
@@ -20101,7 +20104,7 @@ init();
     const B = monthBounds(periodKey);
     const scope = q => onlyClientId ? q.eq('client_id', onlyClientId) : q;
     const stmtEnd = addDays(B.end, STATEMENT_GRACE_DAYS);
-    const [tasks, srcs, je, conns, ri, runs, inv, expoFlags, expoRecent, recs, watches, labCfg, lab, w9] = await Promise.all([
+    const [tasks, srcs, je, conns, ri, runs, inv, expoFlags, expoRecent, recs, watches, labCfg, lab, w9, uf] = await Promise.all([
       safe(() => all(() => scope(sb.from('tasks').select('id,client_id,category,title,status').in('category', CATS)))),
       safe(async () => { const r = await scope(sb.from('sync_sources').select('client_id,source,enabled')); if (r.error) throw r.error; return r.data || []; }),
       safe(() => all(() => scope(sb.from('je_sync_log').select('id,client_id,source,sales_date,status,rev:raw->revision,lock:raw->locked')
@@ -20121,6 +20124,7 @@ init();
       safe(async () => { const r = await scope(sb.from('labor_accrual_config').select('client_id,enabled,pay_frequency,start_month')); if (r.error) throw r.error; return r.data || []; }),
       safe(async () => { const r = await scope(sb.from('labor_accruals').select('client_id,status,total,error').eq('period_month', B.start)); if (r.error) throw r.error; return r.data || []; }),
       safe(async () => { const r = await scope(sb.from('w9_signoffs').select('client_id,period,signed_at').in('period', [periodKey, nextMonthKey(periodKey)])); if (r.error) throw r.error; return r.data || []; }),
+      safe(async () => { const r = await scope(sb.from('uf_aging').select('client_id,checked_on,checked_at,status,balance,open_count,stale_count,stale_total,oldest_date,tie_diff,error')); if (r.error) throw r.error; return r.data || []; }),
     ]);
 
     // Statement files that came in but haven't reconciled.
@@ -20138,7 +20142,7 @@ init();
         return out;
       });
     }
-    return { periodKey, B, tasks, srcs, je, conns, ri, runs, inv, expoFlags, expoRecent, recs, watches, waiting, labCfg, lab, w9 };
+    return { periodKey, B, tasks, srcs, je, conns, ri, runs, inv, expoFlags, expoRecent, recs, watches, waiting, labCfg, lab, w9, uf };
   }
 
   // ---------------------------------------------------------------- evaluation
@@ -20351,7 +20355,34 @@ init();
       out.w9 = so ? { state: 'ok', text: '✓', tip: 'Signed off ' + new Date(so.signed_at).toLocaleDateString('en-US') }
         : { state: 'bad', text: 'not signed', tip: 'W-9 audit not signed off for ' + monthLabel(D.periodKey) + ' or the month after' };
     }
+
+    // -- Undeposited Funds (as of the morning check, not the board's month)
+    out.uf = ufCell(id, D);
     return out;
+  }
+
+  function ufCell(id, D) {
+    if (!D.conns || !D.conns.ok) return UNK(D.conns ? D.conns.err : 'no data');
+    if (!D.conns.v.some(x => x.client_id === id)) return NA;
+    if (!D.uf || !D.uf.ok) return UNK(D.uf ? D.uf.err : 'no data');
+    const u = D.uf.v.find(x => x.client_id === id);
+    if (!u || !u.checked_at) return { state: 'unknown', text: '?', tip: 'Not checked yet — Undeposited Funds is checked every morning' };
+    const asOf = ' (checked ' + new Date(u.checked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) + ')';
+    const dollars = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (u.status === 'error') return UNK((u.error || 'check failed') + asOf);
+    if (u.status === 'no_uf') return { state: 'na', text: '—', tip: 'No Undeposited Funds account in QuickBooks' };
+    if (u.status === 'running') return { state: 'unknown', text: '…', tip: 'Being checked now' };
+    const bal = 'Balance ' + dollars(u.balance);
+    if (u.status === 'stale') {
+      const parts = [];
+      if (u.stale_count) parts.push(plural(u.stale_count, 'item') + ' older than 5 days (' + dollars(u.stale_total) + '), oldest ' +
+        new Date(u.oldest_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+      if (Number(u.balance) < 0) parts.push('the balance is NEGATIVE — a deposit was recorded without its sales');
+      return { state: 'bad', text: u.stale_count ? String(u.stale_count) : '−', tip: parts.join(' · ') + ' · ' + bal + asOf };
+    }
+    if (u.status === 'untied') return { state: 'warn', text: 'check', tip: 'The open items don’t add up to the Undeposited Funds balance (off by ' + dollars(u.tie_diff) +
+      ') — something older than a year is still open, or a transaction type this check doesn’t read touched it · ' + bal + asOf };
+    return { state: 'ok', text: '✓', tip: bal + ', ' + plural(Number(u.open_count) || 0, 'item') + ' waiting, none older than 5 days' + asOf };
   }
 
   const isRed = r => r && r.state === 'bad';
@@ -20501,6 +20532,8 @@ init();
             const os = document.getElementById('rcLogOutcome'); if (os) os.value = cell.outcome || '';
             if (window.RcLogRender) window.RcLogRender();
           }
+        } else if (colKey === 'uf') {
+          if (window.UfShow) window.UfShow(clientId);
         } else if (colKey === 'w9') {
           showPage('w9');
           if (window.W9 && window.W9.openClient) setTimeout(() => window.W9.openClient(clientId), 50);
@@ -20637,6 +20670,132 @@ init();
 </script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
+   UNDEPOSITED FUNDS — detail pop-up, added 2026-10-25
+   Opened from the Close Board's "Undeposited Funds" column and from Needs Me.
+   Shows what the morning check (Edge Function qbo-uf-aging → uf_aging) found
+   sitting in Undeposited Funds, oldest first, with "Check again now".
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const dollars = n => (Number(n) < 0 ? '−' : '') + '$' + Math.abs(Number(n || 0)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const day = d => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  const TYPE = { Payment: 'Payment', SalesReceipt: 'Sales receipt', JournalEntry: 'Journal entry', Transfer: 'Transfer', RefundReceipt: 'Refund', Deposit: 'Deposit line' };
+  let cur = null, busy = false;
+
+  function css() {
+    if (document.getElementById('ufCss')) return;
+    const st = document.createElement('style'); st.id = 'ufCss';
+    st.textContent = `
+      #ufOverlay{position:fixed;inset:0;background:rgba(27,42,75,.35);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+      #ufOverlay .uf-box{background:#fff;border-radius:14px;max-width:860px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:22px 24px}
+      #ufOverlay .uf-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px}
+      #ufOverlay .uf-title{font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:18px;color:var(--navy)}
+      #ufOverlay .uf-sub{font-size:12px;color:var(--text3);margin-top:3px}
+      #ufOverlay .uf-x{border:0;background:none;font-size:22px;line-height:1;cursor:pointer;color:var(--text2)}
+      #ufOverlay .uf-cards{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+      #ufOverlay .uf-card{flex:1;min-width:130px;background:var(--bg3);border-radius:10px;padding:10px 12px}
+      #ufOverlay .uf-card b{display:block;font-size:17px;color:var(--navy)}
+      #ufOverlay .uf-card span{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.04em}
+      #ufOverlay .uf-card.bad b{color:var(--red)}
+      #ufOverlay .uf-note{font-size:13px;border-radius:10px;padding:10px 12px;margin:0 0 12px}
+      #ufOverlay .uf-note.warn{background:var(--yellow-bg);color:var(--yellow)}
+      #ufOverlay .uf-note.bad{background:var(--red-bg);color:var(--red)}
+      #ufOverlay table{width:100%;border-collapse:collapse;font-size:13px}
+      #ufOverlay th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);padding:7px 8px;border-bottom:1px solid var(--border)}
+      #ufOverlay td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+      #ufOverlay td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+      #ufOverlay tr.stale td{background:var(--red-bg)}
+      #ufOverlay .uf-dim{color:var(--text3)}
+      #ufOverlay .uf-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+      #ufOverlay .uf-msg{font-size:12px;color:var(--text2)}
+    `;
+    document.head.appendChild(st);
+  }
+
+  function close() { const o = document.getElementById('ufOverlay'); if (o) o.remove(); cur = null; }
+
+  function render(row, name, msg) {
+    css();
+    let o = document.getElementById('ufOverlay');
+    if (!o) {
+      o = document.createElement('div'); o.id = 'ufOverlay';
+      o.addEventListener('click', e => { if (e.target === o) close(); });
+      document.body.appendChild(o);
+    }
+    const items = (row && row.items) || [];
+    const stale = items.filter(i => i.stale);
+    let notes = '';
+    if (!row || !row.checked_at) notes = '<div class="uf-note warn">Not checked yet. It runs every morning — or use “Check again now”.</div>';
+    else if (row.status === 'error') notes = '<div class="uf-note bad">The last check failed: ' + esc(row.error || 'unknown error') + '</div>';
+    else if (row.status === 'no_uf') notes = '<div class="uf-note warn">This company has no Undeposited Funds account in QuickBooks.</div>';
+    else {
+      if (Number(row.balance) < 0) notes += '<div class="uf-note bad">The balance is negative — a deposit was recorded in QuickBooks without the sales it came from (or the sales were deleted).</div>';
+      if (Math.abs(Number(row.tie_diff) || 0) > 0.01) notes += '<div class="uf-note warn">These items add up to ' + dollars(row.open_total) +
+        ', but QuickBooks shows ' + dollars(row.balance) + ' (off by ' + dollars(row.tie_diff) + '). Something older than ' + day(row.window_start) +
+        ' may still be open, or a transaction type this check doesn’t read moved money in or out.</div>';
+    }
+    const table = items.length ? '<table><thead><tr><th>Date</th><th>Type</th><th>Ref / memo</th><th class="r">Amount</th><th class="r">Days</th></tr></thead><tbody>' +
+      items.map(i => '<tr class="' + (i.stale ? 'stale' : '') + '"><td>' + esc(day(i.date)) + '</td><td>' + esc(TYPE[i.type] || i.type) + '</td><td>' +
+        esc([i.doc, i.name, i.memo].filter(Boolean).join(' · ') || '—') + '</td><td class="r">' + esc(dollars(i.amount)) + '</td><td class="r">' + esc(i.days) + '</td></tr>').join('') +
+      '</tbody></table>' + (Number(row.open_count) > items.length ? '<div class="uf-dim" style="margin-top:6px;font-size:12px">Showing the oldest ' + items.length + ' of ' + row.open_count + '.</div>' : '')
+      : (row && row.checked_at && row.status !== 'error' ? '<div class="uf-dim">Nothing is waiting in Undeposited Funds.</div>' : '');
+    o.innerHTML = '<div class="uf-box"><div class="uf-head"><div><div class="uf-title">Undeposited Funds — ' + esc(name) + '</div>' +
+      '<div class="uf-sub">' + (row && row.checked_at ? 'Checked ' + esc(new Date(row.checked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : '') +
+      ' · Red rows are older than 5 days: usually a deposit that was never recorded, or recorded without linking to these sales.</div></div>' +
+      '<button class="uf-x" onclick="UfClose()" title="Close">×</button></div>' +
+      (row && row.checked_at && row.status !== 'error' && row.status !== 'no_uf' ? '<div class="uf-cards">' +
+        '<div class="uf-card"><b>' + esc(dollars(row.balance)) + '</b><span>Balance in QuickBooks</span></div>' +
+        '<div class="uf-card ' + (stale.length ? 'bad' : '') + '"><b>' + esc(row.stale_count || 0) + ' · ' + esc(dollars(row.stale_total)) + '</b><span>Older than 5 days</span></div>' +
+        '<div class="uf-card"><b>' + esc(row.open_count || 0) + '</b><span>Waiting in total</span></div></div>' : '') +
+      notes + table +
+      '<div class="uf-foot"><span class="uf-msg" id="ufMsg">' + esc(msg || '') + '</span>' +
+      '<span><button class="btn btn-secondary" onclick="UfClose()">Close</button> <button class="btn btn-primary" id="ufRecheck" onclick="UfRecheck()">Check again now</button></span></div></div>';
+  }
+
+  async function load(clientId) {
+    const { data, error } = await sb.from('uf_aging').select('*').eq('client_id', clientId).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
+  function nameOf(id) {
+    const c = (typeof findClientAny === 'function' ? findClientAny(id) : null) ||
+      (typeof allClients !== 'undefined' ? (allClients || []).find(x => x && x.id === id) : null);
+    return c ? c.name : 'Client';
+  }
+
+  window.UfShow = async function (clientId) {
+    cur = clientId;
+    render(null, nameOf(clientId), 'Loading…');
+    try { const row = await load(clientId); if (cur === clientId) render(row, nameOf(clientId)); }
+    catch (e) { if (cur === clientId) render(null, nameOf(clientId), 'Couldn’t load: ' + ((e && e.message) || e)); }
+  };
+  window.UfClose = close;
+  window.UfRecheck = async function () {
+    if (!cur || busy) return;
+    const id = cur; busy = true;
+    const b = document.getElementById('ufRecheck'); if (b) b.disabled = true;
+    const m = document.getElementById('ufMsg'); if (m) m.textContent = 'Checking QuickBooks — this can take up to a minute…';
+    try {
+      const { data, error } = await sb.functions.invoke('qbo-uf-aging', { body: { client_id: id } });
+      if (error) throw new Error(error.message || String(error));
+      if (data && data.ok === false) throw new Error(data.error === 'reauth_needed' ? 'QuickBooks needs reconnecting for this client.' :
+        data.error === 'not_connected' ? 'This client isn’t connected to QuickBooks.' : (data.error || 'check failed'));
+      const row = await load(id);
+      if (cur === id) render(row, nameOf(id), 'Checked just now.');
+      if (window.CloseBoard && window.CloseBoard.reload && document.getElementById('page-close')?.classList.contains('active')) window.CloseBoard.reload();
+      if (window.NeedsMe && document.getElementById('page-needsme')?.classList.contains('active')) window.NeedsMe.reload();
+    } catch (e) {
+      if (cur === id) { const mm = document.getElementById('ufMsg'); if (mm) mm.textContent = 'Check failed: ' + ((e && e.message) || e); }
+    }
+    busy = false;
+    const b2 = document.getElementById('ufRecheck'); if (b2) b2.disabled = false;
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('ufOverlay')) close(); });
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
    NEEDS ME — added 2026-10-25
    One page per person: everything waiting on them, across the clients they
    PREPARE (the same rule as the Expo / Review Queue / Receipts / Daily Sales
@@ -20658,6 +20817,8 @@ init();
                          Client Portal badge, scoped to your clients)
      Team notes          internal notes waiting on you (same rule as the
                          Clients badge)
+     Undeposited Funds   uf_aging 'stale' (items older than 5 days, or a
+                         negative balance) — added with the UF check 10/25/26
      Tasks               your tasks that are Stuck, or overdue (close tasks
                          only while that client's close is In Progress);
                          your Stuck steps
@@ -20683,13 +20844,14 @@ init();
     receipts:  { label: 'Receipts',         icon: '📎', unit: ['receipt waiting', 'receipts waiting'] },
     sales:     { label: 'Daily sales',      icon: '📆', unit: ['day to fix', 'days to fix'] },
     stmts:     { label: 'Statements',       icon: '🧾', unit: ['statement stuck', 'statements stuck'] },
+    uf:        { label: 'Undeposited Funds', icon: '🏦', unit: ['item older than 5 days', 'items older than 5 days'] },
     questions: { label: 'Client questions', icon: '🌐', unit: ['question waiting on you', 'questions waiting on you'] },
     notes:     { label: 'Team notes',       icon: '💬', unit: ['note waiting on you', 'notes waiting on you'] },
     tasks:     { label: 'Tasks',            icon: '☀', unit: ['task overdue or stuck', 'tasks overdue or stuck'] },
     stmtmail:  { label: 'Statement emails', icon: '✉️', unit: ['email in To file', 'emails in To file'] },
     held:      { label: 'Held statements',  icon: '⏸', unit: ['statement held', 'statements held'] },
   };
-  const ORDER = ['tasks', 'questions', 'notes', 'sales', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
+  const ORDER = ['tasks', 'questions', 'notes', 'sales', 'uf', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
 
   function me() { return (typeof getViewingUserName === 'function') ? getViewingUserName() : ''; }
   function isOwnerSelf() { return typeof isAdmin === 'function' && isAdmin() && !(typeof viewingAsName !== 'undefined' && viewingAsName); }
@@ -20851,6 +21013,17 @@ init();
       return { tool: 'tasks', client_id: id, n: b.overdue + b.stuck, oldest: b.oldest, detail: parts.join(' · ') };
     });
   }
+  async function srcUf(mine) {
+    // Written each morning by qbo-uf-aging (added 10/25/26).
+    const rows = await all(() => sb.from('uf_aging').select('client_id,status,balance,stale_count,stale_total,oldest_date').eq('status', 'stale'));
+    const dollars = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return rows.filter(r => mine.has(r.client_id)).map(r => {
+      const parts = [];
+      if (r.stale_count) parts.push(dollars(r.stale_total) + ' older than 5 days — usually a deposit not recorded or not linked');
+      if (Number(r.balance) < 0) parts.push('balance is negative (' + dollars(r.balance) + ')');
+      return { tool: 'uf', client_id: r.client_id, n: Number(r.stale_count) || 1, oldest: r.oldest_date, detail: parts.join(' · ') };
+    });
+  }
   async function srcStatementEmails() {
     const rows = await all(() => sb.from('statement_email_log').select('gmail_message_id,created_at').eq('outcome', 'to_file'));
     if (!rows.length) return [];
@@ -20880,7 +21053,8 @@ init();
     ];
     if (mine.size) {
       jobs.push(['Expo', () => srcExpo(mine)], ['Review Queue', () => srcRq(mine)], ['Receipts', () => srcReceipts(mine)],
-                ['Daily sales', () => srcSales(mine)], ['Statements', () => srcStatements(mine)]);
+                ['Daily sales', () => srcSales(mine)], ['Statements', () => srcStatements(mine)],
+                ['Undeposited Funds', () => srcUf(mine)]);
     }
     if (isOwnerSelf()) jobs.push(['Statement emails', srcStatementEmails], ['Held statements', srcHeld]);
 
@@ -21017,6 +21191,9 @@ init();
           break;
         case 'stmts':
           showPage('reconciler');
+          break;
+        case 'uf':
+          if (window.UfShow) window.UfShow(id);
           break;
         case 'held':
           showPage('reconciler');
