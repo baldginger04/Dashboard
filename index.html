@@ -21495,6 +21495,21 @@ init();
     ]);
     const live = new Map(clientsAll().map(c => [c.id, c]));
     const closeCats = (typeof CLOSE_CATS !== 'undefined') ? CLOSE_CATS : [];
+    // Same two rules My Day applies (fixed 10/25/26 — Ed saw his P&L / Balance
+    // Sheet / Cash Flows review tasks for Hanghart and Inn on the Creek while
+    // Jen's "Ready for Review" was still open):
+    //   1. the three review documents stay hidden until that client's
+    //      "Ready for Review" is Done (isTaskBlockedByReview);
+    //   2. a task with steps is represented by its steps, not itself.
+    const gateTitle = (typeof READY_FOR_REVIEW_TITLE !== 'undefined') ? READY_FOR_REVIEW_TITLE : 'Ready for Review';
+    const gates = await all(() => sb.from('tasks').select('id,client_id,title,status').eq('title', gateTitle));
+    const blocked = t => (typeof isTaskBlockedByReview === 'function') ? isTaskBlockedByReview(t, gates) : false;
+    const hasSteps = new Set();
+    const ids = tasks.map(t => t.id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const part = ids.slice(i, i + 100);
+      (await all(() => sb.from('subtasks').select('id,task_id').in('task_id', part))).forEach(x => hasSteps.add(x.task_id));
+    }
     const by = {};
     const bump = (cid, kind, due) => {
       const b = by[cid] || (by[cid] = { overdue: 0, stuck: 0, oldest: null });
@@ -21503,6 +21518,7 @@ init();
     };
     tasks.forEach(t => {
       const c = live.get(t.client_id); if (!c) return;               // archived client
+      if (blocked(t) || hasSteps.has(t.id)) return;
       if (t.status === 'Stuck') { bump(t.client_id, 'stuck', t.next_due); return; }
       if (!t.next_due || t.next_due >= today) return;
       // A close task only counts while that client's close is under way —
