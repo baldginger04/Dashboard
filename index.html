@@ -21163,6 +21163,146 @@ init();
 </script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
+   CLOSED-MONTH CHANGES — pop-up, added 2026-10-25
+   Opened from Needs Me. Lists transactions created, changed or deleted in
+   QuickBooks that are dated in a month already closed (found each morning by
+   the qbo-closed-watch Edge Function), with "Mark seen". Ed also gets a
+   one-time "Can Triple set the QuickBooks closing date?" test here.
+   ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  const dollars = n => n == null ? '' : (Number(n) < 0 ? '−' : '') + '$' + Math.abs(Number(n)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const day = d => d ? new Date(String(d).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+  const TYPE = { Bill: 'Bill', BillPayment: 'Bill payment', CreditMemo: 'Credit memo', Deposit: 'Deposit', Invoice: 'Invoice',
+                 JournalEntry: 'Journal entry', Payment: 'Payment', Purchase: 'Expense', RefundReceipt: 'Refund', SalesReceipt: 'Sales receipt',
+                 Transfer: 'Transfer', VendorCredit: 'Vendor credit' };
+  const S = { id: null, rows: [], state: null, showSeen: false, msg: '', test: null };
+
+  function css() {
+    if (document.getElementById('cwCss')) return;
+    const st = document.createElement('style'); st.id = 'cwCss';
+    st.textContent = `
+      #cwOverlay{position:fixed;inset:0;background:rgba(27,42,75,.35);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+      #cwOverlay .cw-box{background:#fff;border-radius:14px;max-width:920px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25);padding:22px 24px}
+      #cwOverlay .cw-head{display:flex;justify-content:space-between;gap:12px}
+      #cwOverlay .cw-title{font-family:'Hanken Grotesk',sans-serif;font-weight:700;font-size:18px;color:var(--navy)}
+      #cwOverlay .cw-sub{font-size:12px;color:var(--text3);margin-top:3px}
+      #cwOverlay .cw-x{border:0;background:none;font-size:22px;cursor:pointer;color:var(--text2)}
+      #cwOverlay table{width:100%;border-collapse:collapse;font-size:13px;margin-top:12px}
+      #cwOverlay th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text2);padding:7px 8px;border-bottom:1px solid var(--border)}
+      #cwOverlay td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+      #cwOverlay td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+      #cwOverlay tr.seen td{color:var(--text3)}
+      #cwOverlay .cw-src{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:var(--bg3);color:var(--text2)}
+      #cwOverlay .cw-src.qbo{background:var(--yellow-bg);color:var(--yellow)}
+      #cwOverlay .cw-note{font-size:13px;border-radius:10px;padding:10px 12px;margin-top:12px}
+      #cwOverlay .cw-note.warn{background:var(--yellow-bg);color:var(--yellow)}
+      #cwOverlay .cw-note.info{background:var(--bg3);color:var(--text2)}
+      #cwOverlay .cw-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap;font-size:12px}
+      #cwOverlay a{color:var(--coral);cursor:pointer}
+    `;
+    document.head.appendChild(st);
+  }
+  const nameOf = id => ((typeof findClientAny === 'function' && findClientAny(id)) || {}).name || 'Client';
+  const isOwner = () => typeof isAdmin === 'function' && isAdmin() && !(typeof isViewingAs === 'function' && isViewingAs());
+
+  async function load(id) {
+    const since = new Date(Date.now() - 45 * 86400000).toISOString();
+    let q = sb.from('closed_period_changes').select('*').eq('client_id', id).order('txn_date', { ascending: true });
+    q = S.showSeen ? q.gte('detected_at', since) : q.is('acknowledged_at', null);
+    const [r1, r2] = await Promise.all([q.limit(500), sb.from('closed_watch_state').select('*').eq('client_id', id).maybeSingle()]);
+    if (r1.error) throw r1.error;
+    S.rows = r1.data || []; S.state = r2.data || null;
+  }
+
+  function render() {
+    css();
+    let o = document.getElementById('cwOverlay');
+    if (!o) {
+      o = document.createElement('div'); o.id = 'cwOverlay';
+      o.addEventListener('click', e => { if (e.target === o) close(); });
+      document.body.appendChild(o);
+    }
+    const st = S.state;
+    const open = S.rows.filter(r => !r.acknowledged_at);
+    let html = '<div class="cw-box"><div class="cw-head"><div><div class="cw-title">Changes in closed months — ' + esc(nameOf(S.id)) + '</div>' +
+      '<div class="cw-sub">' + (st && st.closed_through ? 'Closed through ' + esc(day(st.closed_through)) +
+        ' (Triple close: ' + esc(st.triple_closed ? day(st.triple_closed) : '—') + '; QuickBooks closing date: ' + esc(st.book_close_date ? day(st.book_close_date) : 'not set') + ')' : 'No closed month yet for this client') +
+        (st && st.last_checked_at ? ' · checked ' + esc(new Date(st.last_checked_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : '') +
+      '</div></div><button class="cw-x" onclick="ClosedWatch.close()">×</button></div>';
+
+    if (st && st.status === 'error') html += '<div class="cw-note warn">The last check failed: ' + esc(st.error || '') + '</div>';
+    if (st && st.deleted_unknown) html += '<div class="cw-note warn">QuickBooks also reported ' + esc(st.deleted_unknown) + ' deleted transaction' + (st.deleted_unknown === 1 ? '' : 's') +
+      ' it gives no date for, so this can’t tell whether they were in a closed month. If the closed months’ totals look off, that’s the place to look (QuickBooks → Audit log).</div>';
+
+    html += S.rows.length
+      ? '<table><thead><tr><th>Txn date</th><th>What</th><th>Who / ref</th><th class="r">Amount</th><th>Change</th><th>By</th><th></th></tr></thead><tbody>' +
+        S.rows.map(r => '<tr class="' + (r.acknowledged_at ? 'seen' : '') + '"><td>' + esc(day(r.txn_date)) + '</td><td>' + esc(TYPE[r.entity_type] || r.entity_type) + '</td><td>' +
+          esc([r.name, r.doc].filter(Boolean).join(' · ') || '—') + '</td><td class="r">' + esc(dollars(r.amount)) + '</td><td>' + esc(r.change_type) +
+          ' <span style="color:var(--text3);font-size:11px">' + esc(new Date(r.changed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })) + '</span></td><td><span class="cw-src ' + (r.source === 'QuickBooks' ? 'qbo' : '') + '">' + esc(r.source) + '</span></td><td>' +
+          (r.acknowledged_at ? '<span style="font-size:11px">seen' + (r.acknowledged_by ? ' by ' + esc(r.acknowledged_by.split(' ')[0]) : '') + '</span>'
+            : '<a onclick="ClosedWatch.ack(\'' + r.id + '\')">Mark seen</a>') + '</td></tr>').join('') + '</tbody></table>'
+      : '<div class="cw-note info">' + (S.showSeen ? 'Nothing in the last 45 days.' : 'Nothing waiting — no unseen changes in closed months.') + '</div>';
+
+    html += '<div class="cw-note info">“QuickBooks” means someone changed it in QuickBooks directly (the client, or one of us). Expo, Daily sales sync, Payroll accrual, Review Queue and Receipts are our own systems — still worth a look, since a late bill changes a month you already reviewed.</div>';
+
+    if (S.test) html += '<div class="cw-note ' + (S.test.writable ? 'info' : 'warn') + '">' + esc(S.test.text) + '</div>';
+
+    html += '<div class="cw-foot"><span>' +
+      '<label style="cursor:pointer"><input type="checkbox" ' + (S.showSeen ? 'checked' : '') + ' onchange="ClosedWatch.toggleSeen(this.checked)"> Show ones already seen (last 45 days)</label>' +
+      (isOwner() ? ' · <a onclick="ClosedWatch.testClosingDate()" title="Writes the same closing date back — changes nothing">Can Triple set the QuickBooks closing date? (test)</a>' : '') +
+      (S.msg ? ' · ' + esc(S.msg) : '') + '</span><span>' +
+      (open.length > 1 ? '<button class="btn btn-secondary" onclick="ClosedWatch.ackAll()">Mark all ' + open.length + ' seen</button> ' : '') +
+      '<button class="btn btn-secondary" onclick="ClosedWatch.close()">Close</button></span></div></div>';
+    o.innerHTML = html;
+  }
+
+  async function refresh() {
+    const id = S.id;
+    try { await load(id); if (S.id === id) render(); }
+    catch (e) { S.rows = []; S.msg = 'Couldn’t load: ' + ((e && e.message) || e); if (S.id === id) render(); }
+  }
+  function close() { const o = document.getElementById('cwOverlay'); if (o) o.remove(); S.id = null; S.test = null; S.msg = '';
+    if (window.NeedsMe && document.getElementById('page-needsme')?.classList.contains('active')) window.NeedsMe.reload(); }
+  const me = () => (typeof getViewingUserName === 'function' ? getViewingUserName() : null);
+
+  window.ClosedWatch = {
+    open(id) { S.id = id; S.showSeen = false; S.test = null; S.msg = ''; S.rows = []; S.state = null; render(); refresh(); },
+    close,
+    toggleSeen(on) { S.showSeen = !!on; refresh(); },
+    async ack(rowId) {
+      if (typeof isViewingAs === 'function' && isViewingAs()) { S.msg = 'Read-only while viewing as someone else.'; render(); return; }
+      const { error } = await sb.from('closed_period_changes').update({ acknowledged_at: new Date().toISOString(), acknowledged_by: me() }).eq('id', rowId);
+      S.msg = error ? 'Not saved: ' + error.message : ''; refresh();
+    },
+    async ackAll() {
+      if (typeof isViewingAs === 'function' && isViewingAs()) { S.msg = 'Read-only while viewing as someone else.'; render(); return; }
+      const ids = S.rows.filter(r => !r.acknowledged_at).map(r => r.id);
+      for (let i = 0; i < ids.length; i += 100) {
+        const { error } = await sb.from('closed_period_changes').update({ acknowledged_at: new Date().toISOString(), acknowledged_by: me() }).in('id', ids.slice(i, i + 100));
+        if (error) { S.msg = 'Not saved: ' + error.message; break; }
+      }
+      refresh();
+    },
+    async testClosingDate() {
+      if (!confirm('Test on ' + nameOf(S.id) + ': read its QuickBooks closing date and write the SAME date back, to see whether QuickBooks lets Triple set it. Nothing changes in the books. Go?')) return;
+      S.test = { writable: true, text: 'Testing…' }; render();
+      try {
+        const { data, error } = await sb.functions.invoke('qbo-closed-watch', { body: { action: 'closing_date_test', client_id: S.id } });
+        if (error) throw new Error(error.message || String(error));
+        if (data && data.error) throw new Error(data.error);
+        S.test = data.book_close_date == null ? { writable: false, text: data.note || 'No closing date set here — try a client that has one.' }
+          : data.writable ? { writable: true, text: 'Yes — QuickBooks accepted the write (closing date ' + data.book_close_date + (data.unchanged ? ', unchanged' : ', NOW ' + data.after) + '). Setting it when a close is finished can be built.' }
+          : { writable: false, text: 'No — QuickBooks refused it (' + data.status + '): ' + (data.response || '') + '. Closing dates stay a manual step.' };
+      } catch (e) { S.test = { writable: false, text: 'Test failed: ' + ((e && e.message) || e) }; }
+      render();
+    },
+  };
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.getElementById('cwOverlay')) close(); });
+})();
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
    NEEDS ME — added 2026-10-25
    One page per person: everything waiting on them, across the clients they
    PREPARE (the same rule as the Expo / Review Queue / Receipts / Daily Sales
@@ -21186,6 +21326,7 @@ init();
                          Clients badge)
      Undeposited Funds   uf_aging 'stale' (items older than 5 days, or a
                          negative balance) — added with the UF check 10/25/26
+     Closed months       closed_period_changes not yet marked seen (added 10/25/26)
      Tasks               your tasks that are Stuck, or overdue (close tasks
                          only while that client's close is In Progress);
                          your Stuck steps
@@ -21212,13 +21353,14 @@ init();
     sales:     { label: 'Daily sales',      icon: '📆', unit: ['day to fix', 'days to fix'] },
     stmts:     { label: 'Statements',       icon: '🧾', unit: ['statement stuck', 'statements stuck'] },
     uf:        { label: 'Undeposited Funds', icon: '🏦', unit: ['item older than 5 days', 'items older than 5 days'] },
+    closed:    { label: 'Closed months',    icon: '🔒', unit: ['change in a closed month', 'changes in a closed month'] },
     questions: { label: 'Client questions', icon: '🌐', unit: ['question waiting on you', 'questions waiting on you'] },
     notes:     { label: 'Team notes',       icon: '💬', unit: ['note waiting on you', 'notes waiting on you'] },
     tasks:     { label: 'Tasks',            icon: '☀', unit: ['task overdue or stuck', 'tasks overdue or stuck'] },
     stmtmail:  { label: 'Statement emails', icon: '✉️', unit: ['email in To file', 'emails in To file'] },
     held:      { label: 'Held statements',  icon: '⏸', unit: ['statement held', 'statements held'] },
   };
-  const ORDER = ['tasks', 'questions', 'notes', 'sales', 'uf', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
+  const ORDER = ['tasks', 'questions', 'notes', 'closed', 'sales', 'uf', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
 
   function me() { return (typeof getViewingUserName === 'function') ? getViewingUserName() : ''; }
   function isOwnerSelf() { return typeof isAdmin === 'function' && isAdmin() && !(typeof viewingAsName !== 'undefined' && viewingAsName); }
@@ -21382,7 +21524,10 @@ init();
   }
   async function srcUf(mine) {
     // Written each morning by qbo-uf-aging (added 10/25/26).
-    const rows = await all(() => sb.from('uf_aging').select('client_id,status,balance,stale_count,stale_total,oldest_date').eq('status', 'stale'));
+    // Direct query: uf_aging has no id column, and fetchAllRows orders by id.
+    const { data, error } = await sb.from('uf_aging').select('client_id,status,balance,stale_count,stale_total,oldest_date').eq('status', 'stale');
+    if (error) throw error;
+    const rows = data || [];
     const dollars = n => '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return rows.filter(r => mine.has(r.client_id)).map(r => {
       const parts = [];
@@ -21391,8 +21536,24 @@ init();
       return { tool: 'uf', client_id: r.client_id, n: Number(r.stale_count) || 1, oldest: r.oldest_date, detail: parts.join(' · ') };
     });
   }
+  async function srcClosed(mine) {
+    // Found each morning by qbo-closed-watch (added 10/25/26); cleared by "Mark seen".
+    const rows = await all(() => sb.from('closed_period_changes').select('id,client_id,txn_date,source').is('acknowledged_at', null));
+    const by = {};
+    rows.filter(r => mine.has(r.client_id)).forEach(r => {
+      const b = by[r.client_id] || (by[r.client_id] = { n: 0, oldest: null, src: {} });
+      b.n++; b.src[r.source] = (b.src[r.source] || 0) + 1;
+      if (r.txn_date && (!b.oldest || r.txn_date < b.oldest)) b.oldest = r.txn_date;
+    });
+    return Object.keys(by).map(id => ({ tool: 'closed', client_id: id, n: by[id].n,
+      detail: Object.entries(by[id].src).map(([k, v]) => v + ' by ' + k).join(' · ') + (by[id].oldest ? ' · dated as early as ' +
+        new Date(by[id].oldest + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '') }));
+  }
   async function srcStatementEmails() {
-    const rows = await all(() => sb.from('statement_email_log').select('gmail_message_id,created_at').eq('outcome', 'to_file'));
+    // Direct query: statement_email_log is keyed on gmail_message_id (no id column).
+    const { data, error } = await sb.from('statement_email_log').select('gmail_message_id,created_at').eq('outcome', 'to_file').limit(1000);
+    if (error) throw error;
+    const rows = data || [];
     if (!rows.length) return [];
     const oldest = rows.map(r => r.created_at).sort()[0];
     return [{ tool: 'stmtmail', client_id: null, client: 'Your Gmail', n: rows.length, oldest,
@@ -21400,8 +21561,11 @@ init();
   }
   async function srcHeld() {
     const rows = await all(() => sb.from('reconciliations')
-      .select('id,client_id,statement_date,held,released_at,replaced_at,marked_ok_at').eq('held', true));
-    const open = rows.filter(r => !r.released_at && !r.replaced_at && !r.marked_ok_at);
+      .select('id,client_id,statement_date,held,released_at,replaced_at,marked_ok_at,recheck').eq('held', true));
+    // Same rule as the Statement Reconciler's "Held — not sent" filter: a hold
+    // whose morning recheck found every item in QuickBooks has nothing left to send.
+    const cleared = r => !!(r.recheck && r.recheck.still_missing != null && Number(r.recheck.still_missing) === 0);
+    const open = rows.filter(r => !r.released_at && !r.replaced_at && !r.marked_ok_at && !cleared(r));
     const t = tally(open, 'statement_date');
     return Object.keys(t).map(id => ({ tool: 'held', client_id: id, n: t[id].n, oldest: t[id].oldest,
       detail: 'no line matched a bill — check the letterhead, then Send anyway' }));
@@ -21421,7 +21585,7 @@ init();
     if (mine.size) {
       jobs.push(['Expo', () => srcExpo(mine)], ['Review Queue', () => srcRq(mine)], ['Receipts', () => srcReceipts(mine)],
                 ['Daily sales', () => srcSales(mine)], ['Statements', () => srcStatements(mine)],
-                ['Undeposited Funds', () => srcUf(mine)]);
+                ['Undeposited Funds', () => srcUf(mine)], ['Closed months', () => srcClosed(mine)]);
     }
     if (isOwnerSelf()) jobs.push(['Statement emails', srcStatementEmails], ['Held statements', srcHeld]);
 
@@ -21561,6 +21725,9 @@ init();
           break;
         case 'uf':
           if (window.UfShow) window.UfShow(id);
+          break;
+        case 'closed':
+          if (window.ClosedWatch) window.ClosedWatch.open(id);
           break;
         case 'held':
           showPage('reconciler');
