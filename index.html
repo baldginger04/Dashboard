@@ -21998,15 +21998,18 @@ init();
     if (!p.ties) h += '<div class="sp-err">The transactions Stripe lists for this payout don’t add up to the deposit yet. It will refresh on the next pull.</div>';
     if (p.error && p.status === 'failed') h += '<div class="sp-err">' + esc(p.error) + '</div>';
     if (sales.length) {
-      h += '<div class="sp-row"><label>Charges go to</label>' +
-        (editable ? acctSelect('data-act="sales"', salesAcctId, accts) : '<b>' + esc(p.sales_account_label || '') + '</b>') +
+      h += '<div class="sp-row"><label>Default account for charges</label>' +
+        (editable ? acctSelect('data-act="sales"', salesAcctId, accts) : '<b>' + esc(p.sales_account_label || '(each charge coded on its own line)') + '</b>') +
         (suggested ? '<span class="sp-muted">suggested from the last payout you posted</span>' : '') + '</div>';
+      if (editable && sales.length) h += '<div class="sp-muted">Any charge can go somewhere else — pick its account in the Account column. Charges left on “Same as default” use the account above.</div>';
     }
     h += '<table class="sp-table"><thead><tr><th>Date</th><th>Customer / description</th><th>Type</th><th class="n">Amount</th><th class="n">Fee</th><th class="n">Net</th><th>Account</th></tr></thead><tbody>';
     for (const l of ls) {
       let acct;
       if (l.kind === 'fee') acct = '<span class="sp-muted">Fee account</span>';
-      else if (!needsOwn(l)) acct = '<span class="sp-muted">Charges account</span>';
+      else if (!needsOwn(l)) acct = editable
+        ? acctSelect('data-act="line" data-lid="' + esc(l.id) + '"', l.account_id || '', accts, 'Same as default')
+        : esc(l.account_label || p.sales_account_label || '');
       else if (editable) acct = acctSelect('data-act="line" data-lid="' + esc(l.id) + '"', l.account_id || '', accts);
       else acct = esc(l.account_label || '');
       const em = String(l.customer_email || '').toLowerCase(), ds = String(l.description || '');
