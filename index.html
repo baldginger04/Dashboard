@@ -933,6 +933,43 @@
     #page-labor .la-set td{vertical-align:middle}
     #page-labor .la-table tr.la-diff td{background:var(--yellow-bg)}
     #page-labor details{margin-bottom:.5rem}
+    /* STRIPE PAYOUTS (added 2026-10-26) */
+    #page-stripe .sp-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+    #page-stripe .sp-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
+    #page-stripe .sp-field{display:flex;flex-direction:column;gap:.25rem}
+    #page-stripe .sp-field label,#page-stripe .sp-row label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
+    #page-stripe select,#page-stripe input[type=date]{font:inherit;font-size:13px;padding:.4rem .55rem;border:1px solid var(--border);border-radius:7px;background:var(--bg);max-width:100%}
+    #page-stripe .sp-btn{font:inherit;font-weight:600;font-size:13px;background:var(--accent);color:#fff;border:none;border-radius:6px;padding:.45rem 1rem;cursor:pointer}
+    #page-stripe .sp-btn:hover{filter:brightness(.93)}
+    #page-stripe .sp-btn:disabled,#page-stripe .sp-ghost:disabled{opacity:.5;cursor:default}
+    #page-stripe .sp-ghost{font:inherit;font-weight:500;font-size:13px;background:var(--bg);color:var(--text2);border:1px solid var(--border2);border-radius:6px;padding:.4rem .8rem;cursor:pointer}
+    #page-stripe .sp-ghost:hover{border-color:var(--accent);color:var(--accent)}
+    #page-stripe .sp-status{font-size:12px;color:var(--text3);margin-top:.6rem;min-height:1.1em}
+    #page-stripe .sp-status.err,#page-stripe .sp-err-t{color:var(--red)}
+    #page-stripe .sp-meta{font-size:12px;color:var(--text2);margin-top:.55rem}
+    #page-stripe .sp-row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin:.35rem 0}
+    #page-stripe .sp-row select{min-width:260px;max-width:460px}
+    #page-stripe .sp-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:.6rem}
+    #page-stripe .sp-head{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.7rem 1rem;cursor:pointer}
+    #page-stripe .sp-name{font-weight:600;font-size:14px;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+    #page-stripe .sp-sub,#page-stripe .sp-muted{font-size:12px;color:var(--text3)}
+    #page-stripe .sp-body{border-top:1px solid var(--border);padding:.7rem 1rem .9rem}
+    #page-stripe .sp-chip{font-size:11px;font-weight:600;border-radius:20px;padding:.1rem .55rem;border:1px solid}
+    #page-stripe .sp-chip.ok{color:var(--green);background:var(--green-bg);border-color:var(--green-border)}
+    #page-stripe .sp-chip.ready{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-border)}
+    #page-stripe .sp-chip.bad{color:var(--red);background:var(--red-bg);border-color:var(--red-border)}
+    #page-stripe .sp-chip.mute{color:var(--text3);background:var(--bg3);border-color:var(--border)}
+    #page-stripe .sp-err{font-size:12.5px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:7px;padding:.45rem .65rem;margin:.4rem 0}
+    #page-stripe .sp-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:.5rem}
+    #page-stripe .sp-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text3);font-weight:600;padding:.35rem .5rem;border-bottom:1px solid var(--border)}
+    #page-stripe .sp-table td{padding:.3rem .5rem;border-bottom:1px solid var(--border);vertical-align:middle}
+    #page-stripe .sp-table td select{min-width:220px}
+    #page-stripe .sp-table .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #page-stripe .sp-table tfoot td{font-weight:600;border-bottom:none}
+    #page-stripe .sp-table tr.own td{background:var(--yellow-bg)}
+    #page-stripe .sp-btns{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.7rem}
+    #page-stripe code{font-size:12px}
+    @media (max-width:700px){#page-stripe .sp-table{display:block;overflow-x:auto}}
     #page-vendoraudit .va-panel,#page-mv .va-panel{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
     #page-vendoraudit .va-controls,#page-mv .va-controls{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
     #page-vendoraudit .va-field,#page-mv .va-field{display:flex;flex-direction:column;gap:.25rem}
@@ -1312,6 +1349,7 @@
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('labor')" id="nav-labor"><span>🧮</span> Payroll Accruals</div>
+        <div class="nav-item" onclick="showPage('stripe')" id="nav-stripe"><span>💳</span> Stripe Payouts <span class="nav-badge" id="stripeBadge" style="display:none" title="Stripe payouts waiting to be coded for your clients">0</span></div>
         <div class="nav-section">Monthly Tools</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
         <!-- Marketing holds only Prospects today, which is permission-gated, so
@@ -1709,6 +1747,25 @@
           <div style="font-weight:600;font-size:14px;margin-bottom:.6rem">Backfill a range of months</div>
           <div id="laBackfill"></div>
         </div>
+      </div>
+
+      <!-- STRIPE PAYOUTS — added 2026-10-26. Script at the end of the file (search "STRIPE PAYOUTS"). -->
+      <div class="page" id="page-stripe">
+        <div class="page-header"><div><div class="page-title">Stripe Payouts</div><div class="page-sub">One journal entry per Stripe deposit &#8212; pick the account, post it to QuickBooks to Undeposited Funds</div></div></div>
+        <div class="sp-panel">
+          <div class="sp-controls">
+            <div class="sp-field"><label for="spClient">Client</label><select id="spClient" style="min-width:240px"></select></div>
+            <div class="sp-field"><label for="spShow">Show</label>
+              <select id="spShow"><option value="uncoded">To code</option><option value="posted">Posted</option><option value="skipped">Skipped</option><option value="all">All</option></select></div>
+            <button class="sp-ghost" id="spPull">Pull from Stripe now</button>
+            <button class="sp-ghost" id="spSettingsBtn">Settings</button>
+          </div>
+          <div class="sp-meta" id="spMeta"></div>
+          <div class="sp-status" id="spStatus"></div>
+        </div>
+        <div class="sp-panel" id="spSettings" style="display:none"></div>
+        <div class="sp-panel" id="spBulk" style="display:none"></div>
+        <div id="spCards"></div>
       </div>
 
       <div class="page" id="page-close">
@@ -21359,8 +21416,9 @@ init();
     tasks:     { label: 'Tasks',            icon: '☀', unit: ['task overdue or stuck', 'tasks overdue or stuck'] },
     stmtmail:  { label: 'Statement emails', icon: '✉️', unit: ['email in To file', 'emails in To file'] },
     held:      { label: 'Held statements',  icon: '⏸', unit: ['statement held', 'statements held'] },
+    stripe:    { label: 'Stripe payouts',   icon: '💳', unit: ['payout to code', 'payouts to code'] },
   };
-  const ORDER = ['tasks', 'questions', 'notes', 'closed', 'sales', 'uf', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
+  const ORDER = ['tasks', 'questions', 'notes', 'closed', 'sales', 'stripe', 'uf', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
 
   function me() { return (typeof getViewingUserName === 'function') ? getViewingUserName() : ''; }
   function isOwnerSelf() { return typeof isAdmin === 'function' && isAdmin() && !(typeof viewingAsName !== 'undefined' && viewingAsName); }
@@ -21400,6 +21458,11 @@ init();
     const rows = await all(() => sb.from('invoice_queue').select('id,client_id,created_at').eq('status', 'needs_review'));
     const t = tally(rows.filter(r => mine.has(r.client_id)), 'created_at');
     return Object.keys(t).map(id => ({ tool: 'expo', client_id: id, n: t[id].n, oldest: t[id].oldest }));
+  }
+  async function srcStripe(mine) {
+    const rows = await all(() => sb.from('stripe_payouts').select('id,client_id,arrival_date').in('status', ['uncoded', 'failed']));
+    const t = tally(rows.filter(r => mine.has(r.client_id)), 'arrival_date');
+    return Object.keys(t).map(id => ({ tool: 'stripe', client_id: id, n: t[id].n, oldest: t[id].oldest }));
   }
   async function srcRq(mine) {
     const rows = await all(() => sb.from('review_items').select('id,client_id').eq('status', 'open'));
@@ -21600,7 +21663,7 @@ init();
     ];
     if (mine.size) {
       jobs.push(['Expo', () => srcExpo(mine)], ['Review Queue', () => srcRq(mine)], ['Receipts', () => srcReceipts(mine)],
-                ['Daily sales', () => srcSales(mine)], ['Statements', () => srcStatements(mine)],
+                ['Daily sales', () => srcSales(mine)], ['Stripe payouts', () => srcStripe(mine)], ['Statements', () => srcStatements(mine)],
                 ['Undeposited Funds', () => srcUf(mine)], ['Closed months', () => srcClosed(mine)]);
     }
     if (isOwnerSelf()) jobs.push(['Statement emails', srcStatementEmails], ['Held statements', srcHeld]);
@@ -21716,6 +21779,9 @@ init();
     const id = r.client_id;
     try {
       switch (r.tool) {
+        case 'stripe':
+          if (window.StripePayouts) window.StripePayouts.openClient(id); else showPage('stripe');
+          break;
         case 'expo':
           if (typeof Inv !== 'undefined') {
             Inv.client = id; Inv.tab = 'needs_review'; Inv.screen = 'list';
@@ -21788,6 +21854,398 @@ init();
   };
   // Keep the badge current: every 5 minutes, quietly.
   setInterval(() => { if (typeof sb !== 'undefined' && typeof currentUser !== 'undefined' && currentUser) reload({ quiet: true }); }, 5 * 60 * 1000);
+})();
+</script>
+<script>
+/* ============================================================
+   STRIPE PAYOUTS — added 2026-10-26
+   One journal entry per Stripe payout (= one bank deposit), coded by the
+   client's preparer and posted to QBO by the stripe-sync Edge Function:
+     Dr Undeposited Funds (the deposit) · Dr fee account (Stripe fees)
+     Cr the account picked for the payout's charges
+     each refund / dispute / other item, and any charge made before the
+     client's acquisition date, gets its own account.
+   Payouts are pulled from Stripe twice a day (cron "stripe-sync-pull") or
+   with "Pull from Stripe now". Pulling never posts anything.
+   Tables: stripe_connections, stripe_payouts, stripe_payout_lines.
+   ============================================================ */
+(function () {
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const money = n => (Number(n) < 0 ? '-$' : '$') + Math.abs(Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const mdy = iso => iso ? String(iso).slice(5, 7) + '/' + String(iso).slice(8, 10) + '/' + String(iso).slice(0, 4) : '';
+  const dow = iso => iso ? new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '';
+  const clientName = id => { const c = (typeof findClientAny === 'function') ? findClientAny(id) : null; return c ? c.name : id; };
+  const LS_KEY = 'bg_stripe_client';
+  const KIND = { charge: 'Charge', refund: 'Refund', dispute: 'Dispute', fee: 'Stripe fee', other: 'Other' };
+
+  const S = {
+    conns: [], clientId: '', show: 'uncoded', payouts: [], lines: {}, accounts: {}, previews: {},
+    busy: {}, open: {}, showSettings: false, status: '', statusErr: false, suggestion: null,
+  };
+
+  function needsOwn(l) { return l.kind !== 'fee' && (l.kind !== 'charge' || l.before_acquisition); }
+  function setStatus(msg, isErr) { S.status = msg || ''; S.statusErr = !!isErr; const el = $('spStatus'); if (el) { el.textContent = S.status; el.className = 'sp-status' + (isErr ? ' err' : ''); } }
+  const conn = () => S.conns.find(c => c.client_id === S.clientId) || null;
+
+  async function call(body) {
+    const { data, error } = await sb.functions.invoke('stripe-sync', { body });
+    if (error) {
+      let detail = error.message;
+      try { const j = await error.context.json(); detail = j.detail || j.error || detail; } catch (e) {}
+      throw new Error(detail);
+    }
+    if (data && data.ok === false) throw new Error(data.detail || data.error || 'Failed');
+    return data;
+  }
+
+  async function getAccounts(clientId) {
+    if (S.accounts[clientId]) return S.accounts[clientId];
+    try {
+      const { data } = await sb.functions.invoke('qbo-accounts', { body: { client_id: clientId, all: true } });
+      S.accounts[clientId] = (data?.accounts || []).map(a => ({ id: String(a.id), label: a.label || a.name, type: a.type || '' }))
+        .filter(a => a.id && a.label).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    } catch (e) { S.accounts[clientId] = []; }
+    return S.accounts[clientId];
+  }
+
+  // ---------------------------------------------------------------- data
+  async function loadConns() {
+    const { data, error } = await sb.from('stripe_connections').select('*');
+    if (error) { setStatus('Couldn’t load Stripe clients: ' + error.message, true); S.conns = []; return; }
+    S.conns = (data || []).sort((a, b) => clientName(a.client_id).localeCompare(clientName(b.client_id)));
+  }
+  async function loadPayouts() {
+    S.payouts = []; S.lines = {}; S.previews = {}; S.suggestion = null;
+    if (!S.clientId) return;
+    const { data, error } = await sb.from('stripe_payouts').select('*').eq('client_id', S.clientId).order('arrival_date', { ascending: false });
+    if (error) { setStatus('Couldn’t load payouts: ' + error.message, true); return; }
+    S.payouts = data || [];
+    const ids = S.payouts.map(p => p.id);
+    for (let i = 0; i < ids.length; i += 100) {
+      const { data: ls } = await sb.from('stripe_payout_lines').select('*').in('payout_id', ids.slice(i, i + 100));
+      (ls || []).forEach(l => (S.lines[l.payout_id] = S.lines[l.payout_id] || []).push(l));
+    }
+    Object.values(S.lines).forEach(a => a.sort((x, y) => String(x.created_local).localeCompare(String(y.created_local))));
+    const last = S.payouts.filter(p => p.status === 'posted' && p.sales_account_id).sort((a, b) => String(b.posted_at).localeCompare(String(a.posted_at)))[0];
+    if (last) S.suggestion = { id: last.sales_account_id, label: last.sales_account_label };
+  }
+
+  async function savePayoutAccount(pid, acct) {
+    const patch = { sales_account_id: acct ? acct.id : null, sales_account_label: acct ? acct.label : null };
+    const { error } = await sb.from('stripe_payouts').update(patch).eq('id', pid);
+    if (error) { setStatus('Save failed: ' + error.message, true); return false; }
+    const p = S.payouts.find(x => x.id === pid); if (p) Object.assign(p, patch);
+    delete S.previews[pid];
+    return true;
+  }
+  async function saveLineAccount(lid, pid, acct) {
+    const patch = { account_id: acct ? acct.id : null, account_label: acct ? acct.label : null };
+    const { error } = await sb.from('stripe_payout_lines').update(patch).eq('id', lid);
+    if (error) { setStatus('Save failed: ' + error.message, true); return false; }
+    const l = (S.lines[pid] || []).find(x => x.id === lid); if (l) Object.assign(l, patch);
+    delete S.previews[pid];
+    return true;
+  }
+  async function saveConn(patch) {
+    const { error } = await sb.from('stripe_connections').update(patch).eq('client_id', S.clientId);
+    if (error) { setStatus('Save failed: ' + error.message, true); return false; }
+    Object.assign(conn() || {}, patch); S.previews = {};
+    setStatus('Saved.');
+    return true;
+  }
+
+  // ---------------------------------------------------------------- render
+  function acctSelect(attrs, selectedId, accts, placeholder) {
+    const opts = ['<option value="">' + esc(placeholder || '— pick an account —') + '</option>']
+      .concat(accts.map(a => '<option value="' + esc(a.id) + '"' + (a.id === selectedId ? ' selected' : '') + '>' + esc(a.label) + '</option>'));
+    return '<select ' + attrs + '>' + opts.join('') + '</select>';
+  }
+
+  function chip(p) {
+    if (p.status === 'posted') return '<span class="sp-chip ok">Posted · QBO #' + esc(p.qbo_je_id) + '</span>';
+    if (p.status === 'skipped') return '<span class="sp-chip mute">Skipped</span>';
+    if (p.status === 'failed') return '<span class="sp-chip bad">Post failed</span>';
+    if (p.status === 'posting') return '<span class="sp-chip ready">Posting…</span>';
+    if (!p.ties) return '<span class="sp-chip bad">Doesn’t tie yet</span>';
+    return '<span class="sp-chip ready">To code</span>';
+  }
+
+  function summary(p) {
+    const ls = S.lines[p.id] || [];
+    const nCh = ls.filter(l => l.kind === 'charge').length;
+    const parts = [nCh + ' charge' + (nCh === 1 ? '' : 's') + ' ' + money(p.gross_charges), 'fees ' + money(-p.fees)];
+    if (Number(p.refunds)) parts.push('refunds ' + money(p.refunds));
+    if (Number(p.disputes)) parts.push('disputes ' + money(p.disputes));
+    if (Number(p.other)) parts.push('other ' + money(p.other));
+    return parts.join(' · ');
+  }
+
+  function cardHtml(p, accts) {
+    const c = conn() || {};
+    const ls = S.lines[p.id] || [];
+    const editable = p.status === 'uncoded' || p.status === 'failed';
+    const open = S.open[p.id] != null ? S.open[p.id] : editable;
+    const sales = ls.filter(l => l.kind === 'charge' && !l.before_acquisition);
+    const salesAcctId = p.sales_account_id || (editable && S.suggestion ? S.suggestion.id : '');
+    const suggested = !p.sales_account_id && salesAcctId;
+    let h = '<div class="sp-card" data-pid="' + esc(p.id) + '">';
+    h += '<div class="sp-head" data-act="toggle"><div><div class="sp-name">' + esc(dow(p.arrival_date)) + ' ' + esc(mdy(p.arrival_date)) +
+      ' · ' + money(p.amount) + ' deposit ' + chip(p) + '</div><div class="sp-sub">' + esc(summary(p)) +
+      (p.status === 'posted' && p.posted_by ? ' · posted by ' + esc(p.posted_by) : '') + '</div></div><div class="sp-sub">' + (open ? '▾' : '▸') + '</div></div>';
+    if (!open) return h + '</div>';
+    h += '<div class="sp-body">';
+    if (!p.ties) h += '<div class="sp-err">The transactions Stripe lists for this payout don’t add up to the deposit yet. It will refresh on the next pull.</div>';
+    if (p.error && p.status === 'failed') h += '<div class="sp-err">' + esc(p.error) + '</div>';
+    if (sales.length) {
+      h += '<div class="sp-row"><label>Charges go to</label>' +
+        (editable ? acctSelect('data-act="sales"', salesAcctId, accts) : '<b>' + esc(p.sales_account_label || '') + '</b>') +
+        (suggested ? '<span class="sp-muted">suggested from the last payout you posted</span>' : '') + '</div>';
+    }
+    h += '<table class="sp-table"><thead><tr><th>Date</th><th>Customer / description</th><th>Type</th><th class="n">Amount</th><th class="n">Fee</th><th class="n">Net</th><th>Account</th></tr></thead><tbody>';
+    for (const l of ls) {
+      let acct;
+      if (l.kind === 'fee') acct = '<span class="sp-muted">Fee account</span>';
+      else if (!needsOwn(l)) acct = '<span class="sp-muted">Charges account</span>';
+      else if (editable) acct = acctSelect('data-act="line" data-lid="' + esc(l.id) + '"', l.account_id || '', accts);
+      else acct = esc(l.account_label || '');
+      const em = String(l.customer_email || '').toLowerCase(), ds = String(l.description || '');
+      const who = em && ds.toLowerCase().includes(em) ? ds : [l.customer_email, ds].filter(Boolean).join(' — ');
+      const flag = l.before_acquisition ? ' <span class="sp-chip bad">before ' + esc(mdy(c.acquisition_date)) + ' · prior owner</span>' : '';
+      h += '<tr' + (needsOwn(l) ? ' class="own"' : '') + '><td>' + esc(mdy(l.created_local)) + '</td><td>' + esc(who || '(none)') + flag + '</td><td>' + esc(KIND[l.kind] || l.kind) +
+        '</td><td class="n">' + money(l.gross) + '</td><td class="n">' + money(-l.fee) + '</td><td class="n">' + money(l.net) + '</td><td>' + acct + '</td></tr>';
+    }
+    h += '</tbody><tfoot><tr><td colspan="5">Deposit</td><td class="n">' + money(p.amount) + '</td><td></td></tr></tfoot></table>';
+
+    const pv = S.previews[p.id];
+    if (pv) {
+      if (pv.errors && pv.errors.length) pv.errors.forEach(e => { h += '<div class="sp-err">' + esc(e) + '</div>'; });
+      if (pv.lines && pv.lines.length) {
+        h += '<div class="sp-muted" style="margin-top:.6rem">Entry “' + esc(pv.doc_number) + '” dated ' + esc(mdy(pv.txn_date)) + ':</div>';
+        h += '<table class="sp-table"><thead><tr><th>Account</th><th>Description</th><th class="n">Debit</th><th class="n">Credit</th></tr></thead><tbody>';
+        pv.lines.forEach(x => { h += '<tr><td>' + esc(x.account_label) + '</td><td>' + esc(x.description) + '</td><td class="n">' + (x.posting === 'Debit' ? money(x.amount) : '') + '</td><td class="n">' + (x.posting === 'Credit' ? money(x.amount) : '') + '</td></tr>'; });
+        h += '</tbody></table>';
+      }
+    }
+    const busy = S.busy[p.id];
+    h += '<div class="sp-btns">';
+    if (editable) {
+      h += '<button class="sp-ghost" data-act="preview"' + (busy ? ' disabled' : '') + '>Preview entry</button>';
+      h += '<button class="sp-btn" data-act="post"' + (busy || !p.ties ? ' disabled' : '') + '>' + (busy === 'post' ? 'Posting…' : 'Post to QuickBooks') + '</button>';
+      h += '<button class="sp-ghost" data-act="skip"' + (busy ? ' disabled' : '') + '>Skip — already booked</button>';
+    } else if (p.status === 'posted') {
+      h += '<button class="sp-ghost" data-act="unpost"' + (busy ? ' disabled' : '') + '>' + (busy === 'unpost' ? 'Deleting…' : 'Undo (delete the entry from QuickBooks)') + '</button>';
+    } else if (p.status === 'skipped') {
+      h += '<button class="sp-ghost" data-act="unskip"' + (busy ? ' disabled' : '') + '>Un-skip</button>';
+    }
+    h += '</div></div></div>';
+    return h;
+  }
+
+  async function render() {
+    const sel = $('spClient');
+    if (sel) {
+      sel.innerHTML = S.conns.length
+        ? S.conns.map(c => {
+            const n = S.counts && S.counts[c.client_id] ? ' (' + S.counts[c.client_id] + ' to code)' : '';
+            return '<option value="' + esc(c.client_id) + '"' + (c.client_id === S.clientId ? ' selected' : '') + '>' + esc(clientName(c.client_id) + n) + '</option>';
+          }).join('')
+        : '<option value="">No clients connected to Stripe yet</option>';
+    }
+    if ($('spShow')) $('spShow').value = S.show;
+    const c = conn();
+    const meta = $('spMeta');
+    if (meta) {
+      meta.innerHTML = c ? 'Pulls payouts that arrived on or after ' + esc(mdy(c.start_date)) +
+        (c.acquisition_date ? ' · charges before ' + esc(mdy(c.acquisition_date)) + ' are flagged as the prior owner’s' : '') +
+        ' · last pulled ' + (c.last_pulled_at ? esc(new Date(c.last_pulled_at).toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : 'never') +
+        (c.last_pull_error ? ' · <span class="sp-err-t">last pull failed: ' + esc(c.last_pull_error) + '</span>' : '') : '';
+    }
+    const accts = S.clientId ? await getAccounts(S.clientId) : [];
+    renderSettings(accts);
+    const list = S.payouts.filter(p => S.show === 'all' ? true : S.show === 'uncoded' ? (p.status === 'uncoded' || p.status === 'failed' || p.status === 'posting') : p.status === S.show);
+    const bulkable = S.payouts.filter(p => (p.status === 'uncoded' || p.status === 'failed') && !p.sales_account_id && (S.lines[p.id] || []).some(l => l.kind === 'charge' && !l.before_acquisition));
+    const bulk = $('spBulk');
+    if (bulk) {
+      bulk.style.display = bulkable.length > 1 ? '' : 'none';
+      if (bulkable.length > 1) bulk.innerHTML = '<div class="sp-row"><label>' + bulkable.length + ' payouts have no charges account yet — set them all to</label>' +
+        acctSelect('id="spBulkAcct"', S.suggestion ? S.suggestion.id : '', accts) + '<button class="sp-ghost" id="spBulkApply">Apply</button><span class="sp-muted">Refunds, disputes and prior-owner charges still get their own account.</span></div>';
+    }
+    const body = $('spCards');
+    if (!body) return;
+    if (!S.clientId) { body.innerHTML = '<div class="empty">Pick a client.</div>'; return; }
+    if (!list.length) { body.innerHTML = '<div class="empty">' + (S.show === 'uncoded' ? 'Nothing to code — every payout is posted or skipped.' : 'No payouts here.') + '</div>'; return; }
+    const total = list.reduce((s, p) => s + Number(p.amount || 0), 0);
+    body.innerHTML = '<div class="sp-muted" style="margin:0 0 .5rem">' + list.length + ' payout' + (list.length === 1 ? '' : 's') + ' · ' + money(total) + '</div>' + list.map(p => cardHtml(p, accts)).join('');
+  }
+
+  function renderSettings(accts) {
+    const el = $('spSettings');
+    if (!el) return;
+    el.style.display = S.showSettings ? '' : 'none';
+    if (!S.showSettings) return;
+    const c = conn();
+    if (!c) { el.innerHTML = '<div class="sp-muted">No Stripe connection for this client.</div>'; return; }
+    el.innerHTML =
+      '<div class="sp-row"><label>Stripe fee account</label>' + acctSelect('id="spFeeAcct"', c.fee_account_id || '', accts) +
+        (c.fee_account_id ? '' : '<span class="sp-err-t">Needed before anything can post</span>') + '</div>' +
+      '<div class="sp-row"><label>Undeposited Funds</label><span>' + (c.uf_account_label ? esc(c.uf_account_label) : '<span class="sp-muted">found automatically on the first preview</span>') + '</span></div>' +
+      '<div class="sp-row"><label>Pull payouts arriving on or after</label><input type="date" id="spStart" value="' + esc(c.start_date || '') + '"></div>' +
+      '<div class="sp-row"><label>Acquisition date (optional)</label><input type="date" id="spAcq" value="' + esc(c.acquisition_date || '') + '"><span class="sp-muted">Charges made before it are flagged on their own line. Applies to payouts pulled after you change it.</span></div>' +
+      '<div class="sp-row"><label>Stripe key secret</label><code>' + esc(c.secret_name) + '</code></div>';
+  }
+
+  // ---------------------------------------------------------------- actions
+  async function preview(pid) {
+    S.busy[pid] = 'preview'; render();
+    try { S.previews[pid] = await call({ action: 'preview', payout_id: pid }); }
+    catch (e) { S.previews[pid] = { errors: [e.message], lines: [] }; }
+    delete S.busy[pid];
+    await loadConns(); render();
+  }
+  async function post(pid) {
+    const p = S.payouts.find(x => x.id === pid); if (!p) return;
+    // a suggested account shown in the picker is only saved once you post
+    const card = document.querySelector('.sp-card[data-pid="' + CSS.escape(pid) + '"]');
+    const salesSel = card && card.querySelector('select[data-act="sales"]');
+    if (salesSel && salesSel.value && salesSel.value !== p.sales_account_id) {
+      const a = (S.accounts[S.clientId] || []).find(x => x.id === salesSel.value);
+      if (!(await savePayoutAccount(pid, a))) return;
+    }
+    S.busy[pid] = 'post'; render();
+    try {
+      const r = await call({ action: 'post', payout_id: pid });
+      setStatus('Posted ' + r.doc_number + ' (QBO #' + r.qbo_je_id + ').');
+    } catch (e) { setStatus(e.message, true); S.previews[pid] = { errors: [e.message], lines: [] }; }
+    delete S.busy[pid];
+    await reloadClient(true);
+  }
+  async function unpost(pid) {
+    if (!confirm('Delete this payout’s journal entry from QuickBooks and set it back to “To code”?')) return;
+    S.busy[pid] = 'unpost'; render();
+    try { await call({ action: 'unpost', payout_id: pid }); setStatus('Entry deleted from QuickBooks.'); }
+    catch (e) { setStatus(e.message, true); }
+    delete S.busy[pid];
+    await reloadClient(true);
+  }
+  async function setSkipped(pid, skip) {
+    if (skip && !confirm('Skip this payout? Use this when the deposit is already in QuickBooks some other way. Nothing is posted.')) return;
+    const { error } = await sb.from('stripe_payouts').update({ status: skip ? 'skipped' : 'uncoded' }).eq('id', pid).in('status', skip ? ['uncoded', 'failed'] : ['skipped']);
+    if (error) { setStatus(error.message, true); return; }
+    await reloadClient(true);
+  }
+  async function pullNow() {
+    if (!S.clientId) return;
+    const b = $('spPull'); if (b) { b.disabled = true; b.textContent = 'Pulling…'; }
+    try {
+      const r = await call({ action: 'pull', client_id: S.clientId });
+      const x = (r.results || [])[0] || {};
+      if (x.error) setStatus('Pull failed: ' + x.error, true);
+      else setStatus('Pulled: ' + (x.added || 0) + ' new payout' + (x.added === 1 ? '' : 's') + (x.refreshed ? ', ' + x.refreshed + ' refreshed' : '') + '.');
+    } catch (e) { setStatus('Pull failed: ' + e.message, true); }
+    if (b) { b.disabled = false; b.textContent = 'Pull from Stripe now'; }
+    await loadConns();
+    await reloadClient(true);
+  }
+  async function bulkApply() {
+    const id = $('spBulkAcct') && $('spBulkAcct').value;
+    if (!id) { setStatus('Pick an account first.', true); return; }
+    const a = (S.accounts[S.clientId] || []).find(x => x.id === id);
+    const targets = S.payouts.filter(p => (p.status === 'uncoded' || p.status === 'failed') && !p.sales_account_id);
+    for (const p of targets) await savePayoutAccount(p.id, a);
+    setStatus('Set ' + targets.length + ' payout' + (targets.length === 1 ? '' : 's') + ' to ' + a.label + '.');
+    render();
+  }
+
+  async function countUncoded() {
+    const { data } = await sb.from('stripe_payouts').select('client_id').in('status', ['uncoded', 'failed']);
+    const out = {};
+    (data || []).forEach(r => { out[r.client_id] = (out[r.client_id] || 0) + 1; });
+    S.counts = out;
+    const mine = (typeof myClientIdSet === 'function') ? myClientIdSet() : null;
+    const n = Object.keys(out).filter(id => !mine || mine.has(id)).reduce((s, id) => s + out[id], 0);
+    const b = $('stripeBadge'); if (b) { b.textContent = n; b.style.display = n ? '' : 'none'; }
+    return out;
+  }
+
+  async function reloadClient(keepStatus) {
+    if (!keepStatus) setStatus('Loading…');
+    await loadPayouts();
+    await countUncoded();
+    if (!keepStatus) setStatus('');
+    render();
+  }
+
+  function pickDefaultClient() {
+    let saved = ''; try { saved = localStorage.getItem(LS_KEY) || ''; } catch (e) {}
+    if (saved && S.conns.some(c => c.client_id === saved)) return saved;
+    const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : '';
+    const mine = S.conns.filter(c => { const cl = findClientAny(c.client_id); return cl && cl.preparer === me; });
+    const withWork = (mine.length ? mine : S.conns).find(c => S.counts && S.counts[c.client_id]);
+    return (withWork || mine[0] || S.conns[0] || {}).client_id || '';
+  }
+
+  // ---------------------------------------------------------------- wiring
+  function wire() {
+    if (S.wired) return; S.wired = true;
+    $('spClient').addEventListener('change', e => { S.clientId = e.target.value; try { localStorage.setItem(LS_KEY, S.clientId); } catch (x) {} S.open = {}; reloadClient(); });
+    $('spShow').addEventListener('change', e => { S.show = e.target.value; render(); });
+    $('spPull').addEventListener('click', pullNow);
+    $('spSettingsBtn').addEventListener('click', () => { S.showSettings = !S.showSettings; render(); });
+    $('spSettings').addEventListener('change', async e => {
+      const t = e.target;
+      if (t.id === 'spFeeAcct') { const a = (S.accounts[S.clientId] || []).find(x => x.id === t.value); await saveConn({ fee_account_id: a ? a.id : null, fee_account_label: a ? a.label : null }); }
+      if (t.id === 'spStart' && t.value) await saveConn({ start_date: t.value });
+      if (t.id === 'spAcq') await saveConn({ acquisition_date: t.value || null });
+      render();
+    });
+    $('spBulk').addEventListener('click', e => { if (e.target.id === 'spBulkApply') bulkApply(); });
+    const cards = $('spCards');
+    cards.addEventListener('click', e => {
+      const el = e.target.closest('[data-act]'); if (!el) return;
+      const card = el.closest('.sp-card'); if (!card) return;
+      const pid = card.dataset.pid, act = el.dataset.act;
+      if (el.tagName === 'SELECT') return;
+      if (act === 'toggle') { const p = S.payouts.find(x => x.id === pid); const ed = p && (p.status === 'uncoded' || p.status === 'failed'); S.open[pid] = !(S.open[pid] != null ? S.open[pid] : ed); render(); }
+      if (act === 'preview') preview(pid);
+      if (act === 'post') post(pid);
+      if (act === 'unpost') unpost(pid);
+      if (act === 'skip') setSkipped(pid, true);
+      if (act === 'unskip') setSkipped(pid, false);
+    });
+    cards.addEventListener('change', async e => {
+      const el = e.target; if (el.tagName !== 'SELECT') return;
+      const card = el.closest('.sp-card'); if (!card) return;
+      const pid = card.dataset.pid;
+      const a = (S.accounts[S.clientId] || []).find(x => x.id === el.value) || null;
+      if (el.dataset.act === 'sales') await savePayoutAccount(pid, a);
+      if (el.dataset.act === 'line') await saveLineAccount(el.dataset.lid, pid, a);
+      render();
+    });
+  }
+
+  window.StripeOpen = async function () {
+    wire();
+    setStatus('Loading…');
+    await loadConns();
+    await countUncoded();
+    if (!S.clientId || !S.conns.some(c => c.client_id === S.clientId)) S.clientId = pickDefaultClient();
+    await loadPayouts();
+    setStatus('');
+    render();
+  };
+  window.StripePayouts = {
+    openClient(id) { S.clientId = id; S.show = 'uncoded'; try { localStorage.setItem(LS_KEY, id); } catch (e) {} showPage('stripe'); },
+    reload: () => reloadClient(),
+  };
+  window.__StripeInternals = { S, needsOwn, cardHtml, summary };
+
+  const _sp = window.showPage;
+  window.showPage = function (n) { _sp.apply(this, arguments); if (n === 'stripe') window.StripeOpen(); };
+  // badge: first count shortly after sign-in, then every 5 minutes
+  const tick = () => { if (typeof sb !== 'undefined' && typeof currentUser !== 'undefined' && currentUser) countUncoded().catch(() => {}); };
+  setTimeout(tick, 8000);
+  setInterval(tick, 5 * 60 * 1000);
 })();
 </script>
 </body>
