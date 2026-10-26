@@ -958,6 +958,7 @@
     #page-stripe .sp-chip.ok{color:var(--green);background:var(--green-bg);border-color:var(--green-border)}
     #page-stripe .sp-chip.ready{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-border)}
     #page-stripe .sp-chip.bad{color:var(--red);background:var(--red-bg);border-color:var(--red-border)}
+    #page-stripe .sp-chip.sq{color:var(--text);background:var(--bg3);border-color:var(--border)}
     #page-stripe .sp-chip.mute{color:var(--text3);background:var(--bg3);border-color:var(--border)}
     #page-stripe .sp-err{font-size:12.5px;color:var(--red);background:var(--red-bg);border:1px solid var(--red-border);border-radius:7px;padding:.45rem .65rem;margin:.4rem 0}
     #page-stripe .sp-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:.5rem}
@@ -1355,7 +1356,7 @@
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('labor')" id="nav-labor"><span>🧮</span> Payroll Accruals</div>
-        <div class="nav-item" onclick="showPage('stripe')" id="nav-stripe"><span>💳</span> Stripe Payouts <span class="nav-badge" id="stripeBadge" style="display:none" title="Stripe payouts waiting to be coded for your clients">0</span></div>
+        <div class="nav-item" onclick="showPage('stripe')" id="nav-stripe"><span>💳</span> Stripe &amp; Square <span class="nav-badge" id="stripeBadge" style="display:none" title="Stripe and Square deposits waiting to be coded for your clients">0</span></div>
         <div class="nav-section">Monthly Tools</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
         <!-- Marketing holds only Prospects today, which is permission-gated, so
@@ -1757,13 +1758,13 @@
 
       <!-- STRIPE PAYOUTS — added 2026-10-26. Script at the end of the file (search "STRIPE PAYOUTS"). -->
       <div class="page" id="page-stripe">
-        <div class="page-header"><div><div class="page-title">Stripe Payouts</div><div class="page-sub">One journal entry per Stripe deposit &#8212; pick the account, post it to QuickBooks to Undeposited Funds</div></div></div>
+        <div class="page-header"><div><div class="page-title">Stripe &amp; Square Payouts</div><div class="page-sub">One journal entry per Stripe or Square deposit &#8212; pick the account, post it to QuickBooks to Undeposited Funds</div></div></div>
         <div class="sp-panel">
           <div class="sp-controls">
             <div class="sp-field"><label for="spClient">Client</label><select id="spClient" style="min-width:240px"></select></div>
             <div class="sp-field"><label for="spShow">Show</label>
               <select id="spShow"><option value="uncoded">To code</option><option value="posted">Posted</option><option value="skipped">Skipped</option><option value="all">All</option></select></div>
-            <button class="sp-ghost" id="spPull">Pull from Stripe now</button>
+            <button class="sp-ghost" id="spPull">Pull now</button>
             <button class="sp-ghost" id="spSettingsBtn">Settings</button>
           </div>
           <div class="sp-meta" id="spMeta"></div>
@@ -21422,7 +21423,7 @@ init();
     tasks:     { label: 'Tasks',            icon: '☀', unit: ['task overdue or stuck', 'tasks overdue or stuck'] },
     stmtmail:  { label: 'Statement emails', icon: '✉️', unit: ['email in To file', 'emails in To file'] },
     held:      { label: 'Held statements',  icon: '⏸', unit: ['statement held', 'statements held'] },
-    stripe:    { label: 'Stripe payouts',   icon: '💳', unit: ['payout to code', 'payouts to code'] },
+    stripe:    { label: 'Stripe & Square payouts',   icon: '💳', unit: ['payout to code', 'payouts to code'] },
   };
   const ORDER = ['tasks', 'questions', 'notes', 'closed', 'sales', 'stripe', 'uf', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
 
@@ -21669,7 +21670,7 @@ init();
     ];
     if (mine.size) {
       jobs.push(['Expo', () => srcExpo(mine)], ['Review Queue', () => srcRq(mine)], ['Receipts', () => srcReceipts(mine)],
-                ['Daily sales', () => srcSales(mine)], ['Stripe payouts', () => srcStripe(mine)], ['Statements', () => srcStatements(mine)],
+                ['Daily sales', () => srcSales(mine)], ['Stripe & Square payouts', () => srcStripe(mine)], ['Statements', () => srcStatements(mine)],
                 ['Undeposited Funds', () => srcUf(mine)], ['Closed months', () => srcClosed(mine)]);
     }
     if (isOwnerSelf()) jobs.push(['Statement emails', srcStatementEmails], ['Held statements', srcHeld]);
@@ -21883,7 +21884,8 @@ init();
   const dow = iso => iso ? new Date(String(iso).slice(0, 10) + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short' }) : '';
   const clientName = id => { const c = (typeof findClientAny === 'function') ? findClientAny(id) : null; return c ? c.name : id; };
   const LS_KEY = 'bg_stripe_client';
-  const KIND = { charge: 'Charge', refund: 'Refund', dispute: 'Dispute', fee: 'Stripe fee', other: 'Other' };
+  const KIND = { charge: 'Charge', refund: 'Refund', dispute: 'Dispute', fee: 'Fee', other: 'Other' };
+  const brand = p => p && p.provider === 'square' ? 'Square' : 'Stripe';
 
   const S = {
     conns: [], clientId: '', show: 'uncoded', payouts: [], lines: {}, accounts: {}, previews: {},
@@ -21918,7 +21920,7 @@ init();
   const conn = () => S.conns.find(c => c.client_id === S.clientId) || null;
   // a client can have several Stripe accounts (one connection row each)
   const connsFor = id => S.conns.filter(c => c.client_id === id);
-  const acctName = c => c.label || String(c.secret_name || '').replace(/^STRIPE_KEY_/, '').replace(/_/g, ' ');
+  const acctName = c => c.label || String(c.secret_name || '').replace(/^(STRIPE|SQUARE)_KEY_/, '').replace(/_/g, ' ');
   const clientIds = () => [...new Set(S.conns.map(c => c.client_id))];
 
   async function call(body) {
@@ -21945,7 +21947,7 @@ init();
   // ---------------------------------------------------------------- data
   async function loadConns() {
     const { data, error } = await sb.from('stripe_connections').select('*');
-    if (error) { setStatus('Couldn’t load Stripe clients: ' + error.message, true); S.conns = []; return; }
+    if (error) { setStatus('Couldn’t load clients: ' + error.message, true); S.conns = []; return; }
     S.conns = (data || []).sort((a, b) => clientName(a.client_id).localeCompare(clientName(b.client_id)));
   }
   async function loadPayouts() {
@@ -21960,8 +21962,12 @@ init();
       (ls || []).forEach(l => (S.lines[l.payout_id] = S.lines[l.payout_id] || []).push(l));
     }
     Object.values(S.lines).forEach(a => a.sort((x, y) => String(x.created_local).localeCompare(String(y.created_local))));
-    const last = S.payouts.filter(p => p.status === 'posted' && p.sales_account_id).sort((a, b) => String(b.posted_at).localeCompare(String(a.posted_at)))[0];
+    const posted = S.payouts.filter(p => p.status === 'posted' && p.sales_account_id).sort((a, b) => String(b.posted_at).localeCompare(String(a.posted_at)));
+    const last = posted[0];
     if (last) S.suggestion = { id: last.sales_account_id, label: last.sales_account_label };
+    // per provider: a Square deposit suggests the account last used on a Square deposit
+    S.suggestionBy = {};
+    posted.forEach(p => { const k = p.provider || 'stripe'; if (!S.suggestionBy[k]) S.suggestionBy[k] = { id: p.sales_account_id, label: p.sales_account_label }; });
   }
 
   async function savePayoutAccount(pid, acct) {
@@ -22027,17 +22033,18 @@ init();
     const editable = p.status === 'uncoded' || p.status === 'failed';
     const open = S.open[p.id] != null ? S.open[p.id] : editable;
     const sales = ls.filter(l => l.kind === 'charge' && !l.before_acquisition);
-    const salesAcctId = p.sales_account_id || (editable && S.suggestion ? S.suggestion.id : '');
+    const sug = (S.suggestionBy && S.suggestionBy[p.provider || 'stripe']) || S.suggestion;
+    const salesAcctId = p.sales_account_id || (editable && sug ? sug.id : '');
     const suggested = !p.sales_account_id && salesAcctId;
     let h = '<div class="sp-card" data-pid="' + esc(p.id) + '">';
     h += '<div class="sp-head" data-act="toggle"><div><div class="sp-name">' + esc(dow(p.arrival_date)) + ' ' + esc(mdy(p.arrival_date)) +
-      ' · ' + money(p.amount) + ' deposit ' + chip(p) + '</div><div class="sp-sub">' + esc(summary(p)) +
+      ' · ' + money(p.amount) + ' deposit ' + (p.provider === 'square' ? '<span class="sp-chip sq">Square</span> ' : '') + chip(p) + '</div><div class="sp-sub">' + esc(summary(p)) +
       (p.status === 'posted' && p.posted_by ? ' · posted by ' + esc(p.posted_by) : '') +
-      (connsFor(p.client_id).length > 1 ? ' · ' + esc(acctName(connsFor(p.client_id).find(x => x.secret_name === p.secret_name) || { secret_name: p.secret_name || '' })) + ' account' : '') +
+      (connsFor(p.client_id).length > 1 && p.provider !== 'square' ? ' · ' + esc(acctName(connsFor(p.client_id).find(x => x.secret_name === p.secret_name) || { secret_name: p.secret_name || '' })) + ' account' : '') +
       '</div></div><div class="sp-sub">' + (open ? '▾' : '▸') + '</div></div>';
     if (!open) return h + '</div>';
     h += '<div class="sp-body">';
-    if (!p.ties) h += '<div class="sp-err">The transactions Stripe lists for this payout don’t add up to the deposit yet. It will refresh on the next pull.</div>';
+    if (!p.ties) h += '<div class="sp-err">The transactions ' + brand(p) + ' lists for this payout don’t add up to the deposit yet. It will refresh on the next pull.</div>';
     if (p.error && p.status === 'failed') h += '<div class="sp-err">' + esc(p.error) + '</div>';
     if (sales.length) {
       h += '<div class="sp-row"><label>Default account for charges</label>' +
@@ -22071,7 +22078,7 @@ init();
           acct += '</div>';
         }
       }
-      h += '<tr' + (needsOwn(l) ? ' class="own"' : '') + '><td>' + esc(mdy(l.created_local)) + '</td><td>' + esc(who || '(none)') + flag + '</td><td>' + esc(KIND[l.kind] || l.kind) +
+      h += '<tr' + (needsOwn(l) ? ' class="own"' : '') + '><td>' + esc(mdy(l.created_local)) + '</td><td>' + esc(who || '(none)') + flag + '</td><td>' + esc(l.kind === 'fee' ? brand(p) + ' fee' : (KIND[l.kind] || l.kind)) +
         '</td><td class="n">' + money(l.gross) + '</td><td class="n">' + money(-l.fee) + '</td><td class="n">' + money(l.net) + '</td><td>' + acct + '</td></tr>';
       if (splits) h += splitRow(l, splits, accts, editable);
     }
@@ -22110,7 +22117,7 @@ init();
             const n = S.counts && S.counts[id] ? ' (' + S.counts[id] + ' to code)' : '';
             return '<option value="' + esc(id) + '"' + (id === S.clientId ? ' selected' : '') + '>' + esc(clientName(id) + n) + '</option>';
           }).join('')
-        : '<option value="">No clients connected to Stripe yet</option>';
+        : '<option value="">No clients connected to Stripe or Square yet</option>';
     }
     if ($('spShow')) $('spShow').value = S.show;
     const c = conn();
@@ -22118,7 +22125,7 @@ init();
     if (meta) {
       const cs = connsFor(S.clientId);
       const when = x => x.last_pulled_at ? new Date(x.last_pulled_at).toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
-      meta.innerHTML = c ? (cs.length > 1 ? cs.length + ' Stripe accounts (' + cs.map(x => esc(acctName(x))).join(', ') + ') · ' : '') +
+      meta.innerHTML = c ? (cs.length > 1 ? cs.length + ' accounts (' + cs.map(x => esc(acctName(x))).join(', ') + ') · ' : '') +
         'Pulls payouts that arrived on or after ' + esc(mdy(c.start_date)) +
         (c.acquisition_date ? ' · charges before ' + esc(mdy(c.acquisition_date)) + ' are flagged as the prior owner’s' : '') +
         ' · last pulled ' + esc(when(c)) +
@@ -22148,9 +22155,9 @@ init();
     el.style.display = S.showSettings ? '' : 'none';
     if (!S.showSettings) return;
     const c = conn();
-    if (!c) { el.innerHTML = '<div class="sp-muted">No Stripe connection for this client.</div>'; return; }
+    if (!c) { el.innerHTML = '<div class="sp-muted">No Stripe or Square connection for this client.</div>'; return; }
     el.innerHTML =
-      '<div class="sp-row"><label>Stripe fee account</label>' + acctSelect('id="spFeeAcct"', c.fee_account_id || '', accts) +
+      '<div class="sp-row"><label>' + (connsFor(S.clientId).some(x => x.provider === 'square') ? 'Processing fee account' : 'Stripe fee account') + '</label>' + acctSelect('id="spFeeAcct"', c.fee_account_id || '', accts) +
         (c.fee_account_id ? '' : '<span class="sp-err-t">Needed before anything can post</span>') + '</div>' +
       '<div class="sp-row"><label>Charges include sales tax</label><input type="number" step="0.001" min="0" id="spTaxRate" class="sp-amt" placeholder="none" value="' + esc(c.tax_rate == null ? '' : String(Number(c.tax_rate))) + '"> %' +
         acctSelect('id="spTaxAcct"', c.tax_account_id || '', accts, '— sales tax account —') +
@@ -22158,9 +22165,9 @@ init();
       '<div class="sp-row"><label>Undeposited Funds</label><span>' + (c.uf_account_label ? esc(c.uf_account_label) : '<span class="sp-muted">found automatically on the first preview</span>') + '</span></div>' +
       '<div class="sp-row"><label>Pull payouts arriving on or after</label><input type="date" id="spStart" value="' + esc(c.start_date || '') + '"></div>' +
       '<div class="sp-row"><label>Acquisition date (optional)</label><input type="date" id="spAcq" value="' + esc(c.acquisition_date || '') + '"><span class="sp-muted">Charges made before it are flagged on their own line. Applies to payouts pulled after you change it.</span></div>' +
-      '<div class="sp-row"><label>Stripe account' + (connsFor(S.clientId).length > 1 ? 's' : '') + '</label><span>' +
+      '<div class="sp-row"><label>Account' + (connsFor(S.clientId).length > 1 ? 's' : '') + '</label><span>' +
         connsFor(S.clientId).map(x => esc(acctName(x)) + ' <code>' + esc(x.secret_name) + '</code>').join(' · ') + '</span></div>' +
-      '<div class="sp-muted">Fee account and dates apply to all of this client’s Stripe accounts.</div>';
+      '<div class="sp-muted">Fee account, tax and dates apply to all of this client’s accounts.</div>';
   }
 
   // ---------------------------------------------------------------- actions
@@ -22207,11 +22214,12 @@ init();
     const b = $('spPull'); if (b) { b.disabled = true; b.textContent = 'Pulling…'; }
     try {
       const r = await call({ action: 'pull', client_id: S.clientId });
-      const x = (r.results || [])[0] || {};
-      if (x.error) setStatus('Pull failed: ' + x.error, true);
-      else setStatus('Pulled: ' + (x.added || 0) + ' new payout' + (x.added === 1 ? '' : 's') + (x.refreshed ? ', ' + x.refreshed + ' refreshed' : '') + '.');
+      const rs = r.results || [];
+      const bad = rs.filter(x => x.error), added = rs.reduce((s, x) => s + (x.added || 0), 0), refreshed = rs.reduce((s, x) => s + (x.refreshed || 0), 0);
+      if (bad.length) setStatus('Pull failed: ' + bad.map(x => x.error).join('; '), true);
+      else setStatus('Pulled: ' + added + ' new payout' + (added === 1 ? '' : 's') + (refreshed ? ', ' + refreshed + ' refreshed' : '') + '.');
     } catch (e) { setStatus('Pull failed: ' + e.message, true); }
-    if (b) { b.disabled = false; b.textContent = 'Pull from Stripe now'; }
+    if (b) { b.disabled = false; b.textContent = 'Pull now'; }
     await loadConns();
     await reloadClient(true);
   }
