@@ -21887,6 +21887,10 @@ init();
   function needsOwn(l) { return l.kind !== 'fee' && (l.kind !== 'charge' || l.before_acquisition); }
   function setStatus(msg, isErr) { S.status = msg || ''; S.statusErr = !!isErr; const el = $('spStatus'); if (el) { el.textContent = S.status; el.className = 'sp-status' + (isErr ? ' err' : ''); } }
   const conn = () => S.conns.find(c => c.client_id === S.clientId) || null;
+  // a client can have several Stripe accounts (one connection row each)
+  const connsFor = id => S.conns.filter(c => c.client_id === id);
+  const acctName = c => c.label || String(c.secret_name || '').replace(/^STRIPE_KEY_/, '').replace(/_/g, ' ');
+  const clientIds = () => [...new Set(S.conns.map(c => c.client_id))];
 
   async function call(body) {
     const { data, error } = await sb.functions.invoke('stripe-sync', { body });
@@ -21950,7 +21954,7 @@ init();
   async function saveConn(patch) {
     const { error } = await sb.from('stripe_connections').update(patch).eq('client_id', S.clientId);
     if (error) { setStatus('Save failed: ' + error.message, true); return false; }
-    Object.assign(conn() || {}, patch); S.previews = {};
+    connsFor(S.clientId).forEach(c => Object.assign(c, patch)); S.previews = {};
     setStatus('Saved.');
     return true;
   }
@@ -21992,7 +21996,9 @@ init();
     let h = '<div class="sp-card" data-pid="' + esc(p.id) + '">';
     h += '<div class="sp-head" data-act="toggle"><div><div class="sp-name">' + esc(dow(p.arrival_date)) + ' ' + esc(mdy(p.arrival_date)) +
       ' · ' + money(p.amount) + ' deposit ' + chip(p) + '</div><div class="sp-sub">' + esc(summary(p)) +
-      (p.status === 'posted' && p.posted_by ? ' · posted by ' + esc(p.posted_by) : '') + '</div></div><div class="sp-sub">' + (open ? '▾' : '▸') + '</div></div>';
+      (p.status === 'posted' && p.posted_by ? ' · posted by ' + esc(p.posted_by) : '') +
+      (connsFor(p.client_id).length > 1 ? ' · ' + esc(acctName(connsFor(p.client_id).find(x => x.secret_name === p.secret_name) || { secret_name: p.secret_name || '' })) + ' account' : '') +
+      '</div></div><div class="sp-sub">' + (open ? '▾' : '▸') + '</div></div>';
     if (!open) return h + '</div>';
     h += '<div class="sp-body">';
     if (!p.ties) h += '<div class="sp-err">The transactions Stripe lists for this payout don’t add up to the deposit yet. It will refresh on the next pull.</div>';
@@ -22049,9 +22055,9 @@ init();
     const sel = $('spClient');
     if (sel) {
       sel.innerHTML = S.conns.length
-        ? S.conns.map(c => {
-            const n = S.counts && S.counts[c.client_id] ? ' (' + S.counts[c.client_id] + ' to code)' : '';
-            return '<option value="' + esc(c.client_id) + '"' + (c.client_id === S.clientId ? ' selected' : '') + '>' + esc(clientName(c.client_id) + n) + '</option>';
+        ? clientIds().map(id => {
+            const n = S.counts && S.counts[id] ? ' (' + S.counts[id] + ' to code)' : '';
+            return '<option value="' + esc(id) + '"' + (id === S.clientId ? ' selected' : '') + '>' + esc(clientName(id) + n) + '</option>';
           }).join('')
         : '<option value="">No clients connected to Stripe yet</option>';
     }
@@ -22059,10 +22065,13 @@ init();
     const c = conn();
     const meta = $('spMeta');
     if (meta) {
-      meta.innerHTML = c ? 'Pulls payouts that arrived on or after ' + esc(mdy(c.start_date)) +
+      const cs = connsFor(S.clientId);
+      const when = x => x.last_pulled_at ? new Date(x.last_pulled_at).toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
+      meta.innerHTML = c ? (cs.length > 1 ? cs.length + ' Stripe accounts (' + cs.map(x => esc(acctName(x))).join(', ') + ') · ' : '') +
+        'Pulls payouts that arrived on or after ' + esc(mdy(c.start_date)) +
         (c.acquisition_date ? ' · charges before ' + esc(mdy(c.acquisition_date)) + ' are flagged as the prior owner’s' : '') +
-        ' · last pulled ' + (c.last_pulled_at ? esc(new Date(c.last_pulled_at).toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' })) : 'never') +
-        (c.last_pull_error ? ' · <span class="sp-err-t">last pull failed: ' + esc(c.last_pull_error) + '</span>' : '') : '';
+        ' · last pulled ' + esc(when(c)) +
+        cs.filter(x => x.last_pull_error).map(x => ' · <span class="sp-err-t">' + (cs.length > 1 ? esc(acctName(x)) + ': ' : '') + 'last pull failed: ' + esc(x.last_pull_error) + '</span>').join('') : '';
     }
     const accts = S.clientId ? await getAccounts(S.clientId) : [];
     renderSettings(accts);
@@ -22095,7 +22104,9 @@ init();
       '<div class="sp-row"><label>Undeposited Funds</label><span>' + (c.uf_account_label ? esc(c.uf_account_label) : '<span class="sp-muted">found automatically on the first preview</span>') + '</span></div>' +
       '<div class="sp-row"><label>Pull payouts arriving on or after</label><input type="date" id="spStart" value="' + esc(c.start_date || '') + '"></div>' +
       '<div class="sp-row"><label>Acquisition date (optional)</label><input type="date" id="spAcq" value="' + esc(c.acquisition_date || '') + '"><span class="sp-muted">Charges made before it are flagged on their own line. Applies to payouts pulled after you change it.</span></div>' +
-      '<div class="sp-row"><label>Stripe key secret</label><code>' + esc(c.secret_name) + '</code></div>';
+      '<div class="sp-row"><label>Stripe account' + (connsFor(S.clientId).length > 1 ? 's' : '') + '</label><span>' +
+        connsFor(S.clientId).map(x => esc(acctName(x)) + ' <code>' + esc(x.secret_name) + '</code>').join(' · ') + '</span></div>' +
+      '<div class="sp-muted">Fee account and dates apply to all of this client’s Stripe accounts.</div>';
   }
 
   // ---------------------------------------------------------------- actions
