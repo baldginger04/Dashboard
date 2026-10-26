@@ -22230,8 +22230,9 @@ init();
     const out = {};
     (data || []).forEach(r => { out[r.client_id] = (out[r.client_id] || 0) + 1; });
     S.counts = out;
-    const mine = (typeof myClientIdSet === 'function') ? myClientIdSet() : null;
-    const n = Object.keys(out).filter(id => !mine || mine.has(id)).reduce((s, id) => s + out[id], 0);
+    // badge = payouts waiting on ME: clients where I'm the preparer (same rule as Needs Me)
+    const me = (typeof getViewingUserName === 'function') ? getViewingUserName() : '';
+    const n = Object.keys(out).filter(id => { const c = findClientAny(id); return c && c.preparer === me; }).reduce((s, id) => s + out[id], 0);
     const b = $('stripeBadge'); if (b) { b.textContent = n; b.style.display = n ? '' : 'none'; }
     return out;
   }
