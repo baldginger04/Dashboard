@@ -798,6 +798,8 @@
     #page-flbz .flbz-meta{font-size:11.5px;color:var(--text3);margin-top:.35rem}
     #page-flbz .flbz-src{opacity:.75}
     #page-flbz .flbz-warn{margin:.5rem 0 0;padding-left:1.1rem;font-size:12px;color:var(--yellow)}
+    #page-flbz .flbz-review{margin:.55rem 0 0;padding:.55rem .7rem;font-size:12.5px;color:var(--text);background:var(--yellow-bg);border:1px solid var(--yellow);border-radius:7px}
+    #page-flbz .flbz-review b{color:var(--yellow)}
     #page-flbz .flbz-err{font-size:12.5px;color:var(--red);margin-top:.35rem;white-space:pre-wrap}
     #page-flbz .flbz-details{margin-top:.6rem}
     #page-flbz .flbz-details summary{font-size:12px;color:var(--text2);cursor:pointer}
@@ -14332,19 +14334,25 @@ init();
           '<div class="flbz-err">' + esc(p.error) + '</div></div>';
       }
       const bal = p.balanced;
-      const warn = (p.warnings || []).map(w => '<li>' + esc(w) + '</li>').join('');
+      // 10/27/26: the tax-status fallback message gets its own box, so keep
+      // it out of the ordinary warning list.
+      const rv = p.review;
+      const warn = (p.warnings || []).filter(w => !(rv && w === rv.message))
+        .map(w => '<li>' + esc(w) + '</li>').join('');
       return '<div class="flbz-card">' +
         '<div class="flbz-head">' +
           '<div class="flbz-title">' + esc(p.journal_date) + ' \u00b7 ' + esc(p.journal_no) + '</div>' +
           '<span class="flbz-badge ' + (bal ? 'b-ok' : 'b-error') + '">' +
             (bal ? 'balanced' : 'DOES NOT BALANCE') + '</span>' +
           '<span class="flbz-badge b-pending" id="flbzState' + i + '">awaiting review</span>' +
+          (rv ? '<span class="flbz-badge b-error">tape disagrees with itself</span>' : '') +
         '</div>' +
         '<div class="flbz-meta">' +
           'Items in Transit <b>' + money(p.items_in_transit) + '</b> \u00b7 ' +
           'debits ' + money(p.debits) + ' \u00b7 credits ' + money(p.credits) + ' \u00b7 ' +
           (p.lines || []).length + ' lines \u00b7 <span class="flbz-src">' + esc(p.file) + '</span>' +
         '</div>' +
+        (rv ? '<div class="flbz-review"><b>Booked from Tax Status figures.</b> ' + esc(rv.message) + '</div>' : '') +
         (warn ? '<ul class="flbz-warn">' + warn + '</ul>' : '') +
         '<details class="flbz-details"><summary>Show the ' + (p.lines || []).length + ' lines</summary>' +
           '<table class="flbz-table"><thead><tr><th>Account</th><th>Description</th>' +
@@ -14377,9 +14385,13 @@ init();
   async function postOne(date, btn) {
     const p = S.parsed.find(x => x.sales_date === date);
     const idx = S.parsed.indexOf(p);
+    const rv = p && p.review;
     if (!confirm('Post ' + date + ' to First Light Books\u2019 QuickBooks?\n\n' +
       'Items in Transit ' + money(p && p.items_in_transit) + ', ' +
       ((p && p.lines || []).length) + ' lines, total ' + money(p && p.debits) + '.\n\n' +
+      (rv ? '\u26a0 THIS TAPE DISAGREES WITH ITSELF\n' + rv.message + '\n\n' +
+        'OK confirms you have reviewed this and want ' + rv.department + ' booked at ' +
+        money(rv.tax_status_retail) + '.\n\n' : '') +
       'This creates a real journal entry.')) return;
 
     btn.disabled = true;
@@ -14388,7 +14400,7 @@ init();
     const state = $('flbzState' + idx);
     const out = $('flbzResult' + idx);
     try {
-      const d = await invoke({ action: 'post', sales_date: date });
+      const d = await invoke({ action: 'post', sales_date: date, acknowledged: !!rv });
       if (state) { state.textContent = 'posted'; state.className = 'flbz-badge b-ok'; }
       let msg = 'Posted as journal entry ' + esc(d.qbo_je_id) + ' (' + esc(d.doc_number) + '), ' +
         d.line_count + ' lines.';
@@ -14426,7 +14438,12 @@ init();
           '<td><span class="flbz-badge ' + cls + '">' + esc(e.status) + '</span></td>' +
           '<td class="num">' + money(t.debits) + '</td>' +
           '<td>' + esc(e.qbo_je_id || '') + '</td>' +
-          '<td class="flbz-note">' + esc(e.error_message || (t.warnings && t.warnings.length ? t.warnings.length + ' warning(s)' : '')) + '</td>' +
+          '<td class="flbz-note">' + esc(e.error_message || (t.review
+            ? (e.status === 'posted'
+              ? 'Booked from Tax Status (' + t.review.department + ' ' + money(t.review.tax_status_retail) +
+                ')' + (t.review.acknowledged_by ? ', confirmed by ' + t.review.acknowledged_by : '')
+              : 'Tape disagrees with itself \u2014 confirm on Post')
+            : (t.warnings && t.warnings.length ? t.warnings.length + ' warning(s)' : ''))) + '</td>' +
           '<td>' + (e.status === 'posted' && e.qbo_je_id
             ? '<button class="flbz-unpost" data-unpost="' + esc(e.sales_date) + '">Unpost</button>'
             : ((e.status === 'pending' || e.status === 'error') && t.journal_no && Number(t.debits) > 0
@@ -14449,9 +14466,13 @@ init();
     const e = S.entries.find(x => x.sales_date === date);
     if (!e) return;
     const t = e.totals || {};
+    const rv = t.review;
     if (!confirm('Post ' + date + ' to First Light Books\u2019 QuickBooks?\n\n' +
       (t.journal_no || date) + ', Items in Transit ' + money(t.items_in_transit) +
       ', total ' + money(t.debits) + '.\n\n' +
+      (rv ? '\u26a0 THIS TAPE DISAGREES WITH ITSELF\n' + rv.message + '\n\n' +
+        'OK confirms you have reviewed this and want ' + rv.department + ' booked at ' +
+        money(rv.tax_status_retail) + '.\n\n' : '') +
       'This creates a real journal entry.')) {
       setStatus('Not posted \u2014 ' + date + ' is still pending.');
       return;
@@ -14459,7 +14480,7 @@ init();
     btn.disabled = true;
     btn.textContent = 'Posting\u2026';
     try {
-      const d = await invoke({ action: 'post', sales_date: date });
+      const d = await invoke({ action: 'post', sales_date: date, acknowledged: !!rv });
       let msg = date + ' posted as journal entry ' + d.qbo_je_id + ' (' + d.doc_number + '), ' +
         d.line_count + ' lines.';
       const warn = [d.token_store_warning, d.log_write_warning].filter(Boolean);
