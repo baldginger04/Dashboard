@@ -5618,19 +5618,18 @@ function renderUpcomingTasks() {
   const container = document.getElementById('taskContent');
   const today = tzToday();
 
-  // Upcoming = future-dated tasks. Hide parent tasks whose subtasks already
-  // cover the workflow (subtasks are edited inside the parent task modal);
-  // hide Done tasks; only show tasks with next_due > today.
+  // Upcoming = future-dated tasks. Hide Done tasks; only show tasks with
+  // next_due > today. Multi-step tasks are shown as ONE collapsed row with a
+  // step count (e.g. "0/4 steps") rather than their individual steps — before
+  // 10/27 they were hidden entirely, so a task with steps never appeared here.
   // Also hide the three review tasks (P&L, Balance Sheet, Cash Flows) when
   // "Ready for Review" hasn't been completed yet for this client.
-  const parentIds = new Set(clientSubtasks.map(s => s.task_id));
   // Future-dated close tasks are hidden from Current Tasks until they're due,
   // so (only while the close is active) they surface here instead — that way
   // they're always findable somewhere.
   const closeActiveHere = (allClients.find(c => c.id === currentClientId) || {}).close_status === 'In Progress';
   const isUpcoming = t => {
     if (t.status === 'Done') return false;
-    if (parentIds.has(t.id)) return false;
     // Close tasks aren't cadence-driven: they only count as "upcoming" while
     // a close is actually in progress for this client.
     if (isCloseCat(t.category) && !closeActiveHere) return false;
@@ -5675,7 +5674,7 @@ function renderUpcomingTasks() {
         </div>
       </div>
       <div>`;
-    tasks.forEach(t => { html += renderTaskItem(t, today); });
+    tasks.forEach(t => { html += renderTaskItem(t, today, { collapseSteps: true }); });
     html += `<button class="add-task-btn" onclick="openTaskModal('${currentClientId}','${cat}')">+ Add Task</button></div></div>`;
   });
   html += `<button class="btn btn-secondary" style="margin-top:.5rem" onclick="openTaskModal('${currentClientId}')">+ Add Task in new category</button>`;
@@ -5886,8 +5885,12 @@ function toggleCompleted(cat) {
   renderTasks();
 }
 
-function renderTaskItem(task, today) {
+// opts.collapseSteps (Upcoming tab): show a multi-step task as one row with a
+// "done/total steps" badge instead of listing each step with its checkbox, so
+// future steps can't be ticked early from Upcoming.
+function renderTaskItem(task, today, opts = {}) {
   const subs = clientSubtasks.filter(s => s.task_id === task.id);
+  const collapse = !!opts.collapseSteps && subs.length > 0;
   const isDone = task.status === 'Done';
   // Days overdue from `today` (YYYY-MM-DD, Central) back to task.next_due.
   // Both anchored at UTC noon for safe date arithmetic.
@@ -5903,7 +5906,7 @@ function renderTaskItem(task, today) {
   const checkClass = isDone ? 'done' : isOverdue ? 'overdue-check' : '';
 
   let subsHtml = '';
-  if (subs.length) {
+  if (subs.length && !collapse) {
     subsHtml = '<div class="subtask-list">';
     subs.forEach(s => {
       const blocker = s.blocked_by ? clientSubtasks.find(x => x.id === s.blocked_by) : null;
@@ -5976,6 +5979,7 @@ function renderTaskItem(task, today) {
         ${task.status === 'Waiting on Client' ? '<span class="status-pill waiting">Waiting on Client</span>' : ''}
         ${task.status === 'Stuck' ? '<span class="status-pill stuck">Stuck</span>' : ''}
         ${task.frequency ? `<span class="task-freq-badge">${freqLabel(task.frequency, task.frequency_interval)}</span>` : ''}
+        ${collapse ? `<span class="task-freq-badge" title="${subs.map(s => s.title).join(' → ').replace(/"/g, '&quot;')}">${subs.filter(s => s.status === 'Done').length}/${subs.length} steps</span>` : ''}
         ${task.next_due && !isDone ? `<span class="task-due ${isOverdue ? 'overdue' : ''}">Due ${fmtDue(task.next_due)}${isOverdue ? ` · ${daysOverdue}d overdue` : ''}</span>` : ''}
       </div>
       ${completedAt}
