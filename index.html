@@ -10211,7 +10211,9 @@ async function InvLibSaveGl(i){
   const a=L.acct||{}; const qid=a.byId&&a.byId[code]?a.byId[code].id:null;
   const before={ code:r.gl_account||null, qid:r.qbo_account_id||null };
   const sameCode = r.in_library && code===r.gl_account;
-  if(sameCode && !retro){ InvLibEdit(null); return; }
+  // Typing an account without picking it from the list leaves the old one
+  // selected — say so instead of closing as if it saved (2026-10-26).
+  if(sameCode && !retro){ invToast('That\u2019s already the account for this item — nothing changed. To change it, type the account and click it in the list (or press Enter), then Save.'); return; }
   let spread=null;
   if(!sameCode){
     const now=new Date().toISOString();
@@ -10576,6 +10578,35 @@ function InvLineSel(mode){
 // Learned coding reaches invoices ALREADY in the queue, not just future uploads:
 // same client + vendor + item, line still uncoded, invoice not yet posted. An invoice
 // left with nothing to code goes back for an automatic check (and posts if push is on).
+// ── LEARN ITEMS INTO THE LIBRARY (fixed 2026-10-26) ─────────────────────
+// Save coding / Code selected send every coded line's item to item_map in one
+// upsert. When the same item appeared on two lines of an invoice, the batch
+// held the same (client, vendor, item) twice and Postgres rejected the WHOLE
+// batch ("ON CONFLICT DO UPDATE command cannot affect row a second time") —
+// and the error was never checked, so the screen said "N items learned" while
+// nothing was learned. Now: one row per item; an item coded to two DIFFERENT
+// accounts on the same invoice isn't learned (it's ambiguous) and is named in
+// the message; a failed write is reported instead of hidden.
+async function invLearnItems(rows){
+  const byKey={}, conflicts=new Set();
+  for(const r of rows){
+    const k=r.match_key; if(!k) continue;
+    if(byKey[k] && byKey[k].gl_account!==r.gl_account) conflicts.add(k);
+    byKey[k]=r;
+  }
+  const learned=Object.keys(byKey).filter(k=>!conflicts.has(k)).map(k=>byKey[k]);
+  if(learned.length){
+    const { error }=await sb.from('item_map').upsert(learned,{onConflict:'client_id,vendor,match_key'});
+    if(error) return { learned:[], conflicts:[...conflicts], error:error.message||String(error) };
+  }
+  return { learned, conflicts:[...conflicts], error:null };
+}
+function invLearnNote(res){
+  let t='';
+  if(res.error) t+=' The item library was NOT updated ('+res.error+') — the invoice is coded, but Expo won\u2019t remember these items. Try Save again.';
+  if(res.conflicts.length) t+=' Not learned (coded to two different accounts on this invoice): '+res.conflicts.slice(0,5).join(', ')+(res.conflicts.length>5?'…':'')+'.';
+  return t;
+}
 async function InvSpreadCoding(inv, maps){
   const byMk={}; maps.forEach(m=>{ if(m.match_key) byMk[m.match_key]=m; });
   const mks=Object.keys(byMk); if(!mks.length) return { lines:0, invoices:0 };
@@ -10610,12 +10641,12 @@ async function InvCodeSelected(){
       await writeOrThrow(sb.from('invoice_lines').update({final_account:code,qbo_account_id:qid,needs_review:false}).eq('id',c.dataset.id),'Code lines');
     }
     const maps=picked.filter(c=>c.dataset.mk).map(c=>({client_id:inv.client_id,vendor:inv.vendor,match_key:c.dataset.mk,gl_account:code,qbo_account_id:qid,updated_at:new Date().toISOString()}));
-    if(maps.length) await sb.from('item_map').upsert(maps,{onConflict:'client_id,vendor,match_key'});
-    let spread=null; try{ spread=await InvSpreadCoding(inv, maps); }catch(e){ console.warn(e); }
+    const learn=await invLearnItems(maps);
+    let spread=null; try{ spread=await InvSpreadCoding(inv, learn.learned); }catch(e){ console.warn(e); }
     const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
     const status=(rem&&rem.length)?'needs_review':(inv.status==='approved'?'approved':'pending');
     await sb.from('invoice_queue').update({status,auto_checked_at:new Date().toISOString()}).eq('id',inv.id);
-    invToast(picked.length+' line'+(picked.length>1?'s':'')+' coded to '+InvAcctLabel(acct,code)+(maps.length?' — '+maps.length+' learned':'')+'.'+invSpreadCodeNote(spread),'ok');
+    invToast(picked.length+' line'+(picked.length>1?'s':'')+' coded to '+InvAcctLabel(acct,code)+(learn.learned.length?' — '+learn.learned.length+' item'+(learn.learned.length>1?'s':'')+' learned':'')+'.'+invSpreadCodeNote(spread)+invLearnNote(learn), learn.error?undefined:'ok');
     await InvLoadCounts(); await InvOpenInvoice(inv.id);
   }catch(e){ invToast(e.message||String(e)); }
 }
@@ -10760,12 +10791,12 @@ async function InvSaveCoding(){
     if(s.dataset.mk) mapRows.push({client_id:inv.client_id,vendor:inv.vendor,match_key:s.dataset.mk,gl_account:code,qbo_account_id:qid,updated_at:new Date().toISOString()}); }
   if(!lineUpdates.length){ invToast('Pick an account first.'); return; }
   for(const u of lineUpdates) await sb.from('invoice_lines').update({final_account:u.final_account,qbo_account_id:u.qbo_account_id,needs_review:false}).eq('id',u.id);
-  if(mapRows.length) await sb.from('item_map').upsert(mapRows,{onConflict:'client_id,vendor,match_key'});
-  let spread=null; try{ spread=await InvSpreadCoding(inv, mapRows); }catch(e){ console.warn(e); }
+  const learn=await invLearnItems(mapRows);
+  let spread=null; try{ spread=await InvSpreadCoding(inv, learn.learned); }catch(e){ console.warn(e); }
   const { data:rem }=await sb.from('invoice_lines').select('id').eq('invoice_id',inv.id).eq('needs_review',true).limit(1);
   const status=(rem&&rem.length)?'needs_review':'pending';
   await sb.from('invoice_queue').update({status,auto_checked_at:new Date().toISOString()}).eq('id',inv.id);
-  invToast((mapRows.length?('Saved — '+mapRows.length+' item'+(mapRows.length>1?'s':'')+' learned.'):'Saved.')+invSpreadCodeNote(spread), 'ok');
+  invToast((learn.learned.length?('Saved — '+learn.learned.length+' item'+(learn.learned.length>1?'s':'')+' learned.'):'Saved.')+invSpreadCodeNote(spread)+invLearnNote(learn), learn.error?undefined:'ok');
   await InvLoadCounts();
   await InvOpenInvoice(inv.id);
 }
