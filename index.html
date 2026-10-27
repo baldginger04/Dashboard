@@ -9777,7 +9777,10 @@ function InvRenderDetail(){
   const tgt=document.getElementById('invDetail');
   if(!tgt){ InvRenderShell(); return; }
   tgt.innerHTML=
-    '<div class="inv-bar" style="margin:0 0 4px"><button class="inv-back" style="margin:0" onclick="InvBack()">'+invBackLabel()+'</button><span class="inv-search-gap"></span><button class="inv-linkbtn" id="invShowDoc" style="'+(invDocHidden()?'':'display:none')+'" onclick="InvToggleDoc()">Show invoice</button></div>'+notConn
+    '<div class="inv-bar" style="margin:0 0 4px"><button class="inv-back" style="margin:0" onclick="InvBack()">'+invBackLabel()+'</button><span class="inv-search-gap"></span><button class="inv-linkbtn" id="invShowDoc" style="'+(invDocHidden()?'':'display:none')+'" onclick="InvToggleDoc()">Show invoice</button>'
+      // Delete lives up here (10/27) — at the bottom of a long invoice it sat beside the
+      // "lines still need an account" note, which read as if coding was required to delete.
+      +'<button class="btn btn-secondary btn-sm" style="margin-left:8px;color:var(--red);border-color:var(--red-border)" title="Delete — no coding needed" onclick="InvDelete()">Delete</button></div>'+notConn
     +(inv.review_reason&&inv.status!=='approved'?'<div class="inv-warnbar">'+(inv.status==='needs_review'?'<b>Why this needs you:</b> ':'')+invEsc(inv.review_reason)+'</div>':'')
     +'<div style="font-family:\'Hanken Grotesk\',sans-serif;font-size:20px;font-weight:700;color:var(--navy);margin:.2em 0">'+invEsc(inv.vendor||'—')+' <span class="inv-badge '+b[0]+'" style="vertical-align:middle">'+b[1]+'</span>'
     +(inv.status!=='pushed'?' <button class="inv-linkbtn" onclick="InvVendorPicker()">Match vendor in QuickBooks</button>':'')+'</div>'
@@ -9786,7 +9789,7 @@ function InvRenderDetail(){
     +'<div style="margin:8px 0 12px">'+(foots===null?'':foots?'<span class="inv-foot ok">✓ Balances — lines + tax = '+invMoney(grand)+'</span>':'<span class="inv-foot bad">✕ Off by '+invMoney(Math.abs(grand-Number(inv.total)))+' — computed '+invMoney(grand)+' vs '+invMoney(inv.total)+'</span>')+'</div>'
     +bulk
     +'<table class="inv-tbl"><thead><tr><th style="width:28px"><input type="checkbox" title="Select all lines" onclick="InvLineSel(this.checked?\'all\':\'none\')"></th><th>#</th><th>Item</th><th class="inv-r">Qty</th><th class="inv-r">Amount</th><th>GL account</th></tr></thead><tbody>'+products.map(lineRow).join('')+charges.map(lineRow).join('')+'</tbody></table>'
-    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" id="invApproveBtn" onclick="InvApprove()" '+((openReview>0||foots===false||inv.status==='approved')?'disabled':'')+'>'+(InvPushState(inv.client_id).live?'Approve &amp; post to QBO':'Approve for QBO')+'</button>'+(inv.status==='duplicate'?'<button class="btn btn-secondary" onclick="InvNotDuplicate()">Not a duplicate</button>':inv.status!=='pushed'?'<button class="btn btn-secondary" onclick="InvMarkDuplicate()">Duplicate</button>':'')+'<button class="btn btn-secondary" style="color:var(--red);border-color:var(--red-border)" onclick="InvDelete()">Delete</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account.':'All lines coded — ready to approve.')+'</span></div>'
+    +'<div class="inv-bar" style="margin-top:16px"><button class="btn btn-primary" onclick="InvSaveCoding()">Save coding</button><button class="btn btn-secondary" id="invApproveBtn" onclick="InvApprove()" '+((openReview>0||foots===false||inv.status==='approved')?'disabled':'')+'>'+(InvPushState(inv.client_id).live?'Approve &amp; post to QBO':'Approve for QBO')+'</button><span class="inv-note">'+(openReview>0?openReview+' line'+(openReview>1?'s':'')+' still need an account to approve.':'All lines coded — ready to approve.')+'</span>'+(inv.status==='duplicate'?'<button class="btn btn-secondary" onclick="InvNotDuplicate()">Not a duplicate</button>':inv.status!=='pushed'?'<button class="btn btn-secondary" onclick="InvMarkDuplicate()">Duplicate</button>':'')+'</div>'
     +InvPushBoxHtml(inv);
 }
 // CORRECT A LINE AMOUNT (2026-10-06): the extractor sometimes misreads a hard-to-
@@ -10961,6 +10964,9 @@ async function InvHandleUpload(input){
         }}).then(async(r)=>{
           if(r.error){
             await sb.from('invoice_queue').update({ status:'error', error_detail:String(r.error.message||r.error).slice(0,500) }).eq('id',ins.data.id);
+          }else if(r.data&&r.data.mode==='statement'){
+            // invoice-extract recognised a vendor statement (10/27) — it is never coded.
+            invToast('"'+(file&&file.name||'File')+'" is a vendor statement, not an invoice'+(r.data.routed?' — sent to the statement reconciler.':' — marked Error; put it in the client\'s Statements folder, then delete it here.'),'warn');
           }
           await InvRefresh();
         }).catch(async(e)=>{
