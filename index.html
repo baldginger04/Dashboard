@@ -22065,10 +22065,14 @@ init();
       const who = em && ds.toLowerCase().includes(em) ? ds : [l.customer_email, ds].filter(Boolean).join(' — ');
       const flag = l.before_acquisition ? ' <span class="sp-chip bad">before ' + esc(mdy(c.acquisition_date)) + ' · prior owner</span>' : '';
       const splits = Array.isArray(l.splits) && l.splits.length ? l.splits : null;
+      // Square: the card surcharge the customer paid posts to the fee account (contra expense)
+      const sur = !splits && l.kind === 'charge' && !l.before_acquisition && Array.isArray(l.parts)
+        ? l.parts.filter(x => x.surcharge).reduce((s, x) => s + cents(x.amount), 0) : 0;
+      if (sur) acct += '<div class="sp-muted">' + money((cents(l.gross) - sur) / 100) + ' here + ' + money(sur / 100) + ' surcharge → ' + esc(c.fee_account_label || 'fee account') + '</div>';
       if (splittable(l)) {
         if (splits) acct = '<b>Split · ' + splits.length + ' line' + (splits.length === 1 ? '' : 's') + '</b>';
         else if (taxOn() && !l.no_tax) {
-          const t = taxParts(l.gross);
+          const t = taxParts((cents(l.gross) - sur) / 100);
           acct += '<div class="sp-muted">' + money(t.base) + ' + ' + money(t.tax) + ' sales tax</div>';
         }
         if (editable) {
