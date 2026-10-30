@@ -21607,7 +21607,7 @@ init();
     tasks:     { label: 'Tasks',            icon: '☀', unit: ['task overdue or stuck', 'tasks overdue or stuck'] },
     stmtmail:  { label: 'Statement emails', icon: '✉️', unit: ['email in To file', 'emails in To file'] },
     held:      { label: 'Held statements',  icon: '⏸', unit: ['statement held', 'statements held'] },
-    stripe:    { label: 'Stripe & Square payouts',   icon: '💳', unit: ['payout to code', 'payouts to code'] },
+    stripe:    { label: 'Stripe · Square · Ande payouts',   icon: '💳', unit: ['payout to code', 'payouts to code'] },
   };
   const ORDER = ['tasks', 'questions', 'notes', 'closed', 'sales', 'stripe', 'uf', 'expo', 'rq', 'receipts', 'stmts', 'held', 'stmtmail'];
 
@@ -21854,7 +21854,7 @@ init();
     ];
     if (mine.size) {
       jobs.push(['Expo', () => srcExpo(mine)], ['Review Queue', () => srcRq(mine)], ['Receipts', () => srcReceipts(mine)],
-                ['Daily sales', () => srcSales(mine)], ['Stripe & Square payouts', () => srcStripe(mine)], ['Statements', () => srcStatements(mine)],
+                ['Daily sales', () => srcSales(mine)], ['Stripe · Square · Ande payouts', () => srcStripe(mine)], ['Statements', () => srcStatements(mine)],
                 ['Undeposited Funds', () => srcUf(mine)], ['Closed months', () => srcClosed(mine)]);
     }
     if (isOwnerSelf()) jobs.push(['Statement emails', srcStatementEmails], ['Held statements', srcHeld]);
@@ -22317,7 +22317,7 @@ init();
             const n = S.counts && S.counts[id] ? ' (' + S.counts[id] + ' to code)' : '';
             return '<option value="' + esc(id) + '"' + (id === S.clientId ? ' selected' : '') + '>' + esc(clientName(id) + n) + '</option>';
           }).join('')
-        : '<option value="">No clients connected to Stripe or Square yet</option>';
+        : '<option value="">No clients connected to Stripe, Square or Ande yet</option>';
     }
     if ($('spShow')) $('spShow').value = S.show;
     if ($('spAndeImport')) $('spAndeImport').style.display = S.conns.some(x => x.provider === 'ande') ? '' : 'none';
@@ -22357,7 +22357,7 @@ init();
     el.style.display = S.showSettings ? '' : 'none';
     if (!S.showSettings) return;
     const c = conn();
-    if (!c) { el.innerHTML = '<div class="sp-muted">No Stripe or Square connection for this client.</div>'; return; }
+    if (!c) { el.innerHTML = '<div class="sp-muted">No Stripe, Square or Ande connection for this client.</div>'; return; }
     el.innerHTML =
       '<div class="sp-row"><label>' + (connsFor(S.clientId).some(x => x.provider === 'square' || x.provider === 'ande') ? 'Processing fee account' : 'Stripe fee account') + '</label>' + acctSelect('id="spFeeAcct"', c.fee_account_id || '', accts) +
         (c.fee_account_id ? '' : '<span class="sp-err-t">Needed before anything can post</span>') + '</div>' +
