@@ -125,6 +125,7 @@
     /* BUTTONS */
     .btn{padding:7px 16px;border-radius:6px;font-family:'Inter',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;border:none;white-space:nowrap}
     .btn-primary{background:var(--accent);color:white}.btn-primary:hover{opacity:.88}
+    .sm-retry-btn{font-weight:700;box-shadow:0 0 0 2px rgba(216,91,49,.25)}.sm-retry-btn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
     .btn-secondary{background:white;color:var(--text2);border:1px solid var(--border)}.btn-secondary:hover{border-color:var(--accent);color:var(--accent)}
     .btn-ghost{background:transparent;color:var(--text3);border:1px solid transparent;padding:4px 8px;font-size:12px}.btn-ghost:hover{background:var(--bg3);color:var(--text)}
     .btn-sm{padding:5px 11px;font-size:12px}
@@ -1150,6 +1151,9 @@
     #page-rq .t-mute,#page-receipts .t-mute{background:var(--green-bg);color:var(--green)}
     #page-rq .t-wont,#page-receipts .t-wont{background:var(--yellow-bg);color:var(--yellow)}
     #page-rq .rq-sev.high,#page-receipts .rq-sev.high{font-size:10px;font-weight:700;text-transform:uppercase;color:var(--red);border:1px solid var(--red);border-radius:999px;padding:.05rem .4rem}
+    #page-rq .rq-kind{font-size:10px;font-weight:700;text-transform:uppercase;border-radius:999px;padding:.05rem .45rem;border:1px solid}
+    #page-rq .rq-kind.k-bill{color:#1B2A4B;border-color:#1B2A4B;background:#E8ECF4}
+    #page-rq .rq-kind.k-exp{color:#7A4B12;border-color:#C98A2E;background:#FBF1E1}
     #page-rq .rq-fix,#page-receipts .rq-fix{display:flex;gap:.45rem;align-items:center;flex-wrap:wrap;margin-top:.55rem}
     #page-rq .rq-fix label,#page-receipts .rq-fix label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:600}
     #page-rq .rq-fix input[type=text],#page-receipts .rq-fix input[type=text]{min-width:260px;flex:0 1 380px}
@@ -2389,6 +2393,11 @@
           #page-invoices .inv-checks .bad{color:var(--red)}
           /* 2026-10-12: type-to-filter account picker + recode past purchases */
           #page-invoices .inv-combo{position:relative;display:inline-block;vertical-align:middle}
+          #page-invoices .inv-newacct{border:1px solid var(--border,#ddd);border-radius:10px;padding:10px 12px;margin:6px 0 10px;background:#FBF8F1}
+          #page-invoices .inv-newacct-h{font-weight:700;color:var(--navy);margin-bottom:6px}
+          #page-invoices .inv-newacct-row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+          #page-invoices .inv-newacct-row label{display:flex;flex-direction:column;gap:3px;font-size:12px;font-weight:600}
+          #page-invoices .inv-newacct-row input,#page-invoices .inv-newacct-row select{padding:.35rem .45rem;border:1px solid var(--border,#ccc);border-radius:6px;font-size:13px}
           #page-invoices .inv-combo-in{padding:6px 26px 6px 8px;border:1px solid var(--border);border-radius:7px;background:#fff;min-width:230px;max-width:290px;width:100%;box-sizing:border-box;font-size:13px;font-family:inherit}
           #page-invoices .inv-split .inv-combo-in{min-width:170px}
           #page-invoices .inv-combo::after{content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;pointer-events:none}
@@ -9681,6 +9690,81 @@ async function InvGetAccounts(clientId){
 }
 function InvAcctLabel(acct, code){ if(!code) return '—'; if(acct.byId&&acct.byId[code]) return acct.byId[code].label; return acct.nameByCode[code]?(code+' · '+acct.nameByCode[code]):code; }
 
+// ── ADD AN ACCOUNT TO QUICKBOOKS FROM EXPO (2026-10-30) ─────────────────
+// Ed: "Give us the ability to add an account to QBO in Expo." Creates one
+// COGS / Expense / Other Expense account (optionally a sub-account) in the
+// client's QuickBooks through qbo-accounts {action:'create'}, then adds it to
+// every account dropdown already on screen WITHOUT redrawing the invoice, so
+// any lines picked but not yet saved keep their choices. The new account is
+// left selected in "Code several at once".
+function InvNewAcctOpen(){
+  const box=document.getElementById('invNewAcctBox'); if(!box||!Inv.current) return;
+  if(box.innerHTML){ box.innerHTML=''; return; }
+  const types=['Cost of Goods Sold','Expense','Other Expense'];
+  box.innerHTML='<div class="inv-newacct">'
+    +'<div class="inv-newacct-h">New account in '+invEsc(Inv.clients[Inv.current.inv.client_id]||'this client')+'’s QuickBooks</div>'
+    +'<div class="inv-newacct-row">'
+    +'<label>Type<select id="invNaType" data-plain="1" onchange="InvNewAcctParents()">'+types.map(t=>'<option'+(t==='Cost of Goods Sold'?' selected':'')+'>'+t+'</option>').join('')+'</select></label>'
+    +'<label>Number <small class="inv-dim">(optional)</small><input type="text" id="invNaNum" maxlength="20" style="width:90px"></label>'
+    +'<label style="flex:1;min-width:200px">Name<input type="text" id="invNaName" maxlength="100" placeholder="e.g. Paper Goods"></label>'
+    +'<label style="min-width:220px">Sub-account of <small class="inv-dim">(optional)</small><select id="invNaParent" data-plain="1"></select></label>'
+    +'</div>'
+    +'<div class="inv-bar" style="margin:8px 0 0"><button class="btn btn-primary btn-sm" id="invNaGo" onclick="InvNewAcctSave()">Create in QuickBooks</button>'
+    +'<button class="btn btn-secondary btn-sm" onclick="InvNewAcctOpen()">Cancel</button><span class="inv-note" id="invNaMsg"></span></div>'
+    +'</div>';
+  InvNewAcctParents();
+  const n=document.getElementById('invNaName'); if(n) n.focus();
+}
+function InvNewAcctParents(){
+  const sel=document.getElementById('invNaParent'); if(!sel||!Inv.current) return;
+  const type=(document.getElementById('invNaType')||{}).value;
+  const acct=Inv.current.acct, seen=new Set();
+  const opts=Object.values(acct.byId||{}).filter(a=>a&&a.type===type&&!seen.has(a.id)&&seen.add(a.id))
+    .sort((a,b)=>String(a.acct_num||a.name).localeCompare(String(b.acct_num||b.name),undefined,{numeric:true}));
+  sel.innerHTML='<option value="">— none (top level) —</option>'+opts.map(a=>'<option value="'+invEsc(a.id)+'">'+invEsc(a.label)+'</option>').join('');
+}
+async function InvNewAcctSave(){
+  if(!Inv.current) return;
+  const clientId=Inv.current.inv.client_id;
+  const name=((document.getElementById('invNaName')||{}).value||'').trim();
+  const acct_num=((document.getElementById('invNaNum')||{}).value||'').trim();
+  const account_type=(document.getElementById('invNaType')||{}).value;
+  const parent_id=(document.getElementById('invNaParent')||{}).value||null;
+  const msg=document.getElementById('invNaMsg'), go=document.getElementById('invNaGo');
+  const say=(t,bad)=>{ if(msg){ msg.textContent=t; msg.style.color=bad?'var(--red)':''; } };
+  if(!name){ say('Give the account a name.',true); return; }
+  const acct=Inv.current.acct;
+  if(Object.values(acct.byId||{}).some(a=>a&&String(a.name).toLowerCase()===name.toLowerCase())){ say('This client already has an account named “'+name+'”.',true); return; }
+  if(!confirm('Create “'+(acct_num?acct_num+' · ':'')+name+'” ('+account_type+') in '+(Inv.clients[clientId]||'this client')+'’s QuickBooks?')) return;
+  if(go) go.disabled=true; say('Creating in QuickBooks…');
+  let d=null;
+  try{
+    const r=await sb.functions.invoke('qbo-accounts',{ body:{ client_id:clientId, action:'create', name, acct_num:acct_num||null, account_type, parent_id } });
+    d=r.data; if(r.error){ try{ d=await r.error.context.json(); }catch(_){ d={ error:'server_error', message:r.error.message }; } }
+  }catch(e){ d={ error:'server_error', message:String(e.message||e) }; }
+  if(go) go.disabled=false;
+  if(!d||!d.ok||!d.account){
+    const m=d&&d.error==='reauth_needed'?'QuickBooks needs to be reconnected for this client.'
+      :d&&d.error==='not_connected'?'This client isn’t connected to QuickBooks.'
+      :(d&&(d.message||d.error))||'Couldn’t create the account.';
+    say(m,true); return;
+  }
+  const a=d.account, value=a.acct_num||a.id;
+  // Same cache object the whole page uses, so the Item Library sees it too.
+  acct.byId[value]=a; if(a.acct_num) acct.nameByCode[a.acct_num]=a.name;
+  acct.options.push({ value, id:a.id, label:a.label, code:a.acct_num });
+  acct.options.sort((x,y)=>String(x.code||x.label).localeCompare(String(y.code||y.label),undefined,{numeric:true}));
+  document.querySelectorAll('#page-invoices select.inv-acctsel').forEach(sel=>{
+    if([...sel.options].some(o=>o.value===value)) return;
+    const o=document.createElement('option'); o.value=value; o.textContent=a.label;
+    const after=[...sel.options].find(x=>x.value&&String(x.value).localeCompare(String(value),undefined,{numeric:true})>0);
+    sel.insertBefore(o, after||null);
+  });
+  const bulk=document.getElementById('invBulkSel'); if(bulk){ bulk.value=value; invComboSync(bulk); }
+  const box=document.getElementById('invNewAcctBox'); if(box) box.innerHTML='';
+  invToast('Created '+a.label+' in QuickBooks — it’s picked in “Code several at once”.');
+}
+
 // ── TYPE-TO-FILTER ACCOUNT PICKER (2026-10-12) ──────────────────────────
 // Every account dropdown in Expo (line pickers, "Code several at once", the
 // Item Library) gets a text box in front of it: type any part of the number OR
@@ -9773,7 +9857,9 @@ function InvRenderDetail(){
     +'<button class="btn btn-secondary btn-sm" onclick="InvLineSel(\'uncoded\')">Select uncoded</button>'
     +'<button class="btn btn-secondary btn-sm" onclick="InvLineSel(\'none\')">Clear</button>'
     +'<select class="inv-acctsel" id="invBulkSel">'+optsFor('')+'</select>'
-    +'<button class="btn btn-primary btn-sm" onclick="InvCodeSelected()">Code selected lines</button></div>';
+    +'<button class="btn btn-primary btn-sm" onclick="InvCodeSelected()">Code selected lines</button>'
+    +(acct.connected&&inv.status!=='pushed'?'<button class="inv-linkbtn" style="margin-left:6px" onclick="InvNewAcctOpen()">+ New QuickBooks account</button>':'')+'</div>'
+    +'<div id="invNewAcctBox"></div>';
   const tgt=document.getElementById('invDetail');
   if(!tgt){ InvRenderShell(); return; }
   tgt.innerHTML=
@@ -17069,7 +17155,7 @@ init();
     document.getElementById('smModalFoot').innerHTML = canRetry
       ? `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>` + approveBtn +
         (rev ? `<button class="btn btn-ghost" id="smReviewBtn" onclick="SyncMon.markReviewed('${dateKey}')">Reviewed — keep as posted</button>` : '') +
-        `<button class="btn" id="smRetryBtn"${rev ? ' disabled' : ''} onclick="SyncMon.retry('${dateKey}')">${retryLabel}</button>`
+        `<button class="btn btn-primary sm-retry-btn" id="smRetryBtn"${rev ? ' disabled' : ''} onclick="SyncMon.retry('${dateKey}')">${retryLabel}</button>`
       : `<button class="btn btn-ghost" onclick="closeModal('smModal')">Close</button>`;
 
     openModal('smModal');
@@ -18908,7 +18994,7 @@ init();
 
    Fixes are staged first and written to QuickBooks only on "Write to
    QuickBooks" (qbo-txn-write re-fetches each transaction and refuses
-   anything that changed since the scan). "Looks right" and mutes never
+   anything that changed since the scan). "Ignore" and mutes never
    touch QuickBooks. Mutes are coding_exceptions rows, so the old Vendor
    Audit won't-fix register carries over.
    ============================================================ */
@@ -18932,7 +19018,7 @@ init();
   const LEGACY_LABEL = { boundary: 'Unusual account (old Vendor Audit)', new_account: 'Unusual account (old Vendor Audit)',
     dominance: 'Unusual account (old Vendor Audit)', cross_client: 'Unusual account (old Vendor Audit)',
     item_map: 'Unusual account (old Vendor Audit)', balance_sheet: 'Balance sheet' };
-  const DONE_LABEL = { fixed: 'Fixed', accepted: 'Looks right', muted: 'Muted', resolved: 'Cleared in QBO' };
+  const DONE_LABEL = { fixed: 'Fixed', accepted: 'Ignored', muted: 'Muted', resolved: 'Cleared in QBO' };
 
   const S = {
     booted: false,
@@ -19081,6 +19167,7 @@ init();
       '<div class="rq-head">' +
         '<span class="rq-tag t-' + i.check_type + '">' + esc(CHECK_LABEL[i.check_type] || i.check_type) + '</span>' +
         (i.severity === 'high' ? '<span class="rq-sev high">high</span>' : '') +
+        '<span class="rq-kind k-' + (i.entity_type === 'Bill' ? 'bill' : 'exp') + '">' + (i.entity_type === 'Bill' ? 'Bill' : i.entity_type === 'Deposit' ? 'Deposit' : 'Expense') + '</span>' +
         '<span class="rq-line1">' + esc(fmtDate(i.txn_date)) + ' · ' + esc(i.txn_type || i.entity_type) +
           (i.doc_num ? ' #' + esc(i.doc_num) : '') + ' · <b>' + esc(i.vendor_name || '(no payee)') + '</b></span>' +
         '<span class="rq-amt">' + money(i.amount) + (i.txn_total != null && Number(i.txn_total) !== Number(i.amount) ? ' <span class="rq-dim">of ' + money(i.txn_total) + '</span>' : '') + '</span>' +
@@ -19107,8 +19194,8 @@ init();
       fix = '<div class="rq-fix">' +
         '<label>Recode to</label>' +
         '<input type="text" list="rqAcctList" id="rqIn_' + i.id + '" value="' + esc(val) + '" placeholder="account">' +
-        '<button class="rq-act primary" onclick="RQ.stageAccount(\'' + i.id + '\', false)">Stage fix</button>' +
-        (peers.length ? '<button class="rq-act" onclick="RQ.stageAccount(\'' + i.id + '\', true)">Stage this + ' + peers.length + ' like it</button>' : '') +
+        '<button class="rq-act primary" onclick="RQ.stageAccount(\'' + i.id + '\', false)">Recode</button>' +
+        (peers.length ? '<button class="rq-act" onclick="RQ.stageAccount(\'' + i.id + '\', true)">Recode this + ' + peers.length + ' like it</button>' : '') +
         (sug && sug.basis ? '<span class="rq-dim">suggested: ' + esc(sug.basis) + '</span>' : '') +
         '</div>';
     } else if (i.check_type === 'missing_payee') {
@@ -19116,12 +19203,12 @@ init();
       fix = '<div class="rq-fix">' +
         '<label>Payee</label>' +
         '<input type="text" list="rqVendList" id="rqIn_' + i.id + '" value="' + esc(val) + '" placeholder="vendor">' +
-        '<button class="rq-act primary" onclick="RQ.stagePayee(\'' + i.id + '\')">Stage fix</button>' +
+        '<button class="rq-act primary" onclick="RQ.stagePayee(\'' + i.id + '\')">Recode</button>' +
         (sug && sug.basis ? '<span class="rq-dim">guess: ' + esc(sug.basis) + '</span>' : '') +
         '</div>';
     } else if (i.check_type === 'duplicate') {
       const r = i.related || {};
-      fix = '<div class="rq-memo">Compare with ' + esc(r.txn_type || r.entity_type || '') + (r.doc_num ? ' #' + esc(r.doc_num) : '') +
+      fix = '<div class="rq-memo">Compare with ' + (r.entity_type === 'Bill' ? 'bill' : 'expense') + ' (' + esc(r.txn_type || r.entity_type || '') + ')' + (r.doc_num ? ' #' + esc(r.doc_num) : '') +
         ' on ' + esc(fmtDate(r.txn_date)) + ' for ' + money(r.amount) +
         '. Delete or void the extra one in QuickBooks yourself — Triple never deletes.</div>';
     }
@@ -19130,8 +19217,10 @@ init();
       (i.check_type === 'duplicate'
         ? '<button class="rq-act" onclick="RQ.accept(\'' + i.id + '\', \'Not a duplicate\')">Not a duplicate</button>' +
           '<button class="rq-act" onclick="RQ.handled(\'' + i.id + '\')">Handled in QuickBooks</button>'
-        : '<button class="rq-act" onclick="RQ.accept(\'' + i.id + '\')">Looks right</button>') +
-      '<button class="rq-act" onclick="RQ.toggleMute(\'' + i.id + '\')">Mute…</button>' +
+        : '<button class="rq-act" onclick="RQ.accept(\'' + i.id + '\')">Ignore</button>') +
+      (i.status_note && /^Sent to Ed/.test(i.status_note)
+        ? '<span class="rq-dim">Task sent to Ed' + (i.status_by_name ? ' by ' + esc(i.status_by_name) : '') + (i.status_at ? ' · ' + esc(fmtWhen(i.status_at)) : '') + '</span>'
+        : '<button class="rq-act" onclick="RQ.toggleMute(\'' + i.id + '\')">Create a Task for Ed</button>') +
       (st ? '<button class="rq-act" onclick="RQ.unstage(\'' + i.id + '\')">Unstage</button>' : '') +
       '</div>';
 
@@ -19141,22 +19230,14 @@ init();
       head + fix + (st ? '<div class="rq-staged">Staged: ' + esc(stagedLabel(st)) + '</div>' : '') + acts + muteForm + '</div>';
   }
 
+  // 10/30/26 (Ed): no more mutes from the queue. When something is being
+  // pulled in wrong, the preparer sends Ed a task so the scan itself gets
+  // fixed. Existing mutes still apply and are listed under Mutes & exceptions.
   function muteFormHtml(i) {
-    const hasVendor = i.vendor_key && i.vendor_key !== '(none)';
-    const opts = [];
-    if (hasVendor && i.account_key) opts.push(['vendor_account', 'This vendor on ' + (i.account_name || 'this account')]);
-    if (hasVendor) opts.push(['vendor', 'Everything from ' + (i.vendor_name || 'this vendor')]);
-    if (i.account_key) opts.push(['account', 'Anything coded to ' + (i.account_name || 'this account')]);
-    if (!opts.length) return '<div class="rq-form"><div class="rq-memo">This row has no vendor or account to mute on — use Looks right instead.</div></div>';
     return '<div class="rq-form">' +
-      '<div class="rq-memo">Stops <b>' + esc(CHECK_LABEL[i.check_type]) + '</b> flags for:</div>' +
-      '<select id="rqMuteScope">' + opts.map(o => '<option value="' + o[0] + '">' + esc(o[1]) + '</option>').join('') + '</select>' +
-      '<select id="rqMuteDisp">' +
-        '<option value="correct">It’s correct — stop flagging</option>' +
-        '<option value="wont_fix">Client’s choice (won’t fix) — keep on the exceptions register</option>' +
-      '</select>' +
-      '<input type="text" id="rqMuteReason" placeholder="Reason (required)">' +
-      '<div class="rq-acts"><button class="rq-act primary" onclick="RQ.saveMute(\'' + i.id + '\')">Save mute</button>' +
+      '<div class="rq-memo">Tell Ed what’s being pulled in wrong, so the Review Queue can be fixed. This flag stays open.</div>' +
+      '<input type="text" id="rqTaskNote" placeholder="What’s wrong with this flag? (required)">' +
+      '<div class="rq-acts"><button class="rq-act primary" onclick="RQ.saveMute(\'' + i.id + '\')">Send task to Ed</button>' +
       '<button class="rq-act" onclick="RQ.toggleMute(\'' + i.id + '\')">Cancel</button></div>' +
       '</div>';
   }
@@ -19335,7 +19416,7 @@ init();
       const name = ($('rqIn_' + id) || {}).value;
       const a = findAccount(name);
       if (!a) { setStatus('Pick an account from the list — "' + (name || '') + '" isn’t one of this client’s accounts.', true); return; }
-      if (a.id === i.account_id) { setStatus('That’s the account it’s already on. Use Looks right if it’s correct.', true); return; }
+      if (a.id === i.account_id) { setStatus('That’s the account it’s already on. Use Ignore if it’s correct.', true); return; }
       const targets = withPeers ? [i, ...S.items.filter(o => o.id !== i.id && sameVA(o, i))] : [i];
       targets.forEach(t => { S.staged[t.id] = { account_id: a.id, account_name: a.name }; });
       setStatus(targets.length + ' staged.');
@@ -19415,28 +19496,45 @@ init();
 
     async saveMute(id) {
       const i = S.items.find(x => x.id === id); if (!i) return;
-      const scope = ($('rqMuteScope') || {}).value;
-      const disposition = ($('rqMuteDisp') || {}).value || 'correct';
-      const reason = String(($('rqMuteReason') || {}).value || '').trim();
-      if (!reason) { setStatus('A reason is required for a mute.', true); return; }
-      const row = {
-        client_id: S.clientId, scope, disposition, strategy: i.check_type, reason, active: true,
-        created_by: (typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null),
-        vendor_key: scope === 'account' ? null : i.vendor_key, vendor_name: scope === 'account' ? null : i.vendor_name,
-        account_key: scope === 'vendor' ? null : i.account_key, account_name: scope === 'vendor' ? null : i.account_name,
-      };
+      const note = String(($('rqTaskNote') || {}).value || '').trim();
+      if (!note) { setStatus('Say what’s wrong with this flag first.', true); return; }
+      const firm = (typeof allClients !== 'undefined' ? allClients : []).find(c => c && c.is_firm);
+      const client = (clientById(i.client_id || S.clientId) || {}).name || 'client';
+      const today = (typeof tzToday === 'function') ? tzToday() : new Date().toISOString().slice(0, 10);
+      const who = meName();
+      const lines = [
+        'Review Queue flag that looks wrong — sent by ' + (who || 'a preparer') + '.',
+        '',
+        'Their note: ' + note,
+        '',
+        'Client: ' + client,
+        'Flag: ' + (CHECK_LABEL[i.check_type] || i.check_type) + (i.severity ? ' (' + i.severity + ')' : ''),
+        'Transaction: ' + fmtDate(i.txn_date) + ' · ' + (i.entity_type === 'Bill' ? 'Bill' : (i.txn_type || 'Expense')) + (i.doc_num ? ' #' + i.doc_num : '') +
+          ' · ' + (i.vendor_name || '(no payee)') + ' · ' + money(i.amount),
+        i.account_name ? 'Coded to: ' + i.account_name : '',
+        'Why it was flagged: ' + (i.reason || ''),
+        'Review item id: ' + i.id,
+      ].filter(x => x !== '');
       try {
-        const { error } = await sb.from('coding_exceptions').insert(row);
+        const now = new Date().toISOString();
+        const { error } = await sb.from('tasks').insert({
+          client_id: firm ? firm.id : (i.client_id || S.clientId),
+          category: 'General',
+          title: 'Review Queue: ' + client + ' — ' + (CHECK_LABEL[i.check_type] || i.check_type) + ' flag looks wrong',
+          assigned_to: 'Ed Hattrup', status: 'Not Started', frequency: 'one_time',
+          starts_on: today, next_due: today, period: today.substring(0, 7).replace('-', ''),
+          notes: lines.join('\n'), created_by: who || null, created_at: now, updated_at: now,
+        });
         if (error) throw error;
-        const hit = S.items.filter(o => o.check_type === i.check_type && (
-          scope === 'vendor' ? o.vendor_key === i.vendor_key :
-          scope === 'account' ? o.account_key === i.account_key :
-          o.vendor_key === i.vendor_key && o.account_key === i.account_key)).map(o => o.id);
-        await setStatusOn(hit, 'muted', 'Muted: ' + reason);
+        const { error: e2 } = await sb.from('review_items').update({
+          status_note: 'Sent to Ed: ' + note, status_by: (typeof currentUser !== 'undefined' && currentUser ? currentUser.id : null),
+          status_by_name: who, status_at: now,
+        }).eq('id', id);
+        if (e2) throw e2;
         S.openForm = null;
-        setStatus('Muted ' + hit.length + ' row' + (hit.length === 1 ? '' : 's') + '. Future scans will skip this pattern.');
+        setStatus('Task sent to Ed. The flag stays open until it’s fixed or ignored.');
         await reload();
-      } catch (e) { setStatus(e.message || String(e), true); }
+      } catch (e) { setStatus('Couldn’t create the task: ' + (e.message || String(e)), true); }
     },
 
     async unmute(exId) {
@@ -19903,6 +20001,34 @@ init();
   }
   const row = id => S.rows.find(r => r.id === id);
 
+  // supabase-js turns every non-2xx reply into "Edge Function returned a
+  // non-2xx status code" and hides the body, which is the only part that says
+  // what happened. Read the body and say it in plain words (10/30/26).
+  const FN_ERR = {
+    not_pickable: b => 'This receipt was already handled' + (b.status ? ' (it’s now “' + (STATUS_LABEL[b.status] || b.status) + '”)' : '') +
+      ' — probably by someone else with this page open. The list has been refreshed.',
+    not_matchable: b => 'This receipt can’t be re-matched while it’s “' + (STATUS_LABEL[b.status] || b.status || '?') + '”. The list has been refreshed.',
+    not_live: b => b.message || 'This client’s receipt matching isn’t switched to Live, so nothing is written to QuickBooks.',
+    not_found: () => 'That receipt no longer exists. The list has been refreshed.',
+    transaction_not_found: () => 'That transaction isn’t in QuickBooks any more — it may have been deleted or merged.',
+    reauth_needed: () => 'QuickBooks needs to be reconnected for this client (Statement Reconciler → Connect).',
+    forbidden: () => 'Your login isn’t allowed to do this — try signing out and back in.',
+  };
+  async function callFn(name, body) {
+    const { data, error } = await sb.functions.invoke(name, { body });
+    let b = data;
+    if (error) {
+      b = null;
+      try { b = await error.context.json(); } catch (_) { /* no JSON body */ }
+      if (!b) throw new Error(name + ' failed: ' + (error.message || String(error)));
+    }
+    if (b && b.error) {
+      const f = FN_ERR[b.error];
+      throw new Error(f ? f(b) : (b.message || b.detail || b.error));
+    }
+    return b;
+  }
+
   window.RQR = {
     render(clientId) { if (clientId !== S.clientId) { S.clientId = clientId || ''; S.accounts = null; S.msg = ''; } return render(); },
     pick(id) {
@@ -19929,9 +20055,8 @@ init();
         const r = row(id); const c = r && (r.match_candidates || [])[k]; if (!c) return;
         if (!confirm('Attach this receipt to the ' + (c.entity_type === 'Bill' ? 'bill' : 'expense') + ' from ' + fmtDate(c.txn_date) + ' for ' + money(c.total) + ' in ' + clientName(r.client_id) + '’s QuickBooks?')) return;
         note('Attaching in QuickBooks…');
-        const { data, error } = await sb.functions.invoke('receipt-match', { body: { action: 'attach_to', receipt_id: id, entity_type: c.entity_type, entity_id: c.id } });
-        if (error) throw new Error(error.message || String(error));
-        if (!data || data.error) throw new Error((data && (data.message || data.error)) || 'attach failed');
+        const data = await callFn('receipt-match', { action: 'attach_to', receipt_id: id, entity_type: c.entity_type, entity_id: c.id });
+        if (!data) throw new Error('attach failed');
         note(data.status === 'attached' ? 'Attached.' : 'Result: ' + (STATUS_LABEL[data.status] || data.status) + '.', data.status === 'match_error');
       });
     },
@@ -19957,9 +20082,8 @@ init();
         const change = { kind: 'account', entity_type: r.qbo_entity_type, id: r.qbo_entity_id, txn_date: r.qbo_txn_date,
           amount: r.qbo_txn_total, line_id: r.qbo_line_id, old_account_id: r.current_account_id,
           account_id: acct.id, account_name: acct.name };
-        const { data, error } = await sb.functions.invoke('qbo-txn-write', { body: { client_id: r.client_id, changes: [change] } });
-        if (error) throw new Error(error.message || String(error));
-        if (!data || data.ok === false) throw new Error((data && data.error) || 'write failed');
+        const data = await callFn('qbo-txn-write', { client_id: r.client_id, changes: [change] });
+        if (!data || data.ok === false) throw new Error((data && (data.message || data.error)) || 'write failed');
         const res = (data.results || [])[0] || {};
         if (res.status !== 'ok') throw new Error('Not written: ' + (res.message || res.status));
         await patchRow(id, { recode_status: 'accepted', suggested_account_id: acct.id, suggested_account_name: acct.name,
@@ -20024,18 +20148,14 @@ init();
     reread(id) {
       return act(id, async () => {
         note('Reading…');
-        const { data, error } = await sb.functions.invoke('receipts-read', { body: { receipt_id: id } });
-        if (error) throw new Error(error.message || String(error));
-        if (data && data.error) throw new Error(data.message || data.error);
+        const data = await callFn('receipts-read', { receipt_id: id });
         note('Read again: ' + (STATUS_LABEL[(data && data.status) || ''] || (data && data.status) || 'done') + '.');
       });
     },
     rematch(id) {
       return act(id, async () => {
         note('Looking in QuickBooks…');
-        const { data, error } = await sb.functions.invoke('receipt-match', { body: { receipt_id: id, force: true } });
-        if (error) throw new Error(error.message || String(error));
-        if (data && data.error) throw new Error(data.message || data.error);
+        const data = await callFn('receipt-match', { receipt_id: id, force: true });
         note((data.mode === 'dry_run' ? 'Dry run: ' : '') + (STATUS_LABEL[data.status] || data.status) + '.');
       });
     },
@@ -22109,7 +22229,7 @@ init();
     if (!p.ties) h += '<div class="sp-err">The transactions ' + brand(p) + ' lists for this payout don’t add up to the deposit yet. It will refresh on the next pull.</div>';
     if (p.error && p.status === 'failed') h += '<div class="sp-err">' + esc(p.error) + '</div>';
     if (sales.length) {
-      h += '<div class="sp-row"><label>Default account for charges</label>' +
+      h += '<div class="sp-row"><label>Default account for deposits</label>' +
         (editable ? acctSelect('data-act="sales"', salesAcctId, accts) : '<b>' + esc(p.sales_account_label || '(each charge coded on its own line)') + '</b>') +
         (suggested ? '<span class="sp-muted">suggested from the last payout you posted</span>' : '') + '</div>';
       if (editable && sales.length) h += '<div class="sp-muted">Any charge can go somewhere else — pick its account in the Account column. Charges left on “Same as default” use the account above.</div>';
