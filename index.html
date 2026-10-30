@@ -1362,7 +1362,7 @@
         <div class="nav-item" onclick="showPage('reconciler')" id="nav-reconciler"><span>🧾</span> Statement Reconciler</div>
         <div class="nav-item" onclick="showPage('flbz')" id="nav-flbz"><span>📕</span> FLB Z-Tapes <span class="nav-badge" id="flbzBadge" style="display:none">0</span></div>
         <div class="nav-item" onclick="showPage('labor')" id="nav-labor"><span>🧮</span> Payroll Accruals</div>
-        <div class="nav-item" onclick="showPage('stripe')" id="nav-stripe"><span>💳</span> Stripe &amp; Square <span class="nav-badge" id="stripeBadge" style="display:none" title="Stripe and Square deposits waiting to be coded for your clients">0</span></div>
+        <div class="nav-item" onclick="showPage('stripe')" id="nav-stripe"><span>💳</span> Stripe · Square · Ande <span class="nav-badge" id="stripeBadge" style="display:none" title="Stripe, Square and Ande deposits waiting to be coded for your clients">0</span></div>
         <div class="nav-section">Monthly Tools</div>
         <div class="nav-item" onclick="showPage('salestax')" id="nav-salestax"><span>🏛️</span> Monthly Taxes</div>
         <!-- Marketing holds only Prospects today, which is permission-gated, so
@@ -1764,13 +1764,15 @@
 
       <!-- STRIPE PAYOUTS — added 2026-10-26. Script at the end of the file (search "STRIPE PAYOUTS"). -->
       <div class="page" id="page-stripe">
-        <div class="page-header"><div><div class="page-title">Stripe &amp; Square Payouts</div><div class="page-sub">One journal entry per Stripe or Square deposit &#8212; pick the account, post it to QuickBooks to Undeposited Funds</div></div></div>
+        <div class="page-header"><div><div class="page-title">Stripe, Square &amp; Ande Payouts</div><div class="page-sub">One journal entry per Stripe, Square or Ande deposit &#8212; pick the account, post it to QuickBooks to Undeposited Funds</div></div></div>
         <div class="sp-panel">
           <div class="sp-controls">
             <div class="sp-field"><label for="spClient">Client</label><select id="spClient" style="min-width:240px"></select></div>
             <div class="sp-field"><label for="spShow">Show</label>
               <select id="spShow"><option value="uncoded">To code</option><option value="posted">Posted</option><option value="skipped">Skipped</option><option value="all">All</option></select></div>
             <button class="sp-ghost" id="spPull">Pull now</button>
+            <button class="sp-ghost" id="spAndeImport" style="display:none" title="Load an Ande Payments “Export to CSV” file by hand (the Mac mini does this daily)">Import Ande CSV</button>
+            <input type="file" id="spAndeFile" accept=".csv,text/csv" style="display:none">
             <button class="sp-ghost" id="spSettingsBtn">Settings</button>
           </div>
           <div class="sp-meta" id="spMeta"></div>
@@ -22067,7 +22069,10 @@ init();
   const clientName = id => { const c = (typeof findClientAny === 'function') ? findClientAny(id) : null; return c ? c.name : id; };
   const LS_KEY = 'bg_stripe_client';
   const KIND = { charge: 'Charge', refund: 'Refund', dispute: 'Dispute', fee: 'Fee', other: 'Other' };
-  const brand = p => p && p.provider === 'square' ? 'Square' : 'Stripe';
+  const brand = p => p && p.provider === 'square' ? 'Square' : p && p.provider === 'ande' ? 'Ande' : 'Stripe';
+  // Ande (10/30/26): no API — payouts come from Ande's CSV export, imported daily
+  // by the Mac mini or by hand with "Import Ande CSV". One card per bank deposit.
+  const ANDE_TYPE = { deposit: 'Deposit', closeout: 'Closeout', settlement: 'Social settlement', refund: 'Refund' };
 
   const S = {
     conns: [], clientId: '', show: 'uncoded', payouts: [], lines: {}, accounts: {}, previews: {},
@@ -22102,7 +22107,7 @@ init();
   const conn = () => S.conns.find(c => c.client_id === S.clientId) || null;
   // a client can have several Stripe accounts (one connection row each)
   const connsFor = id => S.conns.filter(c => c.client_id === id);
-  const acctName = c => c.label || String(c.secret_name || '').replace(/^(STRIPE|SQUARE)_KEY_/, '').replace(/_/g, ' ');
+  const acctName = c => c.provider === 'ande' ? 'Ande — ' + (c.location_id || c.label || '') : (c.label || String(c.secret_name || '').replace(/^(STRIPE|SQUARE|ANDE)_KEY_/, '').replace(/_/g, ' '));
   const clientIds = () => [...new Set(S.conns.map(c => c.client_id))];
 
   async function call(body) {
@@ -22202,7 +22207,12 @@ init();
   function summary(p) {
     const ls = S.lines[p.id] || [];
     const nCh = ls.filter(l => l.kind === 'charge').length;
-    const parts = [nCh + ' charge' + (nCh === 1 ? '' : 's') + ' ' + money(p.gross_charges), 'fees ' + money(-p.fees)];
+    const noun = p.provider === 'ande' ? 'event payment' : 'charge';
+    let parts = [nCh + ' ' + noun + (nCh === 1 ? '' : 's') + ' ' + money(p.gross_charges), 'fees ' + money(-p.fees)];
+    if (p.provider === 'ande') {
+      parts = parts.filter((x, i) => i === 0 ? nCh > 0 : Number(p.fees) !== 0);
+      if (ls.length === 1) parts.unshift(ls[0].description || '');
+    }
     if (Number(p.refunds)) parts.push('refunds ' + money(p.refunds));
     if (Number(p.disputes)) parts.push('disputes ' + money(p.disputes));
     if (Number(p.other)) parts.push('other ' + money(p.other));
@@ -22220,13 +22230,16 @@ init();
     const suggested = !p.sales_account_id && salesAcctId;
     let h = '<div class="sp-card" data-pid="' + esc(p.id) + '">';
     h += '<div class="sp-head" data-act="toggle"><div><div class="sp-name">' + esc(dow(p.arrival_date)) + ' ' + esc(mdy(p.arrival_date)) +
-      ' · ' + money(p.amount) + ' deposit ' + (p.provider === 'square' ? '<span class="sp-chip sq">Square</span> ' : '') + chip(p) + '</div><div class="sp-sub">' + esc(summary(p)) +
+      ' · ' + money(p.amount) + (Number(p.amount) < 0 ? ' withdrawal ' : ' deposit ') + (p.provider === 'square' || p.provider === 'ande' ? '<span class="sp-chip sq">' + brand(p) + '</span> ' : '') + chip(p) + '</div><div class="sp-sub">' + esc(summary(p)) +
       (p.status === 'posted' && p.posted_by ? ' · posted by ' + esc(p.posted_by) : '') +
-      (connsFor(p.client_id).length > 1 && p.provider !== 'square' ? ' · ' + esc(acctName(connsFor(p.client_id).find(x => x.secret_name === p.secret_name) || { secret_name: p.secret_name || '' })) + ' account' : '') +
+      (connsFor(p.client_id).filter(x => (x.provider || 'stripe') === 'stripe').length > 1 && (p.provider || 'stripe') === 'stripe' ? ' · ' + esc(acctName(connsFor(p.client_id).find(x => x.secret_name === p.secret_name) || { secret_name: p.secret_name || '' })) + ' account' : '') +
       '</div></div><div class="sp-sub">' + (open ? '▾' : '▸') + '</div></div>';
     if (!open) return h + '</div>';
     h += '<div class="sp-body">';
     if (!p.ties) h += '<div class="sp-err">The transactions ' + brand(p) + ' lists for this payout don’t add up to the deposit yet. It will refresh on the next pull.</div>';
+    if (p.provider === 'ande' && p.memo) h += '<div class="sp-muted">Memo: ' + esc(p.memo) + '</div>';
+    if (p.provider === 'ande' && ls.some(l => l.kind === 'refund') && editable)
+      h += '<div class="sp-muted">Refund: reverses the event’s entry — the account defaults to the one the event was coded to. Ande’s original processing fee isn’t returned, so it stays as a cost. Dated the day it was imported (Ande gives no settlement date) — check it against the bank.</div>';
     if (p.error && p.status === 'failed') h += '<div class="sp-err">' + esc(p.error) + '</div>';
     if (sales.length) {
       h += '<div class="sp-row"><label>Default account for deposits</label>' +
@@ -22264,7 +22277,8 @@ init();
           acct += '</div>';
         }
       }
-      h += '<tr' + (needsOwn(l) ? ' class="own"' : '') + '><td>' + esc(mdy(l.created_local)) + '</td><td>' + esc(who || '(none)') + flag + '</td><td>' + esc(l.kind === 'fee' ? brand(p) + ' fee' : (KIND[l.kind] || l.kind)) +
+      const typ = l.kind === 'fee' ? brand(p) + ' fee' : (p.provider === 'ande' && ANDE_TYPE[l.reporting_category]) || KIND[l.kind] || l.kind;
+      h += '<tr' + (needsOwn(l) ? ' class="own"' : '') + '><td>' + esc(mdy(l.created_local)) + '</td><td>' + esc(who || '(none)') + flag + '</td><td>' + esc(typ) +
         '</td><td class="n">' + money(l.gross) + '</td><td class="n">' + money(-l.fee) + '</td><td class="n">' + money(l.net) + '</td><td>' + acct + '</td></tr>';
       if (splits) h += splitRow(l, splits, accts, editable);
     }
@@ -22306,12 +22320,14 @@ init();
         : '<option value="">No clients connected to Stripe or Square yet</option>';
     }
     if ($('spShow')) $('spShow').value = S.show;
+    if ($('spAndeImport')) $('spAndeImport').style.display = S.conns.some(x => x.provider === 'ande') ? '' : 'none';
     const c = conn();
     const meta = $('spMeta');
     if (meta) {
       const cs = connsFor(S.clientId);
       const when = x => x.last_pulled_at ? new Date(x.last_pulled_at).toLocaleString('en-US', { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
       meta.innerHTML = c ? (cs.length > 1 ? cs.length + ' accounts (' + cs.map(x => esc(acctName(x))).join(', ') + ') · ' : '') +
+        (cs.some(x => x.provider === 'ande') ? 'Ande (' + cs.filter(x => x.provider === 'ande').map(x => esc(x.location_id || x.label)).join(', ') + ') comes from Ande’s CSV export, imported daily by the Mac mini · ' : '') +
         'Pulls payouts that arrived on or after ' + esc(mdy(c.start_date)) +
         (c.acquisition_date ? ' · charges before ' + esc(mdy(c.acquisition_date)) + ' are flagged as the prior owner’s' : '') +
         ' · last pulled ' + esc(when(c)) +
@@ -22343,7 +22359,7 @@ init();
     const c = conn();
     if (!c) { el.innerHTML = '<div class="sp-muted">No Stripe or Square connection for this client.</div>'; return; }
     el.innerHTML =
-      '<div class="sp-row"><label>' + (connsFor(S.clientId).some(x => x.provider === 'square') ? 'Processing fee account' : 'Stripe fee account') + '</label>' + acctSelect('id="spFeeAcct"', c.fee_account_id || '', accts) +
+      '<div class="sp-row"><label>' + (connsFor(S.clientId).some(x => x.provider === 'square' || x.provider === 'ande') ? 'Processing fee account' : 'Stripe fee account') + '</label>' + acctSelect('id="spFeeAcct"', c.fee_account_id || '', accts) +
         (c.fee_account_id ? '' : '<span class="sp-err-t">Needed before anything can post</span>') + '</div>' +
       '<div class="sp-row"><label>Charges include sales tax</label><input type="number" step="0.001" min="0" id="spTaxRate" class="sp-amt" placeholder="none" value="' + esc(c.tax_rate == null ? '' : String(Number(c.tax_rate))) + '"> %' +
         acctSelect('id="spTaxAcct"', c.tax_account_id || '', accts, '— sales tax account —') +
@@ -22409,6 +22425,24 @@ init();
     await loadConns();
     await reloadClient(true);
   }
+  async function andeImportFile(file) {
+    if (!file) return;
+    const b = $('spAndeImport'); if (b) { b.disabled = true; b.textContent = 'Importing…'; }
+    try {
+      const csv = await file.text();
+      const r = await call({ action: 'ande_import', csv, client_id: S.clientId || null });
+      const bits = [r.added + ' new deposit' + (r.added === 1 ? '' : 's')];
+      if (r.refreshed) bits.push(r.refreshed + ' refreshed');
+      if (r.unchanged) bits.push(r.unchanged + ' already posted or skipped');
+      if (r.before_start) bits.push(r.before_start + ' before the start date (left alone)');
+      if (r.refunds_booked_by_hand) bits.push(r.refunds_booked_by_hand + ' refund' + (r.refunds_booked_by_hand === 1 ? '' : 's') + ' on events booked before Triple (left alone)');
+      setStatus('Ande import: ' + bits.join(', ') + '.' + (r.unmapped && r.unmapped.length ? ' Venue not matched to a client: ' + r.unmapped.join(', ') + ' — tell Ed.' : ''), !!(r.unmapped && r.unmapped.length));
+    } catch (e) { setStatus('Ande import failed: ' + e.message, true); }
+    if (b) { b.disabled = false; b.textContent = 'Import Ande CSV'; }
+    const f = $('spAndeFile'); if (f) f.value = '';
+    await loadConns();
+    await reloadClient(true);
+  }
   async function bulkApply() {
     const id = $('spBulkAcct') && $('spBulkAcct').value;
     if (!id) { setStatus('Pick an account first.', true); return; }
@@ -22454,6 +22488,8 @@ init();
     $('spClient').addEventListener('change', e => { S.clientId = e.target.value; try { localStorage.setItem(LS_KEY, S.clientId); } catch (x) {} S.open = {}; reloadClient(); });
     $('spShow').addEventListener('change', e => { S.show = e.target.value; render(); });
     $('spPull').addEventListener('click', pullNow);
+    $('spAndeImport').addEventListener('click', () => $('spAndeFile').click());
+    $('spAndeFile').addEventListener('change', e => andeImportFile(e.target.files && e.target.files[0]));
     $('spSettingsBtn').addEventListener('click', () => { S.showSettings = !S.showSettings; render(); });
     $('spSettings').addEventListener('change', async e => {
       const t = e.target;
